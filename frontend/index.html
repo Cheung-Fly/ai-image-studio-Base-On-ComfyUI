@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI 生图工坊</title>
+<style>
+  :root {
+    --bg: #f5f6f8;
+    --card: #ffffff;
+    --border: #e2e5ea;
+    --text: #1f2329;
+    --muted: #8a919b;
+    --primary: #4f6ef2;
+    --primary-hover: #3f5ce0;
+    --danger: #e24b4a;
+    --success: #1d9e75;
+    --radius: 12px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    padding: 24px;
+  }
+  .container { max-width: 960px; margin: 0 auto; }
+  h1 { font-size: 20px; font-weight: 600; margin-bottom: 4px; }
+  .subtitle { color: var(--muted); font-size: 13px; margin-bottom: 20px; }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+  label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; }
+  textarea, input, select {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 14px;
+    font-family: inherit;
+    margin-bottom: 14px;
+    background: #fff;
+  }
+  textarea { min-height: 80px; resize: vertical; }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  @media (max-width: 600px) { .grid, .grid-2 { grid-template-columns: 1fr; } }
+
+  button {
+    background: var(--primary);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 12px 24px;
+    font-size: 15px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background .15s;
+  }
+  button:hover { background: var(--primary-hover); }
+  button:disabled { background: #b8c0d0; cursor: not-allowed; }
+
+  .status { font-size: 13px; margin-top: 12px; min-height: 20px; }
+  .status.pending { color: #ba7517; }
+  .status.processing { color: var(--primary); }
+  .status.completed { color: var(--success); }
+  .status.failed { color: var(--danger); }
+
+  .result-img {
+    max-width: 100%;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    display: block;
+    margin-top: 12px;
+  }
+  .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; }
+  .gallery-item {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    background: #fff;
+    cursor: pointer;
+    transition: transform .1s;
+  }
+  .gallery-item:hover { transform: scale(1.02); }
+  .gallery-item img { width: 100%; display: block; aspect-ratio: 1; object-fit: cover; }
+  .gallery-item .meta { padding: 6px 8px; font-size: 12px; color: var(--muted); }
+  .section-title { font-size: 15px; font-weight: 600; margin-bottom: 12px; }
+  .hint { color: var(--muted); font-size: 12px; margin-top: 8px; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>AI 生图工坊</h1>
+  <div class="subtitle">基于 ComfyUI · 输入提示词，点击生成</div>
+
+  <div class="card">
+    <label for="prompt">正向提示词（prompt）</label>
+    <textarea id="prompt" placeholder="例如：a cute corgi astronaut floating in space, digital art, highly detailed">a cute corgi astronaut floating in space, digital art, highly detailed</textarea>
+
+    <label for="negative">负向提示词（negative prompt）</label>
+    <textarea id="negative" placeholder="例如：blurry, low quality, watermark">blurry, low quality, watermark</textarea>
+
+    <div class="grid-2">
+      <div>
+        <label for="width">宽度</label>
+        <input id="width" type="number" value="1024" min="256" max="2048">
+      </div>
+      <div>
+        <label for="height">高度</label>
+        <input id="height" type="number" value="1024" min="256" max="2048">
+      </div>
+    </div>
+
+    <div class="grid">
+      <div>
+        <label for="steps">步数 steps</label>
+        <input id="steps" type="number" value="24" min="1" max="150">
+      </div>
+      <div>
+        <label for="cfg">cfg</label>
+        <input id="cfg" type="number" value="3.5" min="0" max="30" step="0.1">
+      </div>
+      <div>
+        <label for="seed">种子 seed（-1 随机）</label>
+        <input id="seed" type="number" value="-1" min="-1">
+      </div>
+    </div>
+
+    <button id="btn-generate">生成图片</button>
+    <div id="status" class="status"></div>
+    <img id="result" class="result-img" alt="" style="display:none;">
+  </div>
+
+  <div class="card">
+    <div class="section-title">图库</div>
+    <div id="gallery" class="gallery"></div>
+    <div class="hint">点击图片可查看大图；图库在页面加载时自动刷新。</div>
+  </div>
+</div>
+
+<script>
+const API = "http://127.0.0.1:8000";
+
+const $ = (id) => document.getElementById(id);
+
+function setStatus(text, cls) {
+  const el = $("status");
+  el.textContent = text;
+  el.className = "status " + (cls || "");
+}
+
+async function generate() {
+  const btn = $("btn-generate");
+  const payload = {
+    prompt: $("prompt").value.trim(),
+    negative_prompt: $("negative").value.trim(),
+    width: parseInt($("width").value) || 1024,
+    height: parseInt($("height").value) || 1024,
+    steps: parseInt($("steps").value) || 24,
+    cfg: parseFloat($("cfg").value) || 3.5,
+    seed: parseInt($("seed").value) || -1,
+  };
+
+  if (!payload.prompt) { setStatus("请先填写正向提示词", "failed"); return; }
+
+  btn.disabled = true;
+  setStatus("正在提交任务…", "processing");
+
+  try {
+    const resp = await fetch(API + "/api/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const task = await resp.json();
+    if (!resp.ok || !task.id) {
+      setStatus("提交失败：" + (task.detail || JSON.stringify(task)), "failed");
+      btn.disabled = false;
+      return;
+    }
+    setStatus("任务 #" + task.id + " 已提交，等待出图…", "pending");
+    pollTask(task.id);
+  } catch (err) {
+    setStatus("请求出错：" + err.message, "failed");
+    btn.disabled = false;
+  }
+}
+
+async function pollTask(taskId) {
+  const timer = setInterval(async () => {
+    try {
+      const resp = await fetch(API + "/api/tasks/" + taskId);
+      const task = await resp.json();
+      if (task.status === "completed") {
+        clearInterval(timer);
+        const img = task.images && task.images[0];
+        if (img) {
+          $("result").src = API + img.file_url;
+          $("result").style.display = "block";
+          setStatus("出图完成 ✓", "completed");
+        } else {
+          setStatus("任务完成但没有图片", "failed");
+        }
+        $("btn-generate").disabled = false;
+        loadGallery();
+      } else if (task.status === "failed") {
+        clearInterval(timer);
+        setStatus("出图失败：" + (task.error || "未知错误"), "failed");
+        $("btn-generate").disabled = false;
+      } else {
+        setStatus("任务 #" + taskId + " 状态：" + task.status + "…", "processing");
+      }
+    } catch (err) {
+      clearInterval(timer);
+      setStatus("查询任务出错：" + err.message, "failed");
+      $("btn-generate").disabled = false;
+    }
+  }, 2000);
+}
+
+async function loadGallery() {
+  try {
+    const resp = await fetch(API + "/api/images");
+    const images = await resp.json();
+    const gallery = $("gallery");
+    gallery.innerHTML = "";
+    if (!images.length) {
+      gallery.innerHTML = '<div class="hint">暂无图片</div>';
+      return;
+    }
+    images.forEach((img) => {
+      const item = document.createElement("div");
+      item.className = "gallery-item";
+      const url = API + img.file_url;
+      item.innerHTML = '<img src="' + url + '" loading="lazy"><div class="meta">任务 #' + img.task_id + '</div>';
+      item.onclick = () => {
+        $("result").src = url;
+        $("result").style.display = "block";
+      };
+      gallery.appendChild(item);
+    });
+  } catch (err) {
+    $("gallery").innerHTML = '<div class="hint">图库加载失败：' + err.message + '</div>';
+  }
+}
+
+$("btn-generate").addEventListener("click", generate);
+loadGallery();
+</script>
+</body>
+</html>
