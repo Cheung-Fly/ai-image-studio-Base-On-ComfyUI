@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI 生图工坊 · 本地全流程原理讲解</title>
+<style>
+  :root{
+    --bg:#f4f6f8; --card:#ffffff; --ink:#1f2933; --ink2:#52606d; --line:#d9dee4;
+    --teal:#0f766e; --teal-bg:#e6f4f1;
+    --blue:#2c5f8a; --blue-bg:#e8f1f8;
+    --orange:#c85a17; --orange-bg:#fdeee2;
+    --red:#b3261e; --red-bg:#fbeae9;
+    --green:#2e7d32; --green-bg:#e8f5e9;
+    --slate:#3a506b; --slate-bg:#eef2f6;
+    --gold:#8a6d1d; --gold-bg:#f8f2dd;
+    --mono:"JetBrains Mono","Cascadia Code",Consolas,"Courier New",monospace;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:"Segoe UI","Microsoft YaHei",system-ui,-apple-system,sans-serif;
+    line-height:1.7;font-size:15px;}
+  .wrap{max-width:1120px;margin:0 auto;padding:32px 22px 80px;}
+  h1{font-size:28px;margin:0 0 6px;letter-spacing:.5px;}
+  .sub{color:var(--ink2);margin:0 0 26px;}
+  h2{font-size:21px;margin:42px 0 14px;padding-left:12px;border-left:5px solid var(--teal);}
+  h3{font-size:16px;margin:22px 0 8px;}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:20px 22px;margin:14px 0;
+    box-shadow:0 1px 3px rgba(31,41,51,.06);}
+  code,.mono{font-family:var(--mono);font-size:.88em;background:#eef1f4;padding:1px 6px;border-radius:5px;color:#0b4f6c;}
+  pre{background:#102a33;color:#e6f4f1;border-radius:10px;padding:14px 16px;overflow-x:auto;font-family:var(--mono);
+    font-size:13px;line-height:1.6;}
+  pre .c{color:#7fb7ad;}
+  table{border-collapse:collapse;width:100%;margin:10px 0;font-size:14px;}
+  th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top;}
+  th{background:#eef2f5;}
+  .tag{display:inline-block;font-size:12px;font-weight:600;border-radius:5px;padding:1px 8px;margin-right:6px;}
+  .t-blue{background:var(--blue-bg);color:var(--blue);}
+  .t-red{background:var(--red-bg);color:var(--red);}
+  .t-orange{background:var(--orange-bg);color:var(--orange);}
+  .t-slate{background:var(--slate-bg);color:var(--slate);}
+  .t-teal{background:var(--teal-bg);color:var(--teal);}
+  .t-green{background:var(--green-bg);color:var(--green);}
+  .t-gold{background:var(--gold-bg);color:var(--gold);}
+
+  /* ===== 架构图 ===== */
+  .arch{display:grid;grid-template-columns:1fr 70px 1.15fr 70px 1fr;align-items:center;gap:0;}
+  .lane{display:flex;flex-direction:column;gap:12px;}
+  .node{border-radius:10px;padding:12px 14px;border:1.5px solid;font-size:13.5px;}
+  .node b{display:block;font-size:14.5px;margin-bottom:2px;}
+  .node small{color:var(--ink2);}
+  .n-client{background:var(--slate-bg);border-color:var(--slate);}
+  .n-api{background:var(--green-bg);border-color:var(--green);}
+  .n-redis{background:var(--red-bg);border-color:var(--red);}
+  .n-worker{background:var(--orange-bg);border-color:var(--orange);}
+  .n-comfy{background:var(--blue-bg);border-color:var(--blue);}
+  .n-db{background:var(--teal-bg);border-color:var(--teal);}
+  .n-fs{background:var(--gold-bg);border-color:var(--gold);}
+  .arrowcol{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;color:var(--ink2);font-size:11.5px;text-align:center;}
+  .arrowcol .ar{font-size:22px;color:var(--ink2);line-height:1;}
+  .stack-label{font-size:11px;letter-spacing:1px;color:var(--ink2);text-transform:uppercase;text-align:center;margin-bottom:2px;}
+  .legend{display:flex;flex-wrap:wrap;gap:14px;margin-top:14px;font-size:12.5px;color:var(--ink2);}
+  .legend span{display:inline-flex;align-items:center;gap:6px;}
+  .dot{width:11px;height:11px;border-radius:3px;display:inline-block;}
+
+  /* ===== 时序步骤 ===== */
+  .steps{position:relative;margin-left:8px;padding-left:26px;border-left:2px dashed var(--line);}
+  .step{position:relative;margin:0 0 14px;}
+  .step:before{content:attr(data-n);position:absolute;left:-39px;top:2px;width:26px;height:26px;border-radius:50%;
+    background:var(--teal);color:#fff;font-weight:700;font-size:13px;display:flex;align-items:center;justify-content:center;}
+  .step .who{font-weight:700;}
+  .step .why{color:var(--ink2);font-size:13.5px;}
+  .step.api:before{background:var(--green);}
+  .step.redis:before{background:var(--red);}
+  .step.worker:before{background:var(--orange);}
+  .step.comfy:before{background:var(--blue);}
+
+  /* ===== 状态机 ===== */
+  .fsm{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:10px;margin:10px 0;}
+  .state{border-radius:10px;padding:12px 18px;font-weight:700;border:2px solid;text-align:center;min-width:110px;}
+  .s-pending{background:var(--slate-bg);border-color:var(--slate);}
+  .s-processing{background:var(--blue-bg);border-color:var(--blue);}
+  .s-done{background:var(--green-bg);border-color:var(--green);}
+  .s-fail{background:var(--red-bg);border-color:var(--red);}
+  .trans{font-size:12.5px;color:var(--ink2);text-align:center;line-height:1.3;}
+
+  /* ===== 工作流节点链 ===== */
+  .wf{display:flex;flex-wrap:wrap;align-items:stretch;gap:8px;}
+  .wf-col{flex:1;min-width:150px;display:flex;flex-direction:column;gap:8px;justify-content:center;}
+  .wf-node{border:1.5px solid var(--blue);background:var(--blue-bg);border-radius:9px;padding:9px 11px;font-size:12.5px;}
+  .wf-node b{font-family:var(--mono);font-size:12px;}
+  .wf-node .ph{color:var(--orange);font-family:var(--mono);font-weight:700;}
+  .wf-arrow{display:flex;align-items:center;color:var(--ink2);font-size:20px;}
+  .note{background:#fffdf5;border:1px solid #e8d9a0;border-radius:9px;padding:10px 14px;font-size:13.5px;margin:12px 0;}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+  @media(max-width:820px){
+    .arch{grid-template-columns:1fr;}
+    .arrowcol{flex-direction:row;padding:4px 0;}
+    .grid2{grid-template-columns:1fr;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>AI 生图工坊 · 本地全流程原理讲解</h1>
+  <p class="sub">对应你在本机执行的每一条命令：它启动了什么进程、为什么需要它、数据在组件之间怎么流动。建议配合 <span class="mono">README.md</span> 一起看。</p>
+
+  <!-- ============ 1. 全景架构 ============ -->
+  <h2>一、全景架构：一共 5 个独立进程</h2>
+  <div class="card">
+    <div class="arch">
+      <!-- 调用方 -->
+      <div class="lane">
+        <div class="stack-label">调用方</div>
+        <div class="node n-client">
+          <b>Swagger UI / curl / 未来的 Vue 前端</b>
+          <small>发 HTTP 请求、看任务状态、取图片</small>
+        </div>
+      </div>
+      <div class="arrowcol"><div class="ar">→</div><div>HTTP<br>JSON</div></div>
+      <!-- API + DB -->
+      <div class="lane">
+        <div class="stack-label">本机进程（你启动的）</div>
+        <div class="node n-api">
+          <b>② FastAPI（uvicorn 运行，端口 8000）</b>
+          <small>参数校验 · 路由 · 写数据库 · 投递任务消息 · 毫秒级返回</small>
+        </div>
+        <div class="node n-db">
+          <b>SQLite 文件数据库 <span class="mono">data/aistudio.db</span></b>
+          <small>tasks 表（参数+状态）、images 表（产物记录）</small>
+        </div>
+      </div>
+      <div class="arrowcol"><div class="ar">→</div><div>任务消息<br>JSON</div></div>
+      <!-- Redis + Worker -->
+      <div class="lane">
+        <div class="stack-label">队列与执行</div>
+        <div class="node n-redis">
+          <b>Redis（端口 6379）</b>
+          <small>消息队列 broker：暂存"待出图任务"</small>
+        </div>
+        <div class="node n-worker">
+          <b>③ Celery Worker（独立终端）</b>
+          <small>取任务 → 注入工作流 → 调 ComfyUI → 轮询 → 下图落盘 → 回写状态</small>
+        </div>
+      </div>
+    </div>
+
+    <!-- 第二行：worker 与 ComfyUI / 文件存储 -->
+    <div style="display:grid;grid-template-columns:1fr 70px 1.15fr 70px 1fr;align-items:center;margin-top:14px;">
+      <div></div>
+      <div></div>
+      <div class="node n-fs" style="margin:0 12px;">
+        <b>图片存储 <span class="mono">backend/data/images/&lt;任务id&gt;/</span></b>
+        <small>从 ComfyUI 下载的 PNG 落盘，供 <span class="mono">/api/images/{id}/file</span> 下载</small>
+      </div>
+      <div class="arrowcol"><div class="ar">←</div><div>写文件</div></div>
+      <div class="node n-comfy">
+        <b>ComfyUI（端口 8188，占用 GPU）</b>
+        <small>Krea2 模型加载 + 采样出图；提供 <span class="mono">/prompt</span>、<span class="mono">/history</span>、<span class="mono">/view</span> 三个 HTTP 接口</small>
+      </div>
+    </div>
+
+    <div class="legend">
+      <span><i class="dot" style="background:var(--green)"></i>FastAPI（接单）</span>
+      <span><i class="dot" style="background:var(--red)"></i>Redis（传任务）</span>
+      <span><i class="dot" style="background:var(--orange)"></i>Celery（干活）</span>
+      <span><i class="dot" style="background:var(--blue)"></i>ComfyUI（出图）</span>
+      <span><i class="dot" style="background:var(--teal)"></i>SQLite（记账）</span>
+      <span><i class="dot" style="background:var(--gold)"></i>文件存储（存图）</span>
+    </div>
+    <div class="note"><b>一句话理解分工：</b>FastAPI 像"前台接单员"，Redis 像"工单传送带"，Celery worker 像"后厨"，ComfyUI 是"炉灶（GPU）"，SQLite 是"订单台账"，文件夹是"取餐柜"。前台绝不站在炉灶前等菜做完——接单、派单后立刻回去接待下一位客人。</div>
+  </div>
+
+  <!-- ============ 2. 为什么是队列架构 ============ -->
+  <h2>二、为什么非要拆成 API + 队列 + Worker？</h2>
+  <div class="card">
+    <p>出一张图要 <b>30 秒～3 分钟</b>（首次还要加载 13GB 模型）。如果让 HTTP 请求在 FastAPI 里<b>同步</b>调用 ComfyUI 并死等结果，会有四个硬伤：</p>
+    <table>
+      <tr><th>问题</th><th>后果</th><th>队列架构如何解决</th></tr>
+      <tr><td>请求长时间挂起</td><td>浏览器/网关一般 30～60 秒超时，页面转圈失败</td><td>API 入库+发消息后<b>立即返回 202 和 task_id</b>（毫秒级）</td></tr>
+      <tr><td>并发请求堆积</td><td>10 个人同时点，10 个出图任务一起挤进 8GB 显存，直接 OOM</td><td>任务在 Redis 排队，worker 按 <span class="mono">--pool=solo</span> 串行处理，削峰填谷</td></tr>
+      <tr><td>失败无法恢复</td><td>出图中途网络抖动，整个请求白等，只能用户手动重来</td><td>Celery 内置<b>重试</b>（本项目连接类失败自动重试 2 次）、状态可追踪</td></tr>
+      <tr><td>API 重启任务全丢</td><td>正在等的请求随进程一起消失</td><td>任务持久在 Redis + 状态在 SQLite，worker 重启后可继续/可查</td></tr>
+    </table>
+    <p style="margin-bottom:0">这就是经典的 <b>生产者—消费者模式</b>：API 是生产者，worker 是消费者，两者<b>解耦</b>，各自独立启停、独立扩容（以后量大了可以多开几台 worker 机器）。这也是岗位面试中"AIGC 应用工程化"的高频考点。</p>
+  </div>
+
+  <!-- ============ 3. 逐步讲解 ============ -->
+  <h2>三、逐步讲解：每条命令背后的原理</h2>
+
+  <div class="card">
+    <h3><span class="tag t-slate">前置</span>Redis 与 ComfyUI 为什么要先开着</h3>
+    <p style="margin:6px 0">
+      <b>Redis</b> 是一个内存型键值数据库，在这里充当 Celery 的 <b>消息代理（broker）</b>：worker 启动时会连接 6379 并"订阅"一个名为 <span class="mono">aistudio</span> 的队列；API 投递任务时，Celery 把 <code>{"任务名":"app.workers.tasks.run_generation","参数":[任务id]}</code> 序列化成 JSON 推进 Redis 的列表（底层相当于 LPUSH/BRPOP）。worker 阻塞等待、取到即执行。它还兼任 result backend（存任务返回值），但本项目的业务状态主要落在 SQLite。<br>
+      <b>ComfyUI</b> 是真正驱动 GPU 出图的服务。本项目的后端<b>自己不含任何 AI 模型代码</b>，只是它的 HTTP 客户端——所以必须先有 ComfyUI 在 8188 端口待命。
+    </p>
+  </div>
+
+  <div class="card">
+    <h3><span class="tag t-teal">第 1 步</span>创建虚拟环境 + <span class="mono">pip install -r requirements.txt</span></h3>
+    <p style="margin:6px 0"><b>venv 原理：</b>在 <span class="mono">backend/.venv</span> 里放一套独立的 Python 解释器链接和独立的 <span class="mono">site-packages</span> 包目录。激活（Activate.ps1）后，终端的 PATH 优先指向它，于是 <span class="mono">python</span> 和 <span class="mono">pip</span> 都只作用于这个项目——不同项目可以用不同版本的包，互不污染，也不动系统 Python。</p>
+    <table>
+      <tr><th>安装的包</th><th>在项目里扮演什么角色</th></tr>
+      <tr><td><b>uvicorn[standard]</b></td><td><b>ASGI 服务器</b>：真正监听 8000 端口、收发 TCP/HTTP 的程序；把请求按 ASGI 规范交给 FastAPI。<span class="mono">--reload</span> 是开发期文件改动自动重启。</td></tr>
+      <tr><td><b>fastapi</b></td><td><b>Web 框架</b>：URL 路由、Pydantic 参数校验、依赖注入、JSON 序列化、自动生成 <span class="mono">/docs</span>。</td></tr>
+      <tr><td><b>sqlalchemy</b></td><td><b>ORM</b>：用 Python 类/对象操作数据库，自动生成 SQL，不手写 sqlite3。</td></tr>
+      <tr><td><b>pydantic / pydantic-settings</b></td><td>请求体的类型与取值范围校验（不合格自动返回 422）；从环境变量读取配置。</td></tr>
+      <tr><td><b>celery</b></td><td><b>分布式任务队列框架</b>：提供 <span class="mono">@celery_app.task</span>、<span class="mono">.delay()</span>、worker 命令行、重试机制。</td></tr>
+      <tr><td><b>redis</b></td><td>Redis 的 Python 客户端，Celery 用它连接 broker。</td></tr>
+      <tr><td><b>httpx</b></td><td>HTTP 客户端，worker 用它调用 ComfyUI 的三个接口；冒烟测试也用它的 TestClient 打 API。</td></tr>
+      <tr><td><b>pillow</b></td><td>读取下载回来的图片宽高，写入 images 表。</td></tr>
+    </table>
+  </div>
+
+  <div class="card">
+    <h3><span class="tag t-gold">第 2 步</span>冒烟测试 <span class="mono">python tests\smoke_test.py</span> —— 它是怎么"无中生有"跑通的？</h3>
+    <p style="margin:6px 0">这一步<b>不需要 Redis、不需要 ComfyUI、不起真实端口</b>，却能把整条业务链路测一遍，靠两个"替身"：</p>
+    <div class="grid2">
+      <div>
+        <b>替身 1：假的 ComfyUI 服务</b><br>
+        测试脚本在本机随机端口起一个极简 HTTP 服务（ThreadingHTTPServer），<b>按 ComfyUI 的接口契约</b>返回固定内容：
+        <ul style="margin:6px 0;padding-left:18px">
+          <li><span class="mono">POST /prompt</span> → 回一个固定 prompt_id</li>
+          <li><span class="mono">GET /history/&lt;id&gt;</span> → 回"已完成"+一张图片的文件名</li>
+          <li><span class="mono">GET /view</span> → 回一张 1×1 像素的合法 PNG</li>
+        </ul>
+      </div>
+      <div>
+        <b>替身 2：Celery eager 模式</b><br>
+        设置 <span class="mono">task_always_eager=True</span> 后，<span class="mono">.delay()</span> <b>不再往 Redis 发消息</b>，而是在当前线程里<b>立刻同步执行</b>任务函数。于是不需要 worker 进程，API 调用走完时图也"生成"完了。
+      </div>
+    </div>
+    <p style="margin-bottom:6px">再配合 FastAPI 的 TestClient（进程内直接调用应用，不起网络端口）和临时目录（数据库、图片都写进系统临时文件夹），8 个断言依次验证：健康检查 → 接单返回 202 → 任务 completed → 详情带图 → 图库非空 → 下载是合法 PNG → 状态过滤 → 不存在返回 404 → 工作流参数注入正确。</p>
+    <div class="note" style="margin-bottom:0">价值：改完代码 2 秒自检，不依赖显卡环境；以后接 CI/CD，每次提交自动跑。这是工程化项目的"安全网"。</div>
+  </div>
+
+  <div class="card">
+    <h3><span class="tag t-green">第 3 步</span>启动 API：<span class="mono">uvicorn app.main:app --port 8000</span></h3>
+    <p style="margin:6px 0">
+      <span class="mono">app.main:app</span> 的含义是"从 <span class="mono">app/main.py</span> 里导入名为 <span class="mono">app</span> 的 FastAPI 实例"。启动时发生：<br>
+      ① uvicorn 绑定 8000 端口开始监听；② 触发 lifespan，调用 <span class="mono">init_db()</span> 在 SQLite 里建好 tasks/images 两张表；③ 注册三个路由模块（generate / tasks / images）；④ 根据代码里的类型注解自动生成 OpenAPI 文档，所以 <span class="mono">/docs</span> 的 Swagger 页面是"白送"的。<br>
+      一次请求进来后：路由函数接收 → Pydantic 把 JSON 校验为 <span class="mono">GenerateRequest</span>（width 超出 256~2048 直接 422）→ <span class="mono">get_db()</span> 依赖注入给一个数据库会话，请求结束自动关闭 → 业务处理 → response_model 把 ORM 对象转成 JSON 返回。
+    </p>
+  </div>
+
+  <div class="card">
+    <h3><span class="tag t-orange">第 4 步</span>启动 Worker：<span class="mono">celery -A app.workers.celery_app worker --pool=solo</span></h3>
+    <p style="margin:6px 0">
+      <span class="mono">-A app.workers.celery_app</span> 指定 Celery 应用实例所在模块；worker 启动后连上 Redis、注册 <span class="mono">include</span> 里声明的任务函数，然后进入死循环等消息。看到 <span class="mono">celery@... ready.</span> 就是就绪。<br>
+      <b>为什么 Windows 必须加 <span class="mono">--pool=solo</span>？</b>Celery 默认的 prefork 池用操作系统的 <span class="mono">fork()</span> 创建子进程来并发执行任务，而 Windows 没有 fork，直接报错；<span class="mono">solo</span> 是单线程池（一次一个任务，正好匹配 8GB 显存串行出图），想用并发可换 <span class="mono">--pool=threads --concurrency=2</span>。<br>
+      Worker 和 API 是<b>两个完全独立的进程</b>，靠 Redis 里的消息和共享的 SQLite 文件协作——所以必须各开一个终端，缺一不可。
+    </p>
+  </div>
+
+  <div class="card">
+    <h3><span class="tag t-blue">第 5、6 步</span>提交任务 &amp; 查看结果 —— 完整链路时序</h3>
+    <div class="steps">
+      <div class="step api" data-n="1"><span class="who">FastAPI：</span>收到 <span class="mono">POST /api/generate</span>，Pydantic 校验 prompt/尺寸/steps 等参数。<div class="why">原理：非法参数在进业务逻辑前就被拦下，返回 422。</div></div>
+      <div class="step api" data-n="2"><span class="who">FastAPI：</span>在 tasks 表插入一行，<b>status=pending</b>，commit 后拿到自增主键 task_id。<div class="why">先落库再派单：任何任务都有据可查，不依赖内存。</div></div>
+      <div class="step redis" data-n="3"><span class="who">FastAPI → Redis：</span>调用 <span class="mono">run_generation.delay(task.id)</span>，Celery 把任务消息序列化后推进 Redis 队列。<div class="why">这一步只是"塞工单"，不做出图。</div></div>
+      <div class="step api" data-n="4"><span class="who">FastAPI：</span>立即返回 <b>202 Accepted</b> + 任务对象（此时还是 pending）。<div class="why">HTTP 请求在几十毫秒内结束，不会超时。</div></div>
+      <div class="step worker" data-n="5"><span class="who">Celery Worker：</span>从 Redis 取到消息，把状态改为 <b>processing</b>。<div class="why">状态机推进；前端轮询 /api/tasks/{id} 就能看到变化。</div></div>
+      <div class="step worker" data-n="6"><span class="who">Worker · workflow.py：</span>读取 <span class="mono">workflows/txt2img_api.json</span> 模板，把 <span class="mono">{{prompt}}、{{width}}、{{steps}}、{{seed}}</span> 等占位符替换成实际参数。<div class="why">模板与代码分离：换模型/调节点只改 JSON，不动 Python。</div></div>
+      <div class="step comfy" data-n="7"><span class="who">Worker → ComfyUI：</span><span class="mono">POST http://127.0.0.1:8188/prompt</span>，body 是 <span class="mono">{"prompt": 工作流JSON}</span>；ComfyUI 校验节点、排队执行，返回 <b>prompt_id</b> 存库。<div class="why">ComfyUI 自己也有队列，GPU 任务在它那边串行跑。</div></div>
+      <div class="step comfy" data-n="8"><span class="who">Worker ↔ ComfyUI：</span>每 2 秒 <span class="mono">GET /history/{prompt_id}</span> 轮询，直到状态 completed 且 outputs 里出现 SaveImage 节点产出的图片文件名。<div class="why">轮询是最简单可靠的进度同步方式（后续里程碑可升级 WebSocket）。</div></div>
+      <div class="step comfy" data-n="9"><span class="who">Worker ← ComfyUI：</span>用 <span class="mono">GET /view?filename=...&amp;type=output</span> 把 PNG 字节下载回来，存到 <span class="mono">data/images/{task_id}/</span>，Pillow 读宽高，在 images 表插记录。<div class="why">平台自己留存一份，不依赖 ComfyUI 的 output 目录，便于图库管理。</div></div>
+      <div class="step worker" data-n="10"><span class="who">Worker：</span>把任务状态改为 <b>completed</b>；任何环节异常则改为 <b>failed</b> 并记录 error，连接类瞬时错误自动重试最多 2 次。<div class="why">你调 GET /api/tasks/1 看到 completed 和图片 URL，全链路闭环。</div></div>
+    </div>
+  </div>
+
+  <!-- ============ 4. 状态机 ============ -->
+  <h2>四、任务状态机</h2>
+  <div class="card">
+    <div class="fsm">
+      <div class="state s-pending">pending<br><small>已入库待处理</small></div>
+      <div class="trans">→<br>worker 取走</div>
+      <div class="state s-processing">processing<br><small>ComfyUI 出图中</small></div>
+      <div class="trans">→<br>成功</div>
+      <div class="state s-done">completed<br><small>图片已落盘入库</small></div>
+    </div>
+    <div class="fsm">
+      <div class="state s-processing" style="opacity:.85">processing</div>
+      <div class="trans">→<br>异常</div>
+      <div class="state s-fail">failed<br><small>记录 error 原因</small></div>
+      <div class="trans" style="font-style:italic;">⇢ 连接类失败自动重试（≤2 次），<br>重试时回到 processing（虚线）</div>
+    </div>
+    <p style="margin-bottom:0" class="mono" style="font-size:13px">GET /api/tasks?status=completed 就是按这张状态机的枚举值做过滤。</p>
+  </div>
+
+  <!-- ============ 5. ComfyUI 工作流原理 ============ -->
+  <h2>五、ComfyUI API 模式与工作流模板注入</h2>
+  <div class="card">
+    <p>平时你在 ComfyUI 网页里拖节点连线；开启 API 模式后，画布可以导出成一份 JSON：<b>key 是节点编号，value 是 <span class="mono">{"class_type": 节点类型, "inputs": 参数}</span></b>；inputs 里形如 <span class="mono">["1", 0]</span> 的数组表示"接 1 号节点的第 0 个输出口"——这就是连线。本机没有传统 SD checkpoint，模板已按 <b>Krea 2</b> 组合模型配好，节点链如下：</p>
+    <div class="wf">
+      <div class="wf-col">
+        <div class="wf-node"><b>UNETLoader</b><br>Krea2-Moody-Mix（13GB 扩散模型）</div>
+        <div class="wf-node"><b>CLIPLoader</b><br>qwen3vl_4b，type=<span class="mono">krea2</span></div>
+        <div class="wf-node"><b>VAELoader</b><br>qwen_image_vae</div>
+        <div class="wf-node"><b>EmptySD3LatentImage</b><br>尺寸 <span class="ph">{{width}}×{{height}}</span></div>
+      </div>
+      <div class="wf-arrow">→</div>
+      <div class="wf-col">
+        <div class="wf-node"><b>CLIPTextEncode ×2</b><br>正向 <span class="ph">{{prompt}}</span><br>负向 <span class="ph">{{negative_prompt}}</span></div>
+        <div class="wf-node" style="margin-top:auto"><b>（潜空间噪声画布）</b></div>
+      </div>
+      <div class="wf-arrow">→</div>
+      <div class="wf-col">
+        <div class="wf-node"><b>KSampler</b><br>采样去噪：<span class="ph">{{steps}}</span> 步、<span class="ph">{{cfg}}</span>、<span class="ph">{{seed}}</span><br>euler / simple</div>
+      </div>
+      <div class="wf-arrow">→</div>
+      <div class="wf-col">
+        <div class="wf-node"><b>VAEDecode</b><br>潜空间 → RGB 像素</div>
+        <div class="wf-node"><b>SaveImage</b><br>前缀 aistudio，写入 ComfyUI/output</div>
+      </div>
+    </div>
+    <div class="note"><b>为什么用 EmptySD3LatentImage 而不是常见教程里的 EmptyLatentImage？</b>Krea 2 属于 SD3/MMDiT 架构，潜空间通道数与 SD1.5/SDXL 不同，必须用 SD3 版的空白潜空间节点，否则节点校验就会报错。这也是换模型时最容易踩的坑。</div>
+  </div>
+
+  <!-- ============ 6. 数据存在哪 ============ -->
+  <h2>六、数据落在哪里：两张表 + 一个文件夹</h2>
+  <div class="card">
+    <table>
+      <tr><th>存储</th><th>内容</th><th>为什么这么设计</th></tr>
+      <tr><td>SQLite：<b>tasks</b> 表</td><td>提示词、负向词、宽高、steps、cfg、seed、status、error、comfy_prompt_id、创建/更新时间</td><td>任务台账：支持列表分页、状态过滤、失败排查</td></tr>
+      <tr><td>SQLite：<b>images</b> 表</td><td>所属 task_id（外键）、磁盘文件名/相对路径、宽高</td><td>图库：一个任务可对应多张图（以后支持 batch）</td></tr>
+      <tr><td>文件夹 <span class="mono">data/images/&lt;id&gt;/</span></td><td>真实 PNG 文件</td><td>数据库只存路径，二进制不入库；<span class="mono">/api/images/{id}/file</span> 用 FileResponse 回传</td></tr>
+    </table>
+    <p style="margin-bottom:0">SQLite 是<b>嵌入式文件数据库</b>，无需独立安装服务，适合本机开发；将来上生产只需把 <span class="mono">DATABASE_URL</span> 换成 PostgreSQL 连接串，ORM 代码基本不动——这就是数据访问层抽象的意义。</p>
+  </div>
+
+  <!-- ============ 7. 代码地图 ============ -->
+  <h2>七、代码文件职责地图（出问题知道去哪改）</h2>
+  <div class="card">
+    <table>
+      <tr><th>文件</th><th>职责</th><th>常见排查场景</th></tr>
+      <tr><td class="mono">app/main.py</td><td>FastAPI 入口、中间件、路由注册、启动建表、/health</td><td>服务起不来、跨域问题</td></tr>
+      <tr><td class="mono">app/config.py</td><td>环境变量与默认值（ComfyUI 地址、Redis、路径等）</td><td>端口/路径不对先看这里</td></tr>
+      <tr><td class="mono">app/models.py</td><td>Task / Image ORM 模型与状态枚举</td><td>要加字段（如模型名、批量数）</td></tr>
+      <tr><td class="mono">app/schemas.py</td><td>请求/响应的 Pydantic 模型与参数范围</td><td>参数校验规则调整</td></tr>
+      <tr><td class="mono">app/api/generate.py</td><td>POST /api/generate：入库 + 投递任务</td><td>接单逻辑</td></tr>
+      <tr><td class="mono">app/api/tasks.py</td><td>任务列表/详情/状态过滤</td><td>查询类问题</td></tr>
+      <tr><td class="mono">app/api/images.py</td><td>图库列表、图片文件下载</td><td>图片打不开</td></tr>
+      <tr><td class="mono">app/services/comfy_client.py</td><td>ComfyUI 三个接口的 HTTP 客户端 + 轮询</td><td>连不上 ComfyUI、取不到图、超时</td></tr>
+      <tr><td class="mono">app/services/workflow.py</td><td>模板加载与 {{占位符}} 注入</td><td>换模型、加参数、节点报错</td></tr>
+      <tr><td class="mono">app/workers/celery_app.py</td><td>Celery 实例、broker/backend、队列配置</td><td>worker 连不上 Redis</td></tr>
+      <tr><td class="mono">app/workers/tasks.py</td><td><b>出图执行体</b>：状态机推进、调 ComfyUI、落盘、重试</td><td>任务 failed 的核心排查点</td></tr>
+      <tr><td class="mono">workflows/txt2img_api.json</td><td>ComfyUI 工作流模板（Krea2 节点链）</td><td>换采样器/模型/节点</td></tr>
+      <tr><td class="mono">tests/smoke_test.py</td><td>模拟 ComfyUI + eager 模式的 8 项端到端断言</td><td>回归自检</td></tr>
+    </table>
+  </div>
+
+  <!-- ============ 8. 面试串讲 ============ -->
+  <h2>八、30 秒串讲（可以直接讲给面试官）</h2>
+  <div class="card">
+    <p style="margin:0">
+      "这是一个把 ComfyUI 工作流产品化的 AIGC 生图平台。前端提交提示词和参数到 <b>FastAPI</b>，API 用 Pydantic 校验后把任务写入 <b>SQLite</b>（状态 pending），并通过 <b>Celery 向 Redis 队列投递消息</b>，立即返回任务 ID。<b>Celery worker</b> 异步消费任务，把参数注入参数化的 ComfyUI 工作流模板，调用 ComfyUI 的 <span class="mono">/prompt</span> 接口提交、轮询 <span class="mono">/history</span> 等待完成、再经 <span class="mono">/view</span> 下载图片落盘并回写状态为 completed，全程是 pending→processing→completed/failed 的状态机，失败可重试。我还写了基于模拟服务和 Celery eager 模式的端到端冒烟测试，不依赖 GPU 即可验证全链路。下一步是 Vue 前端、WebSocket 实时进度和 Docker 编排。"
+    </p>
+  </div>
+
+</div>
+</body>
+</html>

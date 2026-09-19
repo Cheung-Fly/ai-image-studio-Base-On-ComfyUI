@@ -1,0 +1,63 @@
+"""ORM 模型：生成任务 + 图片资产。"""
+import enum
+from datetime import datetime
+
+from sqlalchemy import Column, DateTime, Enum, Float, ForeignKey, Integer, String, Text
+from sqlalchemy.orm import relationship
+
+from .database import Base
+
+
+class TaskStatus(str, enum.Enum):
+    pending = "pending"          # 已入队，等待 worker 处理
+    processing = "processing"    # worker 正在生成
+    completed = "completed"      # 生成成功
+    failed = "failed"            # 生成失败
+
+
+class GenerationTask(Base):
+    """一次文生图请求的任务记录。"""
+
+    __tablename__ = "tasks"
+
+    id = Column(Integer, primary_key=True, index=True)
+    prompt = Column(Text, nullable=False)
+    negative_prompt = Column(Text, default="")
+    width = Column(Integer, default=1024)
+    height = Column(Integer, default=1024)
+    steps = Column(Integer, default=24)
+    cfg = Column(Float, default=3.5)
+    seed = Column(Integer, default=0)
+    status = Column(Enum(TaskStatus, native_enum=False), default=TaskStatus.pending, index=True)
+    error = Column(Text, nullable=True)
+    comfy_prompt_id = Column(String(64), nullable=True)  # ComfyUI 返回的 prompt_id
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    images = relationship(
+        "ImageAsset",
+        back_populates="task",
+        cascade="all, delete-orphan",
+        order_by="ImageAsset.id",
+    )
+
+
+class ImageAsset(Base):
+    """生成结果图片。"""
+
+    __tablename__ = "images"
+
+    id = Column(Integer, primary_key=True, index=True)
+    task_id = Column(Integer, ForeignKey("tasks.id"), index=True)
+    filename = Column(String(255), nullable=False)        # 磁盘文件名
+    filepath = Column(String(512), nullable=False)        # 相对 image_storage_dir 的路径
+    width = Column(Integer, nullable=True)
+    height = Column(Integer, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    task = relationship("GenerationTask", back_populates="images")
+
+    @property
+    def file_url(self) -> str:
+        """图片下载地址（供响应模型 file_url 字段使用）。"""
+        return f"/api/images/{self.id}/file"

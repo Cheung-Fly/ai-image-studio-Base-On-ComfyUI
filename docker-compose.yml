@@ -1,0 +1,45 @@
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: aistudio-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+
+  api:
+    build: ./backend
+    container_name: aistudio-api
+    restart: unless-stopped
+    depends_on:
+      - redis
+    ports:
+      - "8000:8000"
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - COMFYUI_BASE_URL=http://host.docker.internal:8188
+      - DATABASE_URL=sqlite:////data/aistudio.db
+      - IMAGE_STORAGE_DIR=/data/images
+      - WORKFLOW_DIR=/workflows
+    volumes:
+      - ./data:/data
+
+  worker:
+    build: ./backend
+    container_name: aistudio-worker
+    restart: unless-stopped
+    depends_on:
+      - redis
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - COMFYUI_BASE_URL=http://host.docker.internal:8188
+      - DATABASE_URL=sqlite:////data/aistudio.db
+      - IMAGE_STORAGE_DIR=/data/images
+      - WORKFLOW_DIR=/workflows
+    volumes:
+      - ./data:/data
+    command: ["celery", "-A", "app.workers.celery_app", "worker", "--loglevel=info", "--concurrency=2"]
+
+volumes:
+  redis-data:
