@@ -1,0 +1,7 @@
+﻿=== check-ignore for sensitive files ===
+backend/.env => 
+backend/data/ => 
+backend/.venv/ => 
+.workbuddy/ => 
+backend/data/aistudio.db => 
+

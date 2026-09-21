@@ -1,0 +1,9 @@
+﻿=== git status --short ===
+
+=== git log count ===
+
+=== git rev-parse HEAD ===
+
+=== check-ignore verbose .env exact ===
+=== check-ignore backend data subfiles ===
+

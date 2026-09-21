@@ -148,10 +148,8 @@ with TestClient(app) as client:
         json={
             "prompt": "a cute corgi astronaut, digital art",
             "negative_prompt": "blurry",
-            "width": 512,
-            "height": 512,
-            "steps": 20,
-            "cfg": 4.0,
+            "aspect_ratio": "3:4 (Portrait Standard)",
+            "megapixels": 2.0,
             "seed": 42,
         },
     )
@@ -191,10 +189,8 @@ with TestClient(app) as client:
     wf = build_workflow(
         prompt="hello world",
         negative_prompt="blurry",
-        width=768,
-        height=512,
-        steps=12,
-        cfg=2.0,
+        aspect_ratio="16:9 (Widescreen)",
+        megapixels=4.0,
         seed=7,
     )
     check(
@@ -203,13 +199,18 @@ with TestClient(app) as client:
         and wf["23"]["inputs"]["text"] == "blurry"
         and wf["20"]["inputs"]["seed"] == 7,
     )
+    check(
+        "工作流注入 aspect_ratio/megapixels 正确",
+        wf["17"]["inputs"]["aspect_ratio"] == "16:9 (Widescreen)"
+        and wf["17"]["inputs"]["megapixels"] == 4.0,
+    )
 
 print()
 if FAILED == 0:
-    print(f"SMOKE TEST PASSED（{PASSED}/8）")
+    print(f"SMOKE TEST PASSED（{PASSED}/9）")
     sys.exit(0)
 else:
-    print(f"SMOKE TEST FAILED（{PASSED}/8）")
+    print(f"SMOKE TEST FAILED（{PASSED}/9）")
     for reason in _REASONS:
         print(f"  - {reason}")
     sys.exit(1)

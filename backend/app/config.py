@@ -26,6 +26,27 @@ class Settings(BaseSettings):
     comfy_timeout: int = 900
     # ComfyUI 输出轮询间隔（秒）
     comfy_poll_interval: float = 2.0
+    # LLM 对话服务：多 provider 支持，运行时由请求指定（前端下拉框切换）
+    # OpenAI 兼容服务（OpenAI / DeepSeek / 通义 / vLLM / Ollama 等）
+    openai_base_url: str = "https://api.openai.com/v1"
+    openai_api_key: str = ""
+    openai_model: str = "gpt-4o-mini"
+    # 本地 llama.cpp server
+    llama_base_url: str = "http://127.0.0.1:8080/v1"
+    llama_api_key: str = ""
+    llama_model: str = "llama-3.1-8b"
+    # llama.cpp server 专用：最大生成 token 数（其部分版本不传 max_tokens 会报错）
+    llama_max_tokens: int = 1024
+    # 默认使用的 provider：openai / llama
+    default_llm_provider: str = "openai"
+    # JWT 签名密钥（生产环境务必通过环境变量覆盖为随机长字符串）
+    jwt_secret: str = "change-me-in-production-please"
+    # token 有效期（分钟）
+    jwt_expire_minutes: int = 60 * 24
+    # 每用户每日 LLM 调用额度（-1 表示不限）
+    daily_chat_quota: int = 100
+    # CORS 允许来源（逗号分隔），生产环境收敛为具体前端域名
+    cors_origins: str = "*"
 
     @property
     def image_dir(self) -> Path:

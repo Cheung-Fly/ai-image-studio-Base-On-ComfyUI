@@ -1,0 +1,38 @@
+{
+  "admin": [
+    2,
+    "admin"
+  ],
+  "deleted_users": [
+    [
+      1,
+      "testuser1"
+    ]
+  ],
+  "deleted_images_rows": 12,
+  "deleted_null_tasks": 6,
+  "deleted_admin_tasks": 1,
+  "final_counts": {
+    "users": 1,
+    "tasks": 0,
+    "images": 0,
+    "conversations": 1,
+    "messages": 4,
+    "usage_records": 1
+  },
+  "deleted_disk_files": [
+    "backend\\data\\images\\1\\ComfyUI_temp_qsngy_00001_.png",
+    "backend\\data\\images\\1\\Krea2-2ST-20260919171552_00001_.png",
+    "backend\\data\\images\\2\\ComfyUI_temp_sksez_00001_.png",
+    "backend\\data\\images\\2\\Krea2-2ST-20260919171552_00002_.png",
+    "backend\\data\\images\\3\\ComfyUI_temp_lbnhb_00001_.png",
+    "backend\\data\\images\\3\\Krea2-2ST-20260919171552_00003_.png",
+    "backend\\data\\images\\4\\ComfyUI_temp_jgdxh_00001_.png",
+    "backend\\data\\images\\4\\Krea2-2ST-20260919171552_00001_.png",
+    "backend\\data\\images\\5\\ComfyUI_temp_jgdxh_00002_.png",
+    "backend\\data\\images\\5\\Krea2-2ST-20260919171552_00002_.png",
+    "backend\\data\\images\\6\\ComfyUI_temp_jgdxh_00003_.png",
+    "backend\\data\\images\\6\\Krea2-2ST-20260919171552_00003_.png"
+  ],
+  "backup": "D:\\Study-Plan\\ai-image-studio\\backend\\data\\aistudio.db.bak_20260921_224230"
+}

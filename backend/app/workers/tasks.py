@@ -1,7 +1,10 @@
 """Celery 生成任务：状态流转 + 调用 ComfyUI + 落盘 + 写图库记录。"""
+import logging
 import uuid
 from datetime import datetime
 from pathlib import Path
+
+from PIL import Image
 
 from ..config import settings
 from ..database import SessionLocal
@@ -9,6 +12,8 @@ from ..models import GenerationTask, ImageAsset, TaskStatus
 from ..services.comfy_client import ComfyClient, ComfyError
 from ..services.workflow import build_workflow
 from .celery_app import celery_app
+
+logger = logging.getLogger(__name__)
 
 
 def _save_image_bytes(task_id: int, filename: str, data: bytes) -> tuple[Path, str, int, int]:
@@ -24,12 +29,11 @@ def _save_image_bytes(task_id: int, filename: str, data: bytes) -> tuple[Path, s
 
     width = height = None
     try:
-        from PIL import Image
-
         with Image.open(target) as im:
             width, height = im.size
-    except Exception:
-        pass  # 拿不到尺寸不阻塞流程
+    except (OSError, Image.UnidentifiedImageError) as exc:
+        # 图片损坏/格式无法识别时不阻塞主流程，但记录日志便于排查（不能静默 pass）
+        logger.warning("读取图片尺寸失败 %s: %s", target.name, exc)
 
     rel = target.relative_to(settings.image_dir).as_posix()
     return target, rel, width, height
@@ -57,10 +61,8 @@ def run_generation(self, task_id: int):
         workflow = build_workflow(
             prompt=task.prompt,
             negative_prompt=task.negative_prompt,
-            width=task.width,
-            height=task.height,
-            steps=task.steps,
-            cfg=task.cfg,
+            aspect_ratio=task.aspect_ratio,
+            megapixels=task.megapixels,
             seed=task.seed,
         )
 

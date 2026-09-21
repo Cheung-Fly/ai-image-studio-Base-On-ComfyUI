@@ -1,0 +1,34 @@
+﻿=== backend/data 目录内容 ===
+d-----	backend\data\images	1
+-a----	backend\data\aistudio.db	81920
+d-----	backend\data\images\1	1
+d-----	backend\data\images\2	1
+d-----	backend\data\images\3	1
+d-----	backend\data\images\4	1
+d-----	backend\data\images\5	1
+d-----	backend\data\images\6	1
+-a----	backend\data\images\1\ComfyUI_temp_qsngy_00001_.png	1999585
+-a----	backend\data\images\1\Krea2-2ST-20260919171552_00001_.png	2906745
+-a----	backend\data\images\2\ComfyUI_temp_sksez_00001_.png	1950850
+-a----	backend\data\images\2\Krea2-2ST-20260919171552_00002_.png	2774885
+-a----	backend\data\images\3\ComfyUI_temp_lbnhb_00001_.png	2139037
+-a----	backend\data\images\3\Krea2-2ST-20260919171552_00003_.png	3191410
+-a----	backend\data\images\4\ComfyUI_temp_jgdxh_00001_.png	2000452
+-a----	backend\data\images\4\Krea2-2ST-20260919171552_00001_.png	2957672
+-a----	backend\data\images\5\ComfyUI_temp_jgdxh_00002_.png	1732879
+-a----	backend\data\images\5\Krea2-2ST-20260919171552_00002_.png	2310768
+-a----	backend\data\images\6\ComfyUI_temp_jgdxh_00003_.png	9054365
+-a----	backend\data\images\6\Krea2-2ST-20260919171552_00003_.png	14830516
+
+=== backend 下所有 .env / .env.* / *.db / *.key / *.pem 文件 ===
+backend\.env
+backend\.venv\Lib\site-packages\certifi\cacert.pem
+backend\.venv\Lib\site-packages\pip\_vendor\certifi\cacert.pem
+backend\.venv\Lib\site-packages\pydantic_settings\sources\providers\nested_secrets.py
+backend\.venv\Lib\site-packages\pydantic_settings\sources\providers\secrets.py
+backend\.venv\Lib\site-packages\pydantic_settings\sources\providers\__pycache__\nested_secrets.cpython-313.pyc
+backend\.venv\Lib\site-packages\pydantic_settings\sources\providers\__pycache__\secrets.cpython-313.pyc
+backend\.venv\Lib\site-packages\redis\credentials.py
+backend\.venv\Lib\site-packages\redis\__pycache__\credentials.cpython-313.pyc
+backend\data\aistudio.db
+

@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 # 提前导入，确保 worker 任务在 API 进程内也完成注册（eager 模式/调试用）
 from app.workers import tasks as _worker_tasks  # noqa: F401
 
-from .api import generate, images, tasks
+from .api import auth, chat, conversations, generate, images, tasks
 from .config import settings
 from .database import init_db
 
@@ -27,15 +27,18 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.cors_origins.split(","),
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+app.include_router(auth.router, prefix="/api")
 app.include_router(generate.router, prefix="/api")
 app.include_router(tasks.router, prefix="/api")
 app.include_router(images.router, prefix="/api")
+app.include_router(chat.router, prefix="/api")
+app.include_router(conversations.router, prefix="/api")
 
 
 @app.get("/health", tags=["system"])

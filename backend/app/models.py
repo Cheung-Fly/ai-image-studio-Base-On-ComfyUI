@@ -15,18 +15,40 @@ class TaskStatus(str, enum.Enum):
     failed = "failed"            # 生成失败
 
 
+class User(Base):
+    """用户账号（公网多人使用时启用鉴权）。"""
+
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String(64), unique=True, nullable=False, index=True)
+    password_hash = Column(String(256), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class UsageRecord(Base):
+    """每日用量记录（用于额度控制）。"""
+
+    __tablename__ = "usage_records"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    date = Column(String(10), nullable=False, index=True)  # YYYY-MM-DD
+    chat_count = Column(Integer, default=0)
+    image_count = Column(Integer, default=0)
+
+
 class GenerationTask(Base):
     """一次文生图请求的任务记录。"""
 
     __tablename__ = "tasks"
 
     id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     prompt = Column(Text, nullable=False)
     negative_prompt = Column(Text, default="")
-    width = Column(Integer, default=1024)
-    height = Column(Integer, default=1024)
-    steps = Column(Integer, default=24)
-    cfg = Column(Float, default=3.5)
+    aspect_ratio = Column(String(32), default="1:1 (Square)")
+    megapixels = Column(Float, default=1.0)
     seed = Column(Integer, default=0)
     status = Column(Enum(TaskStatus, native_enum=False), default=TaskStatus.pending, index=True)
     error = Column(Text, nullable=True)
@@ -61,3 +83,36 @@ class ImageAsset(Base):
     def file_url(self) -> str:
         """图片下载地址（供响应模型 file_url 字段使用）。"""
         return f"/api/images/{self.id}/file"
+
+
+class Conversation(Base):
+    """对话会话：每个用户 × 每个 provider 一条（对应前端每个模型窗口）。"""
+
+    __tablename__ = "conversations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    provider = Column(String(32), nullable=False, index=True)  # openai / llama
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    messages = relationship(
+        "Message",
+        back_populates="conversation",
+        cascade="all, delete-orphan",
+        order_by="Message.id",
+    )
+
+
+class Message(Base):
+    """单条对话消息。"""
+
+    __tablename__ = "messages"
+
+    id = Column(Integer, primary_key=True, index=True)
+    conversation_id = Column(Integer, ForeignKey("conversations.id"), nullable=False, index=True)
+    role = Column(String(16), nullable=False)  # user / assistant
+    content = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    conversation = relationship("Conversation", back_populates="messages")

@@ -93,6 +93,79 @@
   .gallery-item .meta { padding: 6px 8px; font-size: 12px; color: var(--muted); }
   .section-title { font-size: 15px; font-weight: 600; margin-bottom: 12px; }
   .hint { color: var(--muted); font-size: 12px; margin-top: 8px; }
+
+  /* ---- 对话助手 ---- */
+  .chat-box {
+    height: 320px;
+    overflow-y: auto;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+    background: #fafbfc;
+    margin-bottom: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .chat-msg { max-width: 78%; padding: 8px 12px; border-radius: 10px; font-size: 14px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
+  .chat-msg.user { align-self: flex-end; background: var(--primary); color: #fff; border-bottom-right-radius: 3px; }
+  .chat-msg.assistant { align-self: flex-start; background: #fff; border: 1px solid var(--border); border-bottom-left-radius: 3px; }
+  .chat-msg.system { align-self: center; color: var(--muted); font-size: 12px; background: none; border: none; }
+  .chat-input-row { display: flex; gap: 8px; }
+  .chat-input-row textarea { flex: 1; min-height: 44px; margin-bottom: 0; resize: none; }
+  .chat-input-row button { flex-shrink: 0; padding: 0 20px; }
+  .chat-fill-hint { font-size: 12px; color: var(--muted); margin-top: 6px; }
+
+  /* ---- 对话助手侧边栏布局 ---- */
+  .chat-layout { display: flex; gap: 16px; min-height: 420px; }
+  .chat-sidebar {
+    width: 160px;
+    flex-shrink: 0;
+    border-right: 1px solid var(--border);
+    padding-right: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .chat-sidebar .sidebar-title { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+  .chat-model-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    border: 1px solid transparent;
+    font-size: 14px;
+    color: var(--text);
+    transition: all .12s;
+  }
+  .chat-model-item:hover { background: #eef0f5; }
+  .chat-model-item.active { background: #eef2ff; border-color: var(--primary); color: var(--primary); font-weight: 500; }
+  .chat-model-item .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--muted); flex-shrink: 0;
+  }
+  .chat-model-item.active .dot { background: var(--primary); }
+  .chat-main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  .chat-main .chat-box { flex: 1; }
+  @media (max-width: 600px) {
+    .chat-layout { flex-direction: column; }
+    .chat-sidebar { width: 100%; flex-direction: row; border-right: none; border-bottom: 1px solid var(--border); padding-right: 0; padding-bottom: 12px; }
+  }
+
+  /* ---- 登录 / 用户 ---- */
+  .auth-card { max-width: 400px; }
+  .auth-tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+  .auth-tabs button { flex: 1; background: #eef0f5; color: var(--text); padding: 10px; border-radius: 8px; }
+  .auth-tabs button.active { background: var(--primary); color: #fff; }
+  .auth-error { color: var(--danger); font-size: 13px; margin-top: -6px; margin-bottom: 10px; min-height: 18px; }
+  .topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+  .topbar .user-info { font-size: 14px; color: var(--muted); }
+  .topbar .user-info b { color: var(--text); }
+  .btn-link { background: none; color: var(--primary); padding: 4px 8px; font-size: 13px; }
+  .btn-link:hover { background: #eef0f5; }
+  .hidden { display: none !important; }
 </style>
 </head>
 <body>
@@ -100,48 +173,103 @@
   <h1>AI 生图工坊</h1>
   <div class="subtitle">基于 ComfyUI · 输入提示词，点击生成</div>
 
-  <div class="card">
-    <label for="prompt">正向提示词（prompt）</label>
-    <textarea id="prompt" placeholder="例如：a cute corgi astronaut floating in space, digital art, highly detailed">a cute corgi astronaut floating in space, digital art, highly detailed</textarea>
-
-    <label for="negative">负向提示词（negative prompt）</label>
-    <textarea id="negative" placeholder="例如：blurry, low quality, watermark">blurry, low quality, watermark</textarea>
-
-    <div class="grid-2">
-      <div>
-        <label for="width">宽度</label>
-        <input id="width" type="number" value="1024" min="256" max="2048">
-      </div>
-      <div>
-        <label for="height">高度</label>
-        <input id="height" type="number" value="1024" min="256" max="2048">
-      </div>
+  <!-- 登录 / 注册 -->
+  <div id="auth-card" class="card auth-card">
+    <div class="auth-tabs">
+      <button id="tab-login" class="active">登录</button>
+      <button id="tab-register">注册</button>
     </div>
-
-    <div class="grid">
-      <div>
-        <label for="steps">步数 steps</label>
-        <input id="steps" type="number" value="24" min="1" max="150">
-      </div>
-      <div>
-        <label for="cfg">cfg</label>
-        <input id="cfg" type="number" value="3.5" min="0" max="30" step="0.1">
-      </div>
-      <div>
-        <label for="seed">种子 seed（-1 随机）</label>
-        <input id="seed" type="number" value="-1" min="-1">
-      </div>
-    </div>
-
-    <button id="btn-generate">生成图片</button>
-    <div id="status" class="status"></div>
-    <img id="result" class="result-img" alt="" style="display:none;">
+    <label for="auth-username">用户名</label>
+    <input id="auth-username" placeholder="3-64 位字母/数字/下划线" autocomplete="username">
+    <label for="auth-password">密码</label>
+    <input id="auth-password" type="password" placeholder="至少 8 位" autocomplete="current-password">
+    <div id="auth-error" class="auth-error"></div>
+    <button id="btn-auth">登录</button>
   </div>
 
-  <div class="card">
-    <div class="section-title">图库</div>
-    <div id="gallery" class="gallery"></div>
-    <div class="hint">点击图片可查看大图；图库在页面加载时自动刷新。</div>
+  <!-- 已登录后的主体 -->
+  <div id="app-main" class="hidden">
+    <div class="topbar">
+      <div class="user-info">已登录：<b id="current-user"></b></div>
+      <button id="btn-logout" class="btn-link">退出登录</button>
+    </div>
+
+    <div class="card">
+      <label for="prompt">正向提示词（prompt）</label>
+      <textarea id="prompt" placeholder="例如：a cute corgi astronaut floating in space, digital art, highly detailed">a cute corgi astronaut floating in space, digital art, highly detailed</textarea>
+
+      <label for="negative">负向提示词（negative prompt）</label>
+      <textarea id="negative" placeholder="例如：blurry, low quality, watermark">blurry, low quality, watermark</textarea>
+
+      <div class="grid-2">
+        <div>
+          <label for="aspect_ratio">宽高比</label>
+          <select id="aspect_ratio">
+            <option value="1:1 (Square)">1:1 方形</option>
+            <option value="2:3 (Portrait Photo)">2:3 竖版照片</option>
+            <option value="3:2 (Photo)">3:2 横版照片</option>
+            <option value="3:4 (Portrait Standard)">3:4 竖版标准</option>
+            <option value="4:3 (Standard)">4:3 标准</option>
+            <option value="9:16 (Portrait Widescreen)">9:16 竖版宽屏</option>
+            <option value="16:9 (Widescreen)">16:9 宽屏</option>
+            <option value="21:9 (Ultrawide)">21:9 超宽屏</option>
+          </select>
+        </div>
+        <div>
+          <label for="megapixels">百万像素（megapixels）</label>
+          <select id="megapixels">
+            <option value="0.5">0.5 MP（约 720×720）</option>
+            <option value="1.0" selected>1.0 MP（约 1024×1024）</option>
+            <option value="1.5">1.5 MP</option>
+            <option value="2.0">2.0 MP</option>
+            <option value="4.0">4.0 MP</option>
+            <option value="8.0">8.0 MP</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="grid">
+        <div>
+          <label for="seed">种子 seed（-1 随机）</label>
+          <input id="seed" type="number" value="-1" min="-1">
+        </div>
+      </div>
+
+      <button id="btn-generate">生成图片</button>
+      <div id="status" class="status"></div>
+      <img id="result" class="result-img" alt="" style="display:none;">
+    </div>
+
+    <div class="card">
+      <div class="section-title">AI 对话助手</div>
+      <div class="chat-layout">
+        <div class="chat-sidebar">
+          <div class="sidebar-title">模型</div>
+          <div class="chat-model-item active" data-provider="openai">
+            <span class="dot"></span> OpenAI
+          </div>
+          <div class="chat-model-item" data-provider="llama">
+            <span class="dot"></span> llama.cpp
+          </div>
+        </div>
+        <div class="chat-main">
+          <div id="chat-box" class="chat-box">
+            <div class="chat-msg system">你好，我是对话助手。当前服务：OpenAI。</div>
+          </div>
+          <div class="chat-input-row">
+            <textarea id="chat-input" placeholder="输入消息，回车发送…"></textarea>
+            <button id="btn-chat">发送</button>
+          </div>
+          <div class="chat-fill-hint">左侧切换模型，各模型对话上下文独立保留。</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">图库</div>
+      <div id="gallery" class="gallery"></div>
+      <div class="hint">点击图片可查看大图；图库在页面加载时自动刷新。</div>
+    </div>
   </div>
 </div>
 
@@ -150,10 +278,121 @@ const API = "http://127.0.0.1:8000";
 
 const $ = (id) => document.getElementById(id);
 
+// ---- 认证状态管理 ----
+let authToken = localStorage.getItem("auth_token") || "";
+let authUsername = localStorage.getItem("auth_username") || "";
+
+// 统一请求封装：自动带 Authorization 头；401 时清除登录态
+async function apiFetch(path, options = {}) {
+  const headers = { "Content-Type": "application/json", ...(options.headers || {}) };
+  if (authToken) headers["Authorization"] = "Bearer " + authToken;
+  const resp = await fetch(API + path, { ...options, headers });
+  if (resp.status === 401) {
+    clearAuth();
+    return resp;
+  }
+  return resp;
+}
+
+function clearAuth() {
+  authToken = "";
+  authUsername = "";
+  localStorage.removeItem("auth_token");
+  localStorage.removeItem("auth_username");
+  $("app-main").classList.add("hidden");
+  $("auth-card").classList.remove("hidden");
+  $("current-user").textContent = "";
+}
+
+function applyAuth(token, username) {
+  authToken = token;
+  authUsername = username;
+  localStorage.setItem("auth_token", token);
+  localStorage.setItem("auth_username", username);
+  $("auth-card").classList.add("hidden");
+  $("app-main").classList.remove("hidden");
+  $("current-user").textContent = username;
+  $("auth-username").value = "";
+  $("auth-password").value = "";
+  $("auth-error").textContent = "";
+  loadGallery();
+  loadAllConversations();
+}
+
+// 登录/注册 切换
+let authMode = "login"; // login | register
+function setAuthMode(mode) {
+  authMode = mode;
+  $("tab-login").classList.toggle("active", mode === "login");
+  $("tab-register").classList.toggle("active", mode === "register");
+  $("btn-auth").textContent = mode === "login" ? "登录" : "注册";
+  $("auth-error").textContent = "";
+}
+
+async function submitAuth() {
+  const username = $("auth-username").value.trim();
+  const password = $("auth-password").value;
+  const errEl = $("auth-error");
+  errEl.textContent = "";
+  if (!username || !password) {
+    errEl.textContent = "请填写用户名和密码";
+    return;
+  }
+  const btn = $("btn-auth");
+  btn.disabled = true;
+  try {
+    const path = authMode === "login" ? "/api/auth/login" : "/api/auth/register";
+    const resp = await fetch(API + path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password }),
+    });
+    const data = await resp.json();
+    if (!resp.ok || !data.access_token) {
+      errEl.textContent = data.detail || "操作失败";
+      return;
+    }
+    applyAuth(data.access_token, data.username);
+  } catch (err) {
+    errEl.textContent = "请求出错：" + err.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// 页面加载时：有 token 则直接进入已登录态
+if (authToken) {
+  $("auth-card").classList.add("hidden");
+  $("app-main").classList.remove("hidden");
+  $("current-user").textContent = authUsername;
+  loadGallery();
+  loadAllConversations();
+} else {
+  $("app-main").classList.add("hidden");
+  $("auth-card").classList.remove("hidden");
+}
+
+$("tab-login").addEventListener("click", () => setAuthMode("login"));
+$("tab-register").addEventListener("click", () => setAuthMode("register"));
+$("btn-auth").addEventListener("click", submitAuth);
+$("auth-password").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") submitAuth();
+});
+$("btn-logout").addEventListener("click", clearAuth);
+
 function setStatus(text, cls) {
   const el = $("status");
   el.textContent = text;
   el.className = "status " + (cls || "");
+}
+
+// 带 token 加载图片（<img> 标签无法带 Authorization 头，需用 fetch 拿 blob）
+async function loadAuthedImage(url) {
+  const headers = authToken ? { Authorization: "Bearer " + authToken } : {};
+  const resp = await fetch(url, { headers });
+  if (!resp.ok) throw new Error("图片加载失败 " + resp.status);
+  const blob = await resp.blob();
+  return URL.createObjectURL(blob);
 }
 
 async function generate() {
@@ -161,10 +400,8 @@ async function generate() {
   const payload = {
     prompt: $("prompt").value.trim(),
     negative_prompt: $("negative").value.trim(),
-    width: parseInt($("width").value) || 1024,
-    height: parseInt($("height").value) || 1024,
-    steps: parseInt($("steps").value) || 24,
-    cfg: parseFloat($("cfg").value) || 3.5,
+    aspect_ratio: $("aspect_ratio").value,
+    megapixels: parseFloat($("megapixels").value) || 1.0,
     seed: parseInt($("seed").value) || -1,
   };
 
@@ -174,9 +411,8 @@ async function generate() {
   setStatus("正在提交任务…", "processing");
 
   try {
-    const resp = await fetch(API + "/api/generate", {
+    const resp = await apiFetch("/api/generate", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
     const task = await resp.json();
@@ -196,15 +432,19 @@ async function generate() {
 async function pollTask(taskId) {
   const timer = setInterval(async () => {
     try {
-      const resp = await fetch(API + "/api/tasks/" + taskId);
+      const resp = await apiFetch("/api/tasks/" + taskId);
       const task = await resp.json();
       if (task.status === "completed") {
         clearInterval(timer);
         const img = task.images && task.images[0];
         if (img) {
-          $("result").src = API + img.file_url;
-          $("result").style.display = "block";
-          setStatus("出图完成 ✓", "completed");
+          try {
+            $("result").src = await loadAuthedImage(API + img.file_url);
+            $("result").style.display = "block";
+            setStatus("出图完成 ✓", "completed");
+          } catch (e) {
+            setStatus("出图完成但加载图片失败：" + e.message, "failed");
+          }
         } else {
           setStatus("任务完成但没有图片", "failed");
         }
@@ -227,7 +467,7 @@ async function pollTask(taskId) {
 
 async function loadGallery() {
   try {
-    const resp = await fetch(API + "/api/images");
+    const resp = await apiFetch("/api/images");
     const images = await resp.json();
     const gallery = $("gallery");
     gallery.innerHTML = "";
@@ -235,17 +475,21 @@ async function loadGallery() {
       gallery.innerHTML = '<div class="hint">暂无图片</div>';
       return;
     }
-    images.forEach((img) => {
+    for (const img of images) {
       const item = document.createElement("div");
       item.className = "gallery-item";
-      const url = API + img.file_url;
-      item.innerHTML = '<img src="' + url + '" loading="lazy"><div class="meta">任务 #' + img.task_id + '</div>';
-      item.onclick = () => {
-        $("result").src = url;
-        $("result").style.display = "block";
-      };
+      try {
+        const url = await loadAuthedImage(API + img.file_url);
+        item.innerHTML = '<img src="' + url + '" loading="lazy"><div class="meta">任务 #' + img.task_id + '</div>';
+        item.onclick = () => {
+          $("result").src = url;
+          $("result").style.display = "block";
+        };
+      } catch (e) {
+        item.innerHTML = '<div class="meta" style="padding:16px;">图片加载失败</div>';
+      }
       gallery.appendChild(item);
-    });
+    }
   } catch (err) {
     $("gallery").innerHTML = '<div class="hint">图库加载失败：' + err.message + '</div>';
   }
@@ -253,6 +497,113 @@ async function loadGallery() {
 
 $("btn-generate").addEventListener("click", generate);
 loadGallery();
+
+// ---- 对话助手 ----
+// 每个 provider 独立保存上下文（多轮历史），互不串扰
+let chatHistories = { openai: [], llama: [] };   // provider -> [{role, content}]
+let chatMessages = { openai: [], llama: [] };    // provider -> [{role, text}] 界面显示用
+
+function currentProvider() {
+  const active = document.querySelector(".chat-model-item.active");
+  return active ? active.dataset.provider : "openai";
+}
+
+function appendChatMsg(role, text) {
+  const box = $("chat-box");
+  const div = document.createElement("div");
+  div.className = "chat-msg " + role;
+  div.textContent = text;
+  box.appendChild(div);
+  box.scrollTop = box.scrollHeight;
+}
+
+// 切换 provider 时重建聊天框，展示该 provider 自己的历史消息
+function renderChat() {
+  const box = $("chat-box");
+  box.innerHTML = "";
+  const provider = currentProvider();
+  const msgs = chatMessages[provider];
+  if (!msgs.length) {
+    box.innerHTML = '<div class="chat-msg system">你好，我是对话助手。当前服务：' + provider + '。</div>';
+    return;
+  }
+  msgs.forEach((m) => appendChatMsg(m.role, m.text));
+}
+
+// 登录后从后端拉取各 provider 的历史，填充上下文与界面
+async function loadAllConversations() {
+  for (const provider of ["openai", "llama"]) {
+    try {
+      const resp = await apiFetch("/api/conversations/" + provider);
+      if (!resp.ok) continue;
+      const data = await resp.json();
+      const msgs = data.messages || [];
+      chatHistories[provider] = msgs.map((m) => ({ role: m.role, content: m.content }));
+      chatMessages[provider] = msgs.map((m) => ({ role: m.role, text: m.content }));
+    } catch (err) {
+      // 拉取失败不阻塞，保留空历史
+    }
+  }
+  renderChat();
+}
+
+// 侧边栏点击切换模型
+function switchProvider(provider) {
+  document.querySelectorAll(".chat-model-item").forEach((item) => {
+    item.classList.toggle("active", item.dataset.provider === provider);
+  });
+  renderChat();
+}
+
+async function sendChat() {
+  const input = $("chat-input");
+  const btn = $("btn-chat");
+  const text = input.value.trim();
+  if (!text) return;
+
+  const provider = currentProvider();
+  input.value = "";
+  appendChatMsg("user", text);
+  btn.disabled = true;
+
+  try {
+    const resp = await apiFetch("/api/chat", {
+      method: "POST",
+      body: JSON.stringify({ message: text, history: chatHistories[provider], provider }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) {
+      appendChatMsg("system", "请求失败：" + (data.detail || JSON.stringify(data)));
+    } else {
+      appendChatMsg("assistant", data.reply);
+      // 只更新当前 provider 自己的上下文
+      chatHistories[provider].push({ role: "user", content: text });
+      chatHistories[provider].push({ role: "assistant", content: data.reply });
+      chatMessages[provider].push({ role: "user", text });
+      chatMessages[provider].push({ role: "assistant", text: data.reply });
+    }
+  } catch (err) {
+    appendChatMsg("system", "请求出错：" + err.message);
+  } finally {
+    btn.disabled = false;
+    input.focus();
+  }
+}
+
+$("btn-chat").addEventListener("click", sendChat);
+$("chat-input").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    sendChat();
+  }
+});
+document.querySelectorAll(".chat-model-item").forEach((item) => {
+  item.addEventListener("click", () => switchProvider(item.dataset.provider));
+});
+
+// 初始渲染
+renderChat();
+
 </script>
 </body>
 </html>

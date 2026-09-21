@@ -58,20 +58,16 @@ def inject_params(workflow: Dict[str, Any], params: Dict[str, Any]) -> Dict[str,
 def build_workflow(
     prompt: str,
     negative_prompt: str = "",
-    width: int = 1024,
-    height: int = 1024,
-    steps: int = 24,
-    cfg: float = 3.5,
+    aspect_ratio: str = "1:1 (Square)",
+    megapixels: float = 1.0,
     seed: int = 0,
 ) -> Dict[str, Any]:
     """加载模板并注入参数，得到可直接提交给 ComfyUI 的 prompt 对象。"""
     params: Dict[str, Any] = {
         "prompt": prompt,
         "negative_prompt": negative_prompt,
-        "width": int(width),
-        "height": int(height),
-        "steps": int(steps),
-        "cfg": float(cfg),
+        "aspect_ratio": aspect_ratio,
+        "megapixels": float(megapixels),
         "seed": int(seed),
     }
     return inject_params(load_template(), params)

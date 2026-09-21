@@ -22,3 +22,6 @@ backend/data/
 .idea/
 .DS_Store
 Thumbs.db
+
+# 工具缓存
+.ruff_cache/

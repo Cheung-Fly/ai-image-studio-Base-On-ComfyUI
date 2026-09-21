@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI 生图工坊 · 技术栈选型与对比</title>
+<style>
+  :root{
+    --bg:#f4f6f8; --card:#fff; --ink:#1f2933; --ink2:#52606d; --line:#d9dee4;
+    --teal:#0f766e; --teal-bg:#e6f4f1;
+    --blue:#2c5f8a; --blue-bg:#e8f1f8;
+    --orange:#c85a17; --orange-bg:#fdeee2;
+    --red:#b3261e; --red-bg:#fbeae9;
+    --green:#2e7d32; --green-bg:#e8f5e9;
+    --slate:#3a506b; --slate-bg:#eef2f6;
+    --gold:#8a6d1d; --gold-bg:#f8f2dd;
+    --mono:"JetBrains Mono","Cascadia Code",Consolas,"Courier New",monospace;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:"Segoe UI","Microsoft YaHei",system-ui,sans-serif;line-height:1.7;font-size:15px;}
+  .wrap{max-width:1140px;margin:0 auto;padding:32px 22px 90px;}
+  h1{font-size:28px;margin:0 0 6px;}
+  .sub{color:var(--ink2);margin:0 0 24px;}
+  h2{font-size:20px;margin:40px 0 12px;padding-left:12px;border-left:5px solid var(--teal);}
+  h3{font-size:16px;margin:18px 0 6px;}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px 22px;margin:14px 0;
+    box-shadow:0 1px 3px rgba(31,41,51,.06);}
+  code,.mono{font-family:var(--mono);font-size:.88em;background:#eef1f4;padding:1px 6px;border-radius:5px;color:#0b4f6c;}
+  table{border-collapse:collapse;width:100%;margin:10px 0;font-size:13.5px;}
+  th,td{border:1px solid var(--line);padding:7px 10px;text-align:left;vertical-align:top;}
+  th{background:#eef2f5;white-space:nowrap;}
+  td:first-child{white-space:nowrap;font-weight:600;}
+  .pick{background:var(--green-bg)!important;font-weight:700;}
+  .pick td:first-child{color:var(--green);}
+  .badge{display:inline-block;font-size:11.5px;font-weight:700;border-radius:5px;padding:1px 7px;white-space:nowrap;}
+  .b-yes{background:var(--green-bg);color:var(--green);}
+  .b-mid{background:var(--gold-bg);color:var(--gold);}
+  .b-no{background:var(--red-bg);color:var(--red);}
+  .b-pick{background:var(--green);color:#fff;}
+  .why{border-left:4px solid var(--green);background:var(--green-bg);border-radius:0 8px 8px 0;padding:9px 14px;margin:10px 0 4px;font-size:14px;}
+  .swap{border-left:4px solid var(--orange);background:var(--orange-bg);border-radius:0 8px 8px 0;padding:9px 14px;margin:8px 0 0;font-size:13.5px;}
+  .layer{display:grid;grid-template-columns:130px 1fr;gap:10px;align-items:stretch;margin:8px 0;}
+  .layer .lname{background:var(--slate);color:#fff;border-radius:9px;display:flex;align-items:center;justify-content:center;
+    font-weight:700;font-size:14px;text-align:center;padding:8px;}
+  .layer .lbody{display:flex;flex-wrap:wrap;gap:8px;align-items:center;}
+  .chip{border-radius:8px;padding:8px 12px;font-size:13px;border:1.5px solid;font-weight:600;}
+  .chip small{display:block;font-weight:400;color:var(--ink2);font-size:11.5px;}
+  .c-teal{background:var(--teal-bg);border-color:var(--teal);}
+  .c-blue{background:var(--blue-bg);border-color:var(--blue);}
+  .c-orange{background:var(--orange-bg);border-color:var(--orange);}
+  .c-red{background:var(--red-bg);border-color:var(--red);}
+  .c-green{background:var(--green-bg);border-color:var(--green);}
+  .c-gold{background:var(--gold-bg);border-color:var(--gold);}
+  .c-slate{background:var(--slate-bg);border-color:var(--slate);}
+  .note{background:#fffdf5;border:1px solid #e8d9a0;border-radius:9px;padding:10px 14px;font-size:13.5px;margin:12px 0;}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+  .flow{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:8px 0;}
+  .flow .f{background:var(--blue-bg);border:1.5px solid var(--blue);border-radius:8px;padding:7px 12px;font-size:13px;font-weight:600;}
+  .flow .ar{color:var(--ink2);font-size:18px;}
+  @media(max-width:820px){.layer{grid-template-columns:1fr}.grid2{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>AI 生图工坊 · 技术栈 / 工具栈选型与横向对比</h1>
+  <p class="sub">每一层"用了什么、同类有哪些、为什么选它、什么时候该换掉"。标签含义：
+    <span class="badge b-pick">本项目选用</span>
+    <span class="badge b-yes">适合/成熟</span>
+    <span class="badge b-mid">特定场景可用</span>
+    <span class="badge b-no">本项目不合适</span>
+  </p>
+
+  <!-- ========== 总览 ========== -->
+  <h2>一、技术栈全景（按层）</h2>
+  <div class="card">
+    <div class="layer">
+      <div class="lname">前端<br><small>（第2周）</small></div>
+      <div class="lbody">
+        <div class="chip c-teal">Vue 3 + Vite<small>界面框架 + 构建工具</small></div>
+        <div class="chip c-teal">Pinia<small>前端状态管理</small></div>
+      </div>
+    </div>
+    <div class="layer">
+      <div class="lname">API 层</div>
+      <div class="lbody">
+        <div class="chip c-green">FastAPI<small>Web 框架（路由/校验/文档）</small></div>
+        <div class="chip c-green">Uvicorn<small>ASGI 服务器，监听 8000</small></div>
+        <div class="chip c-green">Pydantic v2<small>请求校验 / 配置</small></div>
+      </div>
+    </div>
+    <div class="layer">
+      <div class="lname">任务队列</div>
+      <div class="lbody">
+        <div class="chip c-orange">Celery 5<small>任务编排/重试/状态机</small></div>
+        <div class="chip c-red">Redis<small>broker 消息代理 + result backend</small></div>
+      </div>
+    </div>
+    <div class="layer">
+      <div class="lname">生成引擎</div>
+      <div class="lbody">
+        <div class="chip c-blue">ComfyUI API<small>节点工作流 + GPU 推理（8188）</small></div>
+        <div class="chip c-blue">httpx<small>调用 ComfyUI 的 HTTP 客户端</small></div>
+      </div>
+    </div>
+    <div class="layer">
+      <div class="lname">数据层</div>
+      <div class="lbody">
+        <div class="chip c-teal">SQLAlchemy 2<small>ORM</small></div>
+        <div class="chip c-teal">SQLite<small>开发期文件数据库</small></div>
+        <div class="chip c-gold">本地文件目录<small>PNG 产物存储</small></div>
+      </div>
+    </div>
+    <div class="layer">
+      <div class="lname">工程化</div>
+      <div class="lbody">
+        <div class="chip c-slate">venv + pip<small>环境与依赖管理</small></div>
+        <div class="chip c-slate">内置 http.server + TestClient<small>冒烟测试替身</small></div>
+        <div class="chip c-slate">Docker Compose<small>多服务编排（进阶）</small></div>
+      </div>
+    </div>
+    <div class="note" style="margin-bottom:0"><b>选型总原则（四条）：</b>① <b>就业导向</b>——招聘 JD 出现频率高的技术优先；② <b>与 AI 生态同构</b>——ComfyUI/PyTorch 都是 Python，全栈一种语言；③ <b>成熟 &gt; 新潮</b>——资料多、坑能搜到；④ <b>可平滑演进</b>——SQLite→PostgreSQL、Redis→RabbitMQ、单机→Docker，代码不大改。</div>
+  </div>
+
+  <!-- ========== 语言 ========== -->
+  <h2>二、编程语言：Python 3.13</h2>
+  <div class="card">
+    <table>
+      <tr><th>候选</th><th>AI/生图生态</th><th>后端队列生态</th><th>上手成本</th><th>结论</th></tr>
+      <tr class="pick"><td>Python <span class="badge b-pick">选用</span></td><td>统治级：ComfyUI、PyTorch、diffusers 全是 Python</td><td>FastAPI、Celery 成熟</td><td>低</td><td>与引擎同语言，可直接读 ComfyUI 源码、写自定义节点</td></tr>
+      <tr><td>Node.js / TS</td><td><span class="badge b-no">弱</span> 推理侧几乎无生态</td><td>Nest/BullMQ 不错</td><td>中</td><td>做前端 BFF 可以，做 GPU 调度要跨语言调 Python 服务，多一层</td></tr>
+      <tr><td>Java / Go</td><td><span class="badge b-no">弱</span></td><td>很强（Spring/Go 并发）</td><td>高/中</td><td>大厂平台侧用得到，但个人 AIGC 项目开发慢、离模型远</td></tr>
+    </table>
+    <div class="why">选 Python 的决定性理由：<b>生成引擎本身就是 Python 程序</b>。后端、worker、（未来的）自定义节点共用一种语言和一套数据格式，调试链路最短。</div>
+  </div>
+
+  <!-- ========== Web 框架 ========== -->
+  <h2>三、Web 框架：FastAPI</h2>
+  <div class="card">
+    <table>
+      <tr><th>候选</th><th>异步</th><th>参数校验</th><th>自动 API 文档</th><th>体量</th><th>AI 岗位热度</th></tr>
+      <tr class="pick"><td>FastAPI <span class="badge b-pick">选用</span></td><td><span class="badge b-yes">原生 ASGI</span></td><td><span class="badge b-yes">Pydantic 自动</span></td><td><span class="badge b-yes">白送 Swagger</span></td><td>轻</td><td><span class="badge b-yes">极高</span></td></tr>
+      <tr><td>Flask</td><td><span class="badge b-mid">需拼</span></td><td><span class="badge b-no">手写/第三方</span></td><td><span class="badge b-mid">flask-restx</span></td><td>极轻</td><td><span class="badge b-mid">高（偏老项目）</span></td></tr>
+      <tr><td>Django + DRF</td><td><span class="badge b-mid">3.1 后支持</span></td><td><span class="badge b-yes">serializer</span></td><td><span class="badge b-yes">有</span></td><td><span class="badge b-no">重</span></td><td><span class="badge b-mid">中</span></td></tr>
+      <tr><td>Spring Boot (Java)</td><td><span class="badge b-mid">WebFlux</span></td><td><span class="badge b-yes">Bean Validation</span></td><td><span class="badge b-mid">springdoc</span></td><td><span class="badge b-no">很重</span></td><td><span class="badge b-mid">传统后端高，AI 侧低</span></td></tr>
+      <tr><td>Express / Nest (Node)</td><td><span class="badge b-yes">是</span></td><td><span class="badge b-mid">需配 zod 等</span></td><td><span class="badge b-mid">需配</span></td><td>轻/中</td><td><span class="badge b-mid">前端全栈方向</span></td></tr>
+    </table>
+    <div class="why"><b>为什么是 FastAPI：</b>① 一个 Pydantic 模型同时搞定"请求校验 + 422 错误 + OpenAPI schema + Swagger UI"，本项目的 <code>/docs</code> 零手写；② 类型注解即文档，简历上"FastAPI + 类型驱动开发"是 AIGC 应用岗高频要求；③ 异步底子好，未来接 WebSocket 实时进度顺理成章。</div>
+    <div class="swap"><b>Flask 为什么不选：</b>什么都要自己拼（校验、序列化、文档、异步），小项目看似轻，做到本项目这个规模反而要造一堆轮子。<b>Django 为什么不选：</b>自带的 admin、auth、模板、Django ORM 全用不上，却要接受它的目录约定和同步包袱。</div>
+  </div>
+
+  <!-- ========== ASGI ========== -->
+  <h2>四、ASGI 服务器：Uvicorn</h2>
+  <div class="card">
+    <table>
+      <tr><th>候选</th><th>协议</th><th>角色</th><th>结论</th></tr>
+      <tr class="pick"><td>Uvicorn <span class="badge b-pick">选用</span></td><td>ASGI（异步）</td><td>单进程服务器，自带 --reload</td><td>FastAPI 官方标配，开发期直接用</td></tr>
+      <tr><td>Gunicorn</td><td>WSGI（同步）为主</td><td>多进程进程管理器</td><td>生产上常用 <code>gunicorn -k uvicorn.workers.UvicornWorker</code> 管理多个 uvicorn 进程；开发期不需要</td></tr>
+      <tr><td>Hypercorn / Daphne</td><td>ASGI</td><td>同类服务器</td><td>能用但社区资料少，HTTP/2 等特性本项目用不上</td></tr>
+    </table>
+    <div class="why">原理上分清两层：<b>FastAPI 是"应用"（不监听端口），Uvicorn 才是真正绑定 8000 端口、收发 HTTP 的服务器</b>，它把网络请求翻译成 ASGI 规范交给 FastAPI。</div>
+  </div>
+
+  <!-- ========== 队列 ========== -->
+  <h2>五、任务队列：Celery（本项目最关键的选型）</h2>
+  <div class="card">
+    <table>
+      <tr><th>候选</th><th>成熟度/生态</th><th>失败重试</th><th>定时任务</th><th>监控</th><th>Windows 友好度</th><th>结论</th></tr>
+      <tr class="pick"><td>Celery <span class="badge b-pick">选用</span></td><td><span class="badge b-yes">Python 事实标准</span></td><td><span class="badge b-yes">自动重试/退避</span></td><td><span class="badge b-yes">celery beat</span></td><td><span class="badge b-yes">Flower</span></td><td><span class="badge b-mid">需 --pool=solo</span></td><td>功能最全、JD 高频，本项目重试/状态/队列都要</td></tr>
+      <tr><td>RQ</td><td><span class="badge b-mid">轻量流行</span></td><td><span class="badge b-mid">基础重试</span></td><td><span class="badge b-no">弱（rq-scheduler）</span></td><td><span class="badge b-mid">rq-dashboard</span></td><td><span class="badge b-yes">好</span></td><td>极简任务够用，复杂编排（链/组/定时）吃力</td></tr>
+      <tr><td>Dramatiq / ARQ</td><td><span class="badge b-mid">设计现代</span></td><td><span class="badge b-yes">有</span></td><td><span class="badge b-mid">有限</span></td><td><span class="badge b-no">弱</span></td><td><span class="badge b-mid">一般</span></td><td>技术不错但生态小、简历辨识度低</td></tr>
+      <tr><td>自研（Redis list + 线程）</td><td>—</td><td><span class="badge b-no">全自己写</span></td><td><span class="badge b-no">无</span></td><td><span class="badge b-no">无</span></td><td>—</td><td>消息确认、崩溃恢复、重试、序列化都是坑，<b>面试减分项</b></td></tr>
+      <tr><td>Kafka / RabbitMQ 裸客户端</td><td><span class="badge b-yes">强</span></td><td colspan="3">自己实现消费者框架</td><td>—</td><td>那是"消息中间件"不是"任务队列"，缺 task 抽象</td></tr>
+    </table>
+    <div class="why"><b>为什么是 Celery：</b>它给的是一整套"分布式任务"抽象——<code>@task</code> 装饰器、<code>.delay()</code> 投递、worker 进程池、自动重试（本项目 max_retries=2）、状态追踪、定时任务、任务链/组、Flower 监控。这些正是生图平台（长任务、失败重试、批量、定时清理）的刚需，自己写任何一项都不便宜，且是面试官最爱深挖的部分。</div>
+    <div class="swap"><b>Windows 的 pool 怎么选：</b>默认 prefork 依赖 <code>fork()</code>（Linux 系统调用，Windows 没有）→ 本机用 <code>--pool=solo</code>（单线程串行，匹配 8GB 显存）或 <code>--pool=threads</code>；Linux 生产用默认 prefork 即可，无需改代码。</div>
+  </div>
+
+  <!-- ========== Broker ========== -->
+  <h2>六、消息代理 Broker：Redis</h2>
+  <div class="card">
+    <table>
+      <tr><th>候选</th><th>定位</th><th>可靠性/路由</th><th>安装运维</th><th>一专多能</th><th>结论</th></tr>
+      <tr class="pick"><td>Redis <span class="badge b-pick">选用</span></td><td>内存键值库 / 轻量队列</td><td><span class="badge b-mid">够用</span></td><td><span class="badge b-yes">Windows 一键跑</span></td><td><span class="badge b-yes">broker+结果后端+缓存+限流</span></td><td>本机/中小规模最佳，Celery 改一行配置可换</td></tr>
+      <tr><td>RabbitMQ</td><td>专业消息代理 AMQP</td><td><span class="badge b-yes">最强：ACK、死信、路由</span></td><td><span class="badge b-mid">偏重</span></td><td><span class="badge b-no">只做消息</span></td><td><b>生产高可靠场景的升级目标</b></td></tr>
+      <tr><td>Kafka</td><td>分布式日志流</td><td><span class="badge b-yes">吞吐极高</span></td><td><span class="badge b-no">重（ZK/KRaft）</span></td><td><span class="badge b-no">不适合任务队列</span></td><td>适合日志/事件流、大数据，生图任务队列是杀鸡用牛刀</td></tr>
+      <tr><td>数据库表当队列</td><td>轮询一张 tasks 表</td><td><span class="badge b-mid">依赖事务</span></td><td><span class="badge b-yes">零新组件</span></td><td>—</td><td>极简 demo 可以；轮询有延迟、高并发锁表，不专业</td></tr>
+    </table>
+    <div class="why"><b>为什么先用 Redis：</b>一个组件同时当 broker 和 result backend，本机零负担，学习曲线最平。Celery 把 broker 差异封装在配置里，<b>将来上线换 RabbitMQ 只改 <code>REDIS_URL</code> 一行</b>，业务代码零改动——这就是队列抽象层的价值。</div>
+  </div>
+
+  <!-- ========== ORM / DB ========== -->
+  <h2>七、数据层：SQLAlchemy 2 + SQLite（开发）→ PostgreSQL（生产）</h2>
+  <div class="grid2">
+    <div class="card">
+      <h3 style="margin-top:0">ORM 对比</h3>
+      <table>
+        <tr><th>候选</th><th>评价</th></tr>
+        <tr class="pick"><td>SQLAlchemy 2 <span class="badge b-pick">选用</span></td><td>Python ORM 事实标准，功能最全，方言支持 PG/MySQL/SQLite，2.0 支持现代类型注解写法</td></tr>
+        <tr><td>Django ORM</td><td>好用但与 Django 框架绑定，不能单独拿来配 FastAPI</td></tr>
+        <tr><td>Tortoise ORM</td><td>异步原生，但生态小、迁移工具弱、岗位辨识度低</td></tr>
+        <tr><td>原生 sqlite3 / SQL</td><td>零抽象，但换数据库、防注入、关系查询都要自己扛</td></tr>
+      </table>
+    </div>
+    <div class="card">
+      <h3 style="margin-top:0">数据库对比</h3>
+      <table>
+        <tr><th>候选</th><th>评价</th></tr>
+        <tr class="pick"><td>SQLite <span class="badge b-pick">开发选用</span></td><td>单文件、零安装、零服务，随项目拷走；通过 ORM 与生产隔离差异</td></tr>
+        <tr><td>PostgreSQL</td><td><b>生产首选</b>：并发写强、JSONB、全文检索、扩展多；AI 公司最常见</td></tr>
+        <tr><td>MySQL</td><td>同样可行、运维普及度高；本项目无强偏好，PG 在 AI/海外团队更常见</td></tr>
+      </table>
+    </div>
+  </div>
+  <div class="card">
+    <div class="why"><b>关键设计：</b>图片二进制<b>不入库</b>，数据库只存路径（images 表），文件放 <code>data/images/</code>。数据库存大二进制会膨胀、备份慢；文件系统 + 路径索引是图库类应用的标准做法（将来可平滑换成对象存储 S3/OSS，只改存取那一层）。</div>
+  </div>
+
+  <!-- ========== 引擎 ========== -->
+  <h2>八、生成引擎：ComfyUI API 模式（项目核心，对比最该讲透）</h2>
+  <div class="card">
+    <table>
+      <tr><th>候选</th><th>工作流能力</th><th>模型/LoRA/ControlNet 生态</th><th>工程化/API</th><th>学习与简历价值</th><th>成本</th></tr>
+      <tr class="pick"><td>ComfyUI <span class="badge b-pick">选用</span></td><td><span class="badge b-yes">节点图，任意拼装</span></td><td><span class="badge b-yes">最全、新模型首发支持</span></td><td><span class="badge b-yes">原生 API：/prompt /history /view</span></td><td><span class="badge b-yes">岗位核心技能</span></td><td>本机显卡，0 元</td></tr>
+      <tr><td>diffusers 手写推理</td><td><span class="badge b-mid">代码即流程</span></td><td><span class="badge b-mid">要自己跟模型迭代</span></td><td>直接函数调用</td><td><span class="badge b-mid">偏算法研究</span></td><td>0 元</td></tr>
+      <tr><td>A1111 / Forge API</td><td><span class="badge b-mid">参数表单式</span></td><td><span class="badge b-yes">插件多</span></td><td><span class="badge b-mid">有 API 但工作流表达弱</span></td><td><span class="badge b-mid">中</span></td><td>0 元</td></tr>
+      <tr><td>商业 API（Replicate/闭源大模型）</td><td><span class="badge b-mid">黑盒</span></td><td>平台提供什么用什么</td><td><span class="badge b-yes">HTTP 简单</span></td><td><span class="badge b-no">学不到引擎集成</span></td><td><span class="badge b-no">按张付费、数据出域</span></td></tr>
+    </table>
+    <div class="why"><b>为什么是 ComfyUI：</b>① <b>工作流即 JSON</b>——画布导出 API 格式后，参数化（<code>{{prompt}}</code> 占位符注入）就能做成产品模板，换模型/换采样器只改 JSON 不改代码；② 新模型（你机器上的 Krea2、MiniMax）生态跟进最快，LoRA/ControlNet/图生图/视频统一是"加节点"；③ 自带队列和 output 管理，后端只需"提交—轮询—取图"三个接口；④ 招聘 JD 里"ComfyUI 工作流产品化"正是这个项目的定位。</div>
+    <div class="swap"><b>diffusers 什么时候选：</b>做模型微调、算法研究、需要把推理嵌进训练 pipeline 时。它比 ComfyUI 灵活但<b>工程化要全自己写</b>（模型加载调度、显存管理、节点依赖、队列），对应用开发岗性价比低。<b>商业 API 什么时候选：</b>验证产品创意、不持有 GPU、追求上线速度时；但它让项目退化成"普通 CRUD 调第三方"，就业竞争力和可控性都打折。</div>
+  </div>
+
+  <!-- ========== HTTP 客户端 ========== -->
+  <h2>九、HTTP 客户端：httpx</h2>
+  <div class="card">
+    <table>
+      <tr><th>候选</th><th>同步/异步</th><th>HTTP/2</th><th>与测试集成</th><th>结论</th></tr>
+      <tr class="pick"><td>httpx <span class="badge b-pick">选用</span></td><td><span class="badge b-yes">同步+异步同一套 API</span></td><td><span class="badge b-yes">支持</span></td><td><span class="badge b-yes">FastAPI TestClient 底层就是它</span></td><td>现在同步写 worker，未来改异步零迁移成本</td></tr>
+      <tr><td>requests</td><td>仅同步</td><td><span class="badge b-no">不支持</span></td><td>—</td><td>最经典但项目维护模式化、异步时代的上一代选择</td></tr>
+      <tr><td>aiohttp</td><td>仅异步</td><td><span class="badge b-mid">支持</span></td><td>—</td><td>偏底层，仅异步，写同步脚本不方便</td></tr>
+    </table>
+  </div>
+
+  <!-- ========== 前端 ========== -->
+  <h2>十、前端：Vue 3 + Vite + Pinia（第 2 周里程碑）</h2>
+  <div class="card">
+    <table>
+      <tr><th>候选</th><th>定位</th><th>像不像"产品"</th><th>上手成本</th><th>结论</th></tr>
+      <tr class="pick"><td>Vue 3 + Vite + Pinia <span class="badge b-pick">选用</span></td><td>主流 SPA 框架</td><td><span class="badge b-yes">完整前端工程</span></td><td><span class="badge b-mid">中</span></td><td>模板语法直观、中文生态强、Vite 秒级热更新；Pinot 是 Vue 官方状态库</td></tr>
+      <tr><td>React + Vite</td><td>主流 SPA 框架</td><td><span class="badge b-yes">是</span></td><td><span class="badge b-mid">中高（JSX/hooks）</span></td><td>岗位更多但概念更碎；两个都会更好，先 Vue 快速出活</td></tr>
+      <tr><td>Gradio / Streamlit</td><td>AI 演示框架</td><td><span class="badge b-no">像 demo 不像产品</span></td><td><span class="badge b-yes">极低</span></td><td>算法演示神器，但没有队列/图库/工程化展示，<b>撑不起"全栈平台"简历叙事</b></td></tr>
+    </table>
+    <div class="why">就业项目要证明的是"能把模型包成产品"：提示词面板、参数表单、任务进度轮询、图库管理——这是标准前端工程，Vue 正好覆盖这些训练点。</div>
+  </div>
+
+  <!-- ========== 工程化 ========== -->
+  <h2>十一、环境、测试与部署工具</h2>
+  <div class="card">
+    <h3 style="margin-top:0">虚拟环境 / 包管理</h3>
+    <table>
+      <tr><th>候选</th><th>特点</th><th>结论</th></tr>
+      <tr class="pick"><td>venv + pip <span class="badge b-pick">选用</span></td><td>Python 自带、零安装、概念最基础</td><td>教学和入门项目最稳，面试官默认你懂</td></tr>
+      <tr><td>uv / Poetry / PDM</td><td>锁文件、依赖解析、uv 速度极快</td><td><span class="badge b-mid">进阶推荐</span>：uv 是 2025 后行业趋势，熟练后可替换（命令几乎兼容）</td></tr>
+      <tr><td>conda / miniconda</td><td>管 Python 版本 + 原生库（CUDA 等）</td><td>数据科学/需要不同 Python 版本时用；纯 Web 项目偏重</td></tr>
+    </table>
+
+    <h3>测试：为什么用"内置假服务 + eager"而不是直接跑真链路</h3>
+    <table>
+      <tr><th>方式</th><th>速度</th><th>依赖 GPU/Redis</th><th>结论</th></tr>
+      <tr class="pick"><td>http.server 模拟 ComfyUI + Celery eager + TestClient <span class="badge b-pick">选用</span></td><td><span class="badge b-yes">2 秒</span></td><td><span class="badge b-yes">都不需要</span></td><td>验证业务逻辑（路由/状态机/落盘/序列化），CI 友好</td></tr>
+      <tr><td>真实 ComfyUI + Redis 端到端</td><td><span class="badge b-no">分钟级</span></td><td><span class="badge b-no">全依赖</span></td><td>发布前手动跑一次即可，不适合每次改代码都跑</td></tr>
+    </table>
+    <div class="note" style="margin-bottom:0">测试替身（mock/stub）是工程岗必考概念：<b>我们测的是"自己的业务代码对不对"，不是测 ComfyUI 会不会出图</b>——后者是它的开发者要保证的。后续可升级为 pytest + respx（mock httpx），结构更标准。</div>
+
+    <h3>部署：Docker Compose</h3>
+    <table>
+      <tr><th>候选</th><th>特点</th><th>结论</th></tr>
+      <tr class="pick"><td>Docker Compose <span class="badge b-pick">进阶选用</span></td><td>一个 yaml 声明 redis/api/worker 三个服务，一条命令起全套</td><td>环境一致、可复现、简历加分；ComfyUI 留宿主机做 GPU 直通</td></tr>
+      <tr><td>裸机 + systemd/脚本</td><td>手工装 Redis、配两个服务开机自启</td><td>能跑但不可复制、换台机器重来一遍</td></tr>
+      <tr><td>Kubernetes</td><td>容器编排集群</td><td><span class="badge b-no">本项目过重</span>；多机多副本、自动扩缩容时才需要，是后期学习目标</td></tr>
+    </table>
+  </div>
+
+  <!-- ========== 演进路线 ========== -->
+  <h2>十二、选型演进路线（讲给面试官听的"成长感"）</h2>
+  <div class="card">
+    <div class="flow">
+      <div class="f">SQLite + 单机<br><small>现在：跑通链路</small></div><div class="ar">→</div>
+      <div class="f">Docker Compose<br><small>环境一致</small></div><div class="ar">→</div>
+      <div class="f">PostgreSQL<br><small>生产数据库</small></div><div class="ar">→</div>
+      <div class="f">Redis → RabbitMQ<br><small>可靠投递</small></div><div class="ar">→</div>
+      <div class="f">多 Worker 横向扩展<br><small>消费组并发</small></div><div class="ar">→</div>
+      <div class="f">S3/OSS 存图<br><small>对象存储</small></div><div class="ar">→</div>
+      <div class="f">K8s + 监控<br><small>平台化</small></div>
+    </div>
+    <div class="note" style="margin-bottom:0">每一步升级都<b>不需要推翻重写</b>：ORM 屏蔽数据库差异、Celery 屏蔽 broker 差异、存储层屏蔽文件系统/对象存储差异——这正是分层架构（api / services / workers / models）的意义，也是本项目代码刻意分层的原因。</div>
+  </div>
+
+</div>
+</body>
+</html>

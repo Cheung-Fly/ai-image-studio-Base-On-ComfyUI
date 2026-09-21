@@ -1,0 +1,14 @@
+﻿=== check if .gitignore itself ignored ===
+
+=== check README.md ===
+
+=== check backend/requirements.txt ===
+
+=== raw: git -C status ===
+
+=== git rev-parse --show-toplevel ===
+
+=== git rev-parse --git-dir ===
+
+=== is bare ===
+

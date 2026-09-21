@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI生图工坊 · 多端上线路线图</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif; color: #1f2937; background: #f3f5f9; line-height: 1.65; padding: 32px 16px; }
+  .wrap { max-width: 1120px; margin: 0 auto; }
+  h1 { font-size: 26px; margin-bottom: 6px; }
+  .sub { color: #6b7280; margin-bottom: 26px; font-size: 14px; }
+  h2 { font-size: 19px; margin: 34px 0 14px; padding-left: 10px; border-left: 4px solid #2563eb; }
+  .card { background: #fff; border-radius: 12px; padding: 20px 22px; box-shadow: 0 1px 4px rgba(0,0,0,.06); margin-bottom: 16px; }
+  .key { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 12px; padding: 16px 20px; font-size: 15px; }
+  .key b { color: #1d4ed8; }
+  svg { width: 100%; height: auto; display: block; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,.06); }
+  th { background: #1e293b; color: #fff; text-align: left; padding: 11px 13px; font-weight: 600; white-space: nowrap; }
+  td { padding: 11px 13px; border-top: 1px solid #e5e7eb; vertical-align: top; }
+  tr:nth-child(even) td { background: #f8fafc; }
+  .tag { display: inline-block; font-size: 12px; padding: 1px 8px; border-radius: 10px; font-weight: 600; }
+  .t-must { background: #fee2e2; color: #b91c1c; }
+  .t-opt { background: #dcfce7; color: #15803d; }
+  .cols { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  .col { background: #fff; border-radius: 12px; padding: 16px 18px; box-shadow: 0 1px 4px rgba(0,0,0,.06); }
+  .col h3 { font-size: 16px; margin-bottom: 4px; }
+  .col .en { font-size: 12px; color: #9ca3af; margin-bottom: 10px; }
+  .col ul { padding-left: 18px; font-size: 13.5px; }
+  .col li { margin-bottom: 7px; }
+  .c1 { border-top: 4px solid #2563eb; }
+  .c2 { border-top: 4px solid #16a34a; }
+  .c3 { border-top: 4px solid #d97706; }
+  .tl { position: relative; margin-top: 8px; padding-left: 28px; }
+  .tl::before { content: ""; position: absolute; left: 9px; top: 6px; bottom: 6px; width: 2px; background: #cbd5e1; }
+  .ms { position: relative; margin-bottom: 16px; background: #fff; border-radius: 10px; padding: 12px 16px; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+  .ms::before { content: ""; position: absolute; left: -24px; top: 17px; width: 12px; height: 12px; border-radius: 50%; background: #2563eb; border: 2px solid #fff; box-shadow: 0 0 0 2px #2563eb; }
+  .ms.now::before { background: #f59e0b; box-shadow: 0 0 0 2px #f59e0b; }
+  .ms b { display: block; font-size: 14.5px; margin-bottom: 2px; }
+  .ms span { font-size: 13px; color: #4b5563; }
+  .warn { background: #fff7ed; border: 1px solid #fed7aa; border-radius: 12px; padding: 16px 20px; font-size: 14px; }
+  .warn h3 { color: #c2410c; font-size: 15px; margin-bottom: 8px; }
+  .warn li { margin-left: 18px; margin-bottom: 5px; }
+  .note { font-size: 12.5px; color: #6b7280; margin-top: 8px; }
+  @media (max-width: 860px) { .cols { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>AI 生图工坊 · 多端上线路线图</h1>
+  <div class="sub">网页端 / 微信小程序 / 桌面软件 —— 三种壳共用同一套云端后端 API</div>
+
+  <div class="key">
+    核心判断：<b>不要做三个项目</b>。三端只是前端形态不同，真正要先完成的是把 <b>FastAPI + Celery + Redis + ComfyUI(GPU) + LLM</b> 部署到云端并通过 <b>HTTPS 域名</b>对外开放；之后网页、小程序、桌面软件都向同一个 <code>https://你的域名/api/</code> 发请求。推荐顺序：<b>网页端 → 小程序 → 桌面端</b>。
+  </div>
+
+  <h2>一、总体架构（上线后）</h2>
+  <div class="card">
+  <svg viewBox="0 0 1080 470" xmlns="http://www.w3.org/2000/svg" font-family="Microsoft YaHei, sans-serif">
+    <!-- 三端 -->
+    <rect x="30" y="40" width="200" height="70" rx="10" fill="#dbeafe" stroke="#2563eb"/>
+    <text x="130" y="70" text-anchor="middle" font-size="15" font-weight="bold" fill="#1e3a8a">网页端 Web</text>
+    <text x="130" y="93" text-anchor="middle" font-size="12" fill="#3b5998">HTML/Vue/React + Nginx 托管</text>
+
+    <rect x="30" y="160" width="200" height="70" rx="10" fill="#dcfce7" stroke="#16a34a"/>
+    <text x="130" y="190" text-anchor="middle" font-size="15" font-weight="bold" fill="#14532d">微信小程序</text>
+    <text x="130" y="213" text-anchor="middle" font-size="12" fill="#166534">WXML / uni-app · 需HTTPS白名单</text>
+
+    <rect x="30" y="280" width="200" height="70" rx="10" fill="#fef3c7" stroke="#d97706"/>
+    <text x="130" y="310" text-anchor="middle" font-size="15" font-weight="bold" fill="#78350f">桌面软件</text>
+    <text x="130" y="333" text-anchor="middle" font-size="12" fill="#92400e">Tauri / Electron 打包 .exe</text>
+
+    <!-- 箭头到网关 -->
+    <line x1="230" y1="75" x2="330" y2="160" stroke="#64748b" stroke-width="2" marker-end="url(#a)"/>
+    <line x1="230" y1="195" x2="330" y2="180" stroke="#64748b" stroke-width="2" marker-end="url(#a)"/>
+    <line x1="230" y1="315" x2="330" y2="200" stroke="#64748b" stroke-width="2" marker-end="url(#a)"/>
+    <text x="252" y="120" font-size="11" fill="#64748b">HTTPS</text>
+
+    <defs>
+      <marker id="a" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto">
+        <path d="M0,0 L9,4.5 L0,9 z" fill="#64748b"/>
+      </marker>
+      <marker id="b" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto">
+        <path d="M0,0 L9,4.5 L0,9 z" fill="#2563eb"/>
+      </marker>
+    </defs>
+
+    <!-- 网关 -->
+    <rect x="330" y="130" width="180" height="90" rx="10" fill="#1e293b"/>
+    <text x="420" y="168" text-anchor="middle" font-size="15" font-weight="bold" fill="#fff">Nginx 网关</text>
+    <text x="420" y="192" text-anchor="middle" font-size="11.5" fill="#cbd5e1">域名 + HTTPS 证书</text>
+    <text x="420" y="209" text-anchor="middle" font-size="11.5" fill="#cbd5e1">反向代理 / 静态页面</text>
+
+    <line x1="510" y1="175" x2="600" y2="175" stroke="#2563eb" stroke-width="2" marker-end="url(#b)"/>
+
+    <!-- 后端 -->
+    <rect x="600" y="60" width="220" height="230" rx="10" fill="#eff6ff" stroke="#2563eb"/>
+    <text x="710" y="90" text-anchor="middle" font-size="15" font-weight="bold" fill="#1e3a8a">应用层（CPU 云服务器）</text>
+    <rect x="620" y="105" width="180" height="40" rx="7" fill="#fff" stroke="#93c5fd"/>
+    <text x="710" y="130" text-anchor="middle" font-size="13" fill="#1e40af">FastAPI（接口/鉴权/限流）</text>
+    <rect x="620" y="153" width="180" height="40" rx="7" fill="#fff" stroke="#93c5fd"/>
+    <text x="710" y="178" text-anchor="middle" font-size="13" fill="#1e40af">Celery Worker（任务队列）</text>
+    <rect x="620" y="201" width="85" height="40" rx="7" fill="#fff" stroke="#93c5fd"/>
+    <text x="662" y="226" text-anchor="middle" font-size="12.5" fill="#1e40af">Redis</text>
+    <rect x="715" y="201" width="85" height="40" rx="7" fill="#fff" stroke="#93c5fd"/>
+    <text x="757" y="226" text-anchor="middle" font-size="12.5" fill="#1e40af">PostgreSQL</text>
+    <text x="710" y="266" text-anchor="middle" font-size="11" fill="#64748b">（SQLite 生产环境升级）</text>
+
+    <!-- GPU / 外部服务 -->
+    <rect x="870" y="60" width="190" height="68" rx="10" fill="#fce7f3" stroke="#db2777"/>
+    <text x="965" y="88" text-anchor="middle" font-size="13.5" font-weight="bold" fill="#9d174d">GPU 云服务器</text>
+    <text x="965" y="110" text-anchor="middle" font-size="11.5" fill="#be185d">ComfyUI + Krea2 生图</text>
+
+    <rect x="870" y="145" width="190" height="68" rx="10" fill="#f3e8ff" stroke="#9333ea"/>
+    <text x="965" y="173" text-anchor="middle" font-size="13.5" font-weight="bold" fill="#6b21a8">LLM 服务</text>
+    <text x="965" y="195" text-anchor="middle" font-size="11.5" fill="#7e22ce">llama.cpp / 云 API · 扩写</text>
+
+    <rect x="870" y="230" width="190" height="68" rx="10" fill="#ecfeff" stroke="#0891b2"/>
+    <text x="965" y="258" text-anchor="middle" font-size="13.5" font-weight="bold" fill="#155e75">对象存储 OSS/COS</text>
+    <text x="965" y="280" text-anchor="middle" font-size="11.5" fill="#0e7490">图片文件 + CDN 分发</text>
+
+    <line x1="820" y1="120" x2="870" y2="100" stroke="#db2777" stroke-width="2" marker-end="url(#a)"/>
+    <line x1="820" y1="170" x2="870" y2="179" stroke="#9333ea" stroke-width="2" marker-end="url(#a)"/>
+    <line x1="820" y1="225" x2="870" y2="260" stroke="#0891b2" stroke-width="2" marker-end="url(#a)"/>
+
+    <!-- 底部横条：合规 -->
+    <rect x="30" y="392" width="1030" height="56" rx="10" fill="#fff7ed" stroke="#f97316"/>
+    <text x="50" y="417" font-size="13.5" font-weight="bold" fill="#c2410c">面向国内公众上线的合规层：</text>
+    <text x="50" y="438" font-size="12.5" fill="#9a3412">域名 ICP 备案 · HTTPS · 生成式 AI / 深度合成算法备案 · AI 生成内容显著标识 · 图片内容安全审核（文字/图片审核 API）</text>
+  </svg>
+  <div class="note">示意图：服务可合并部署在同一台 GPU 服务器（学习期省钱），用户量上来后再把应用层与 GPU 层拆分。</div>
+  </div>
+
+  <h2>二、所有端的共同地基（只做一次）</h2>
+  <table>
+    <tr><th style="width:22%">事项</th><th style="width:48%">具体操作</th><th style="width:30%">说明</th></tr>
+    <tr><td>后端 + GPU 上云</td><td>云 GPU 服务器用 docker-compose 启动 api/worker/redis，ComfyUI 常驻；llama.cpp 可同机或独立</td><td><span class="tag t-must">必须</span> 不能跑在个人电脑</td></tr>
+    <tr><td>域名 + ICP 备案</td><td>买域名 → 国内服务器控制台提交 ICP 备案（个人可办，约 1~3 周）</td><td><span class="tag t-must">必须</span> 用境外服务器可免备案但访问慢，且小程序不支持</td></tr>
+    <tr><td>HTTPS</td><td>Nginx 反向代理 + Let's Encrypt 免费证书（或云厂商免费 SSL）</td><td><span class="tag t-must">必须</span> 小程序与现代浏览器强制</td></tr>
+    <tr><td>用户系统</td><td>注册/登录、JWT 鉴权、按用户限流与配额（每日生图张数）</td><td><span class="tag t-must">必须</span> 当前项目无登录，需新增 auth 模块</td></tr>
+    <tr><td>数据库与存储升级</td><td>SQLite → PostgreSQL；图片从本地磁盘 → 对象存储 OSS/COS + CDN</td><td><span class="tag t-must">必须</span> 多用户并发与弹性扩容</td></tr>
+    <tr><td>跨域 CORS</td><td>FastAPI 加 CORSMiddleware，只放行你的前端域名</td><td><span class="tag t-must">必须</span></td></tr>
+    <tr><td>安全与可观测</td><td>内部服务（ComfyUI/llama-server）只监听内网、密钥用环境变量、日志与错误监控</td><td><span class="tag t-must">必须</span></td></tr>
+  </table>
+
+  <h2>三、三个端分别要做什么</h2>
+  <div class="cols">
+    <div class="col c1">
+      <h3>① 网页端</h3>
+      <div class="en">最先做，求职演示足够</div>
+      <ul>
+        <li>现有 index.html 完善为正式前端（或用 Vue/React 重写）</li>
+        <li>静态文件交给 Nginx 或对象存储静态网站托管</li>
+        <li>API 地址改为 https://域名/api</li>
+        <li>加登录页、生成进度轮询、画廊页</li>
+        <li>部署最简单，迭代最快，<b>建议作为求职作品主形态</b></li>
+      </ul>
+    </div>
+    <div class="col c2">
+      <h3>② 微信小程序</h3>
+      <div class="en">复用后端，前端重写</div>
+      <ul>
+        <li>注册小程序账号，用 WXML 或 uni-app/Taro 重写页面（HTML 不能直接用）</li>
+        <li>管理后台配置 request/downloadFile <b>合法域名</b>（须 HTTPS+已备案）</li>
+        <li>登录走微信授权 code2session</li>
+        <li><b>学习演示</b>：用「体验版」+ 添加体验成员（最多30人），可免正式审核跑通</li>
+        <li><b>正式发布</b>：AIGC 类目对个人主体限制多，通常需企业主体 + 生成式 AI 备案</li>
+      </ul>
+    </div>
+    <div class="col c3">
+      <h3>③ 桌面软件</h3>
+      <div class="en">推荐 Tauri，轻量</div>
+      <ul>
+        <li>用 Tauri（包体约 10MB）或 Electron（生态成熟、约 100MB+）把前端包成 .exe</li>
+        <li>形态：客户端只做界面，<b>连云端 API</b>；不要把 13GB 的 ComfyUI/模型塞进安装包</li>
+        <li>用 NSIS 做安装程序，配代码签名证书（否则 SmartScreen 拦截）</li>
+        <li>可加自动更新；通过官网/GitHub Releases 分发</li>
+      </ul>
+    </div>
+  </div>
+
+  <h2>四、建议的演进时间线</h2>
+  <div class="tl">
+    <div class="ms now"><b>M0 · 本地全链路跑通（当前）</b><span>本机 FastAPI + Celery + Redis + ComfyUI，冒烟测试通过、真实出图</span></div>
+    <div class="ms now"><b>M1 · 云端 LLM 接入（进行中）</b><span>llama.cpp 部署 P4 + SSH 隧道 + /api/optimize-prompt 提示词扩写</span></div>
+    <div class="ms"><b>M2 · 后端整体上云</b><span>GPU 服务器跑 ComfyUI+后端，先用 IP:端口 让公网访问 Swagger 验证</span></div>
+    <div class="ms"><b>M3 · 网页端正式上线</b><span>域名备案、Nginx+HTTPS、用户登录、对象存储、PostgreSQL</span></div>
+    <div class="ms"><b>M4 · 小程序</b><span>先出体验版用于求职演示；有企业主体后再走正式审核与备案</span></div>
+    <div class="ms"><b>M5 · 桌面版</b><span>Tauri 打包前端连云端 API，签名后发布安装包</span></div>
+  </div>
+
+  <h2>五、合规红线（面向国内公众用户）</h2>
+  <div class="warn">
+    <h3>文生图属于「深度合成」且属于「生成式 AI」，正式对公众提供服务前：</h3>
+    <ul>
+      <li>完成 <b>ICP 备案</b>（域名）与 <b>生成式人工智能服务 / 深度合成算法备案</b>（通常要求企业主体）；</li>
+      <li>接入<b>内容安全审核</b>：提示词文本审核 + 生成图片审核（云厂商均有内容安全 API）；</li>
+      <li>对 AI 生成图片添加<b>显著标识/隐式水印</b>（《人工智能生成合成内容标识办法》要求）；</li>
+      <li><b>求职/学习阶段不受影响</b>：本地运行、网页演示给面试官、小程序体验版加白名单成员，都不需要正式备案。</li>
+    </ul>
+  </div>
+</div>
+</body>
+</html>

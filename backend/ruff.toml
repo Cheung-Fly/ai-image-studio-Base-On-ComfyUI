@@ -1,0 +1,25 @@
+# Ruff 配置（放在 backend/ 下，对 app/ 生效）
+# 文档：https://docs.astral.sh/ruff/rules/
+target-version = "py313"
+line-length = 100
+
+[lint]
+# 启用的规则集（实用而不过度严格）：
+# E   pycodestyle 基础风格
+# F   pyflakes：未使用的导入/变量、明显错误
+# I   isort：import 排序
+# UP  pyupgrade：使用现代 Python 写法
+# B   flake8-bugbear：常见陷阱
+# SIM 可简化的写法
+# RET return 语句习惯
+select = ["E", "F", "I", "UP", "B", "SIM", "RET"]
+
+ignore = [
+    # FastAPI 的依赖注入官方写法就是 db=Depends(get_db)，
+    # B008 是针对普通 Python 的警告，对 FastAPI 属误报，全局忽略
+    "B008",
+]
+
+[lint.per-file-ignores]
+# 测试文件允许宽泛断言和魔法数字
+"tests/*" = ["S101"]

@@ -3,23 +3,27 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import GenerationTask
+from ..models import GenerationTask, User
 from ..schemas import GenerateRequest, TaskOut
 from ..workers.tasks import run_generation
+from .auth import get_current_user
 
 router = APIRouter(tags=["generate"])
 
 
 @router.post("/generate", response_model=TaskOut, status_code=202)
-def generate(req: GenerateRequest, db: Session = Depends(get_db)):
-    """提交一个文生图任务，立即返回 task_id；实际生成由 Celery worker 异步执行。"""
+def generate(
+    req: GenerateRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """提交一个文生图任务，立即返回 task_id；实际生成由 Celery worker 异步执行（需登录）。"""
     task = GenerationTask(
+        user_id=user.id,
         prompt=req.prompt,
         negative_prompt=req.negative_prompt,
-        width=req.width,
-        height=req.height,
-        steps=req.steps,
-        cfg=req.cfg,
+        aspect_ratio=req.aspect_ratio,
+        megapixels=req.megapixels,
         seed=req.seed,
     )
     db.add(task)

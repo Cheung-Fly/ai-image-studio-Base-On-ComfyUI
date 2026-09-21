@@ -1,0 +1,8 @@
+﻿=== staged (cached) files ===
+
+=== ls-files --cached ===
+
+=== untracked ===
+
+=== status porcelain full ===
+
