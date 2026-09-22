@@ -1,4 +1,4 @@
-"""提交生成任务。"""
+"""视频生成接口：提交 MiniMax H3 Ref2VA 任务。"""
 import json
 
 from fastapi import APIRouter, Depends
@@ -6,39 +6,41 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..models import GenerationTask, User
-from ..schemas import GenerateRequest, TaskOut
+from ..schemas import GenerateVideoRequest, TaskOut
 from ..workers.tasks import run_generation
 from .auth import get_current_user
 
-router = APIRouter(tags=["generate"])
+router = APIRouter(tags=["video"])
 
 
-@router.post("/generate", response_model=TaskOut, status_code=202)
-def generate(
-    req: GenerateRequest,
+@router.post("/generate-video", response_model=TaskOut, status_code=202)
+def generate_video(
+    req: GenerateVideoRequest,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """提交一个文生图任务，立即返回 task_id；实际生成由 Celery worker 异步执行（需登录）。"""
+    """提交一个视频生成任务，返回 task_id；实际生成由 Celery worker 异步执行（需登录）。"""
     task = GenerationTask(
         user_id=user.id,
+        task_type="video",
         prompt=req.prompt,
-        negative_prompt=req.negative_prompt,
-        workflow=req.workflow,
-        model_preset=req.model_preset,
+        negative_prompt="",
+        workflow="",  # 视频工作流由 video_workflow.py 固定构建
+        model_preset="",
         aspect_ratio=req.aspect_ratio,
         megapixels=req.megapixels,
         seed=req.seed,
+        duration=req.duration,
         steps=req.steps,
-        refine_steps=req.refine_steps,
         loras=json.dumps([ref.model_dump() for ref in req.loras]),
+        ref_images=",".join(req.ref_images),
+        ref_videos=",".join(req.ref_videos),
+        ref_audios=",".join(req.ref_audios),
     )
     db.add(task)
     db.commit()
     db.refresh(task)
 
     run_generation.delay(task.id)
-    # eager（冒烟测试）模式下任务已同步完成，重新读取拿到最新状态；
-    # 真实异步模式下任务仍为 pending，此处读到的状态不变
     db.refresh(task)
     return task

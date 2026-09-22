@@ -1,5 +1,4 @@
 """任务查询接口。"""
-from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -12,9 +11,9 @@ from .auth import get_current_user
 router = APIRouter(tags=["tasks"])
 
 
-@router.get("/tasks", response_model=List[TaskOut])
+@router.get("/tasks", response_model=list[TaskOut])
 def list_tasks(
-    status: Optional[str] = None,
+    status: str | None = None,
     limit: int = 50,
     offset: int = 0,
     user: User = Depends(get_current_user),

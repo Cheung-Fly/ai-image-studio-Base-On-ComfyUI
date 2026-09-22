@@ -1,11 +1,9 @@
 """用户注册 / 登录 / 鉴权依赖。"""
-from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
-from ..config import settings
 from ..database import get_db
 from ..models import User
 from ..schemas import LoginRequest, RegisterRequest, TokenResponse
@@ -51,7 +49,7 @@ def get_current_user(
     try:
         user_id = int(payload["sub"])
     except (KeyError, ValueError):
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "token 无效")
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "token 无效") from None
     user = db.get(User, user_id)
     if user is None:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "用户不存在")

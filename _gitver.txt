@@ -1,6 +1,0 @@
-﻿=== git version ===
-
-=== where git ===
-C:\WINDOWS\system32\git
-=== git rev-parse inside dir via -C ===
-

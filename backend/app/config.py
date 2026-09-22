@@ -12,6 +12,10 @@ class Settings(BaseSettings):
 
     # ComfyUI 服务地址（API 模式）
     comfyui_base_url: str = "http://127.0.0.1:8188"
+    # ComfyUI input 目录（素材上传落盘位置，供 LoadImage/LoadVideo/LoadAudio 读取）
+    comfyui_input_dir: str = ""
+    # ComfyUI loras 目录（列出可用 LoRA 文件，供前端下拉选择）
+    comfyui_loras_dir: str = ""
     # 数据库连接串
     database_url: str = f"sqlite:///{(BASE_DIR / 'data' / 'aistudio.db').as_posix()}"
     # 图片存储目录（相对 backend/）
@@ -22,6 +26,10 @@ class Settings(BaseSettings):
     workflow_dir: str = "../workflows"
     # 工作流模板文件名（Krea2 文生图 + 潜空间放大）
     workflow_file: str = "Krea2-极清生图流+SeedVR2-int8图像放大.json"
+    # 模型组合预设文件（相对 backend/），定义多套 UNET+CLIP+VAE 组合
+    model_presets_file: str = "model_presets.json"
+    # 默认模型组合预设名（空 = 不覆盖，使用工作流 JSON 里写死的模型）
+    default_model_preset: str = ""
     # 单次生成超时（秒）
     comfy_timeout: int = 900
     # ComfyUI 输出轮询间隔（秒）
@@ -57,6 +65,25 @@ class Settings(BaseSettings):
     def workflow_path(self) -> Path:
         p = Path(self.workflow_dir) / self.workflow_file
         return p if p.is_absolute() else BASE_DIR / p
+
+    @property
+    def model_presets_path(self) -> Path:
+        p = Path(self.model_presets_file)
+        return p if p.is_absolute() else BASE_DIR / p
+
+    @property
+    def comfyui_input_path(self) -> Path | None:
+        """素材上传目录；未配置时回退到项目内 data/upload。"""
+        if self.comfyui_input_dir:
+            return Path(self.comfyui_input_dir)
+        return BASE_DIR / "data" / "upload"
+
+    @property
+    def comfyui_loras_path(self) -> Path | None:
+        """ComfyUI LoRA 目录；未配置时返回 None（前端不展示 LoRA 列表）。"""
+        if self.comfyui_loras_dir:
+            return Path(self.comfyui_loras_dir)
+        return None
 
 
 settings = Settings()

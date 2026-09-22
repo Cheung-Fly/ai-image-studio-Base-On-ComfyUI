@@ -7,7 +7,7 @@
 
 后续接入 RAG / 提示词优化时，可在 chat() 前追加检索增强逻辑，无需改动前端。
 """
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import httpx
 
@@ -20,9 +20,11 @@ class LLMError(Exception):
     """LLM 调用失败。"""
 
 
-def _build_messages(message: str, history: Optional[List[Dict[str, str]]] = None) -> List[Dict[str, str]]:
+def _build_messages(
+    message: str, history: list[dict[str, str]] | None = None
+) -> list[dict[str, str]]:
     """把前端传来的 history + 当前消息拼成 messages 列表。"""
-    messages: List[Dict[str, str]] = []
+    messages: list[dict[str, str]] = []
     for item in history or []:
         role = item.get("role")
         content = item.get("content", "")
@@ -32,7 +34,7 @@ def _build_messages(message: str, history: Optional[List[Dict[str, str]]] = None
     return messages
 
 
-def _resolve(provider: str) -> Dict[str, Any]:
+def _resolve(provider: str) -> dict[str, Any]:
     """根据 provider 名返回对应的 base_url/api_key/model 配置。"""
     if provider == "llama":
         return {
@@ -48,7 +50,7 @@ def _resolve(provider: str) -> Dict[str, Any]:
     }
 
 
-def chat(message: str, history: Optional[List[Dict[str, str]]] = None, provider: str = "") -> str:
+def chat(message: str, history: list[dict[str, str]] | None = None, provider: str = "") -> str:
     """调用指定 provider 的 LLM，返回回复文本。"""
     provider = provider or settings.default_llm_provider
     if provider not in SUPPORTED_PROVIDERS:
@@ -67,7 +69,7 @@ def chat(message: str, history: Optional[List[Dict[str, str]]] = None, provider:
 
     messages = _build_messages(message, history)
 
-    payload: Dict[str, Any] = {
+    payload: dict[str, Any] = {
         "model": cfg["model"],
         "messages": messages,
     }

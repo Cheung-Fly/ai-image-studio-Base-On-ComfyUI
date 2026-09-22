@@ -13,6 +13,9 @@
     --muted: #8a919b;
     --primary: #4f6ef2;
     --primary-hover: #3f5ce0;
+    --accent: #7c5cff;          /* 点缀紫罗兰（呼应 Active Theory #A970FF） */
+    --accent-soft: rgba(124, 92, 255, 0.10);
+    --mono: "SF Mono", "Cascadia Code", "Consolas", "Menlo", monospace;
     --danger: #e24b4a;
     --success: #1d9e75;
     --radius: 12px;
@@ -26,8 +29,99 @@
     padding: 24px;
   }
   .container { max-width: 960px; margin: 0 auto; }
-  h1 { font-size: 20px; font-weight: 600; margin-bottom: 4px; }
-  .subtitle { color: var(--muted); font-size: 13px; margin-bottom: 20px; }
+  h1 {
+    font-size: 40px;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    line-height: 1.1;
+    margin-bottom: 6px;
+    background: linear-gradient(120deg, var(--text) 30%, var(--accent) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .subtitle {
+    color: var(--muted);
+    font-size: 13px;
+    font-family: var(--mono);
+    letter-spacing: 0.02em;
+    margin-bottom: 24px;
+  }
+  .subtitle::before {
+    content: "◤ ";
+    color: var(--accent);
+    font-weight: 700;
+  }
+
+  /* ---- 登录页粒子背景 ---- */
+  #auth-particles {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 0;
+    pointer-events: none;
+    display: block;
+  }
+  #auth-particles.hidden { display: none !important; }
+  .auth-card {
+    position: relative;
+    z-index: 1;
+    background: rgba(255, 255, 255, 0.78);
+    backdrop-filter: blur(16px) saturate(1.2);
+    -webkit-backdrop-filter: blur(16px) saturate(1.2);
+    box-shadow:
+      0 0 0 1px rgba(124, 92, 255, 0.06),
+      0 20px 50px rgba(124, 92, 255, 0.14);
+  }
+  .auth-card::before {
+    content: "";
+    position: absolute;
+    inset: -1px;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(140deg, var(--accent), transparent 40%, transparent 60%, rgba(79, 110, 242, 0.5));
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+  .auth-tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 18px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 10px;
+  }
+  .auth-tabs button {
+    background: transparent;
+    color: var(--muted);
+    padding: 6px 14px;
+    font-size: 14px;
+    font-weight: 500;
+    border-radius: 6px;
+    transition: all .15s;
+  }
+  .auth-tabs button:hover { color: var(--text); background: var(--accent-soft); }
+  .auth-tabs button.active {
+    color: var(--accent);
+    background: var(--accent-soft);
+    font-weight: 600;
+  }
+  #btn-auth {
+    width: 100%;
+    background: linear-gradient(120deg, var(--accent), var(--primary));
+    box-shadow: 0 6px 20px rgba(124, 92, 255, 0.28);
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    transition: transform .15s, box-shadow .15s, filter .15s;
+  }
+  #btn-auth:hover {
+    background: linear-gradient(120deg, var(--accent), var(--primary-hover));
+    transform: translateY(-1px);
+    box-shadow: 0 10px 26px rgba(124, 92, 255, 0.36);
+  }
+  #btn-auth:active { transform: translateY(0); }
 
   .card {
     background: var(--card);
@@ -87,12 +181,79 @@
     background: #fff;
     cursor: pointer;
     transition: transform .1s;
+    position: relative;
   }
   .gallery-item:hover { transform: scale(1.02); }
   .gallery-item img { width: 100%; display: block; aspect-ratio: 1; object-fit: cover; }
+  .gallery-item video { width: 100%; display: block; aspect-ratio: 1; object-fit: cover; background: #000; }
   .gallery-item .meta { padding: 6px 8px; font-size: 12px; color: var(--muted); }
+  .gallery-item .type-badge {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #fff;
+    background: rgba(0, 0, 0, 0.55);
+    padding: 2px 8px;
+    border-radius: 10px;
+    pointer-events: none;
+  }
+  .gallery-item .video-play {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.55);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    pointer-events: none;
+  }
   .section-title { font-size: 15px; font-weight: 600; margin-bottom: 12px; }
   .hint { color: var(--muted); font-size: 12px; margin-top: 8px; }
+
+  /* ---- 预览弹层（lightbox） ---- */
+  #lightbox {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 18, 24, 0.88);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 32px;
+    cursor: zoom-out;
+  }
+  #lightbox.hidden { display: none; }
+  #lightbox img, #lightbox video {
+    max-width: 100%;
+    max-height: 100%;
+    border-radius: 8px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+    cursor: default;
+  }
+  #lightbox .lb-close {
+    position: absolute;
+    top: 20px;
+    right: 24px;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.12);
+    color: #fff;
+    font-size: 22px;
+    line-height: 40px;
+    text-align: center;
+    cursor: pointer;
+    transition: background .15s;
+  }
+  #lightbox .lb-close:hover { background: rgba(255, 255, 255, 0.25); }
 
   /* ---- 对话助手 ---- */
   .chat-box {
@@ -156,9 +317,6 @@
 
   /* ---- 登录 / 用户 ---- */
   .auth-card { max-width: 400px; }
-  .auth-tabs { display: flex; gap: 8px; margin-bottom: 16px; }
-  .auth-tabs button { flex: 1; background: #eef0f5; color: var(--text); padding: 10px; border-radius: 8px; }
-  .auth-tabs button.active { background: var(--primary); color: #fff; }
   .auth-error { color: var(--danger); font-size: 13px; margin-top: -6px; margin-bottom: 10px; min-height: 18px; }
   .topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
   .topbar .user-info { font-size: 14px; color: var(--muted); }
@@ -166,9 +324,164 @@
   .btn-link { background: none; color: var(--primary); padding: 4px 8px; font-size: 13px; }
   .btn-link:hover { background: #eef0f5; }
   .hidden { display: none !important; }
+
+  /* ---- 生图工作流侧边栏 ---- */
+  .gen-layout { display: flex; gap: 16px; }
+  .wf-sidebar {
+    width: 180px;
+    flex-shrink: 0;
+    border-right: 1px solid var(--border);
+    padding-right: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .wf-sidebar .wf-title { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+  .wf-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    border: 1px solid transparent;
+    font-size: 13px;
+    color: var(--text);
+    transition: all .12s;
+    word-break: break-all;
+    line-height: 1.35;
+  }
+  .wf-item:hover { background: #eef0f5; }
+  .wf-item.active { background: #eef2ff; border-color: var(--primary); color: var(--primary); font-weight: 500; }
+  .wf-item .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex-shrink: 0; }
+  .wf-item.active .dot { background: var(--primary); }
+  .wf-empty { font-size: 12px; color: var(--muted); padding: 6px 4px; }
+  .gen-main { flex: 1; min-width: 0; }
+  @media (max-width: 600px) {
+    .gen-layout { flex-direction: column; }
+    .wf-sidebar { width: 100%; flex-direction: row; flex-wrap: wrap; border-right: none; border-bottom: 1px solid var(--border); padding-right: 0; padding-bottom: 12px; }
+  }
+
+  /* ---- 顶部导航 ---- */
+  .navbar {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 16px;
+    padding: 6px 8px 0;
+    background: rgba(255, 255, 255, 0.55);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-radius: var(--radius) var(--radius) 0 0;
+  }
+  .nav-tab {
+    background: none;
+    color: var(--muted);
+    padding: 10px 16px;
+    border-radius: 8px 8px 0 0;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    border: none;
+    position: relative;
+    transition: color .15s;
+  }
+  .nav-tab::after {
+    content: "";
+    position: absolute;
+    left: 16px;
+    right: 16px;
+    bottom: 0;
+    height: 2px;
+    border-radius: 2px;
+    background: var(--accent);
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform .2s ease;
+  }
+  .nav-tab:hover { color: var(--text); background: var(--accent-soft); }
+  .nav-tab.active { color: var(--accent); background: none; font-weight: 600; }
+  .nav-tab.active::after { transform: scaleX(1); }
+  .view { display: none; }
+  .view.active { display: block; }
+  .nav-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+
+  /* ---- 个人主页 ---- */
+  .profile-card { display: flex; align-items: center; gap: 16px; padding: 20px; }
+  .profile-avatar {
+    width: 64px; height: 64px; border-radius: 50%;
+    background: var(--primary); color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 28px; font-weight: 600; flex-shrink: 0;
+  }
+  .profile-info { flex: 1; }
+  .profile-name { font-size: 18px; font-weight: 600; }
+  .profile-meta { font-size: 13px; color: var(--muted); margin-top: 4px; }
+  .profile-stats { display: flex; gap: 24px; margin-top: 12px; }
+  .stat-item { text-align: center; }
+  .stat-num { font-size: 22px; font-weight: 600; color: var(--primary); }
+  .stat-label { font-size: 12px; color: var(--muted); }
+
+  /* ---- 视频生成占位 ---- */
+  .placeholder-card {
+    border: 1px dashed var(--border);
+    border-radius: var(--radius);
+    padding: 40px 20px;
+    text-align: center;
+    color: var(--muted);
+  }
+  .placeholder-card .ph-title { font-size: 16px; font-weight: 600; color: var(--text); margin-bottom: 8px; }
+  .placeholder-card .ph-desc { font-size: 13px; }
+  .badge { display: inline-block; font-size: 11px; color: #ba7517; background: #fdf3e2; padding: 2px 8px; border-radius: 10px; margin-left: 8px; }
+
+  /* ---- 视频生成素材槽 ---- */
+  .asset-slots { display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px; }
+  .asset-slot { border: 1px solid var(--border); border-radius: 10px; padding: 14px; background: #fafbfc; }
+  .asset-slot.disabled { opacity: 0.5; pointer-events: none; }
+  .asset-slot .slot-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .asset-slot .slot-title { font-size: 14px; font-weight: 600; }
+  .asset-slot .slot-hint { font-size: 12px; color: var(--muted); }
+  .asset-slot .slot-locked { font-size: 12px; color: var(--muted); }
+  .slot-files { display: flex; flex-wrap: wrap; gap: 8px; }
+  .slot-file {
+    display: flex; align-items: center; gap: 6px;
+    background: #eef2ff; border: 1px solid #cdd8ff;
+    padding: 4px 10px; border-radius: 16px; font-size: 13px;
+  }
+  .slot-file .rm { cursor: pointer; color: var(--muted); font-weight: 600; }
+  .slot-file .rm:hover { color: var(--danger); }
+  .btn-upload {
+    background: #fff; color: var(--primary); border: 1px dashed var(--primary);
+    padding: 8px 14px; border-radius: 8px; font-size: 13px; cursor: pointer;
+  }
+  .btn-upload:hover { background: #eef2ff; }
+  input[type="file"].file-input { display: none; }
+
+  /* ---- LoRA 列表 ---- */
+  .lora-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+  .lora-row {
+    display: flex; align-items: center; gap: 8px;
+    background: #fafbfc; border: 1px solid var(--border);
+    border-radius: 8px; padding: 8px;
+  }
+  .lora-row select { flex: 1; margin-bottom: 0; }
+  .lora-row input[type="number"] { width: 90px; margin-bottom: 0; }
+  .lora-row .rm { cursor: pointer; color: var(--muted); font-weight: 600; padding: 0 6px; }
+  .lora-row .rm:hover { color: var(--danger); }
+
+  /* ---- 无障碍：减弱动效 ---- */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      transition: none !important;
+      animation: none !important;
+    }
+    #auth-particles { display: none !important; }
+  }
 </style>
 </head>
 <body>
+<canvas id="auth-particles" class="hidden"></canvas>
 <div class="container">
   <h1>AI 生图工坊</h1>
   <div class="subtitle">基于 ComfyUI · 输入提示词，点击生成</div>
@@ -189,88 +502,259 @@
 
   <!-- 已登录后的主体 -->
   <div id="app-main" class="hidden">
-    <div class="topbar">
-      <div class="user-info">已登录：<b id="current-user"></b></div>
-      <button id="btn-logout" class="btn-link">退出登录</button>
-    </div>
-
-    <div class="card">
-      <label for="prompt">正向提示词（prompt）</label>
-      <textarea id="prompt" placeholder="例如：a cute corgi astronaut floating in space, digital art, highly detailed">a cute corgi astronaut floating in space, digital art, highly detailed</textarea>
-
-      <label for="negative">负向提示词（negative prompt）</label>
-      <textarea id="negative" placeholder="例如：blurry, low quality, watermark">blurry, low quality, watermark</textarea>
-
-      <div class="grid-2">
-        <div>
-          <label for="aspect_ratio">宽高比</label>
-          <select id="aspect_ratio">
-            <option value="1:1 (Square)">1:1 方形</option>
-            <option value="2:3 (Portrait Photo)">2:3 竖版照片</option>
-            <option value="3:2 (Photo)">3:2 横版照片</option>
-            <option value="3:4 (Portrait Standard)">3:4 竖版标准</option>
-            <option value="4:3 (Standard)">4:3 标准</option>
-            <option value="9:16 (Portrait Widescreen)">9:16 竖版宽屏</option>
-            <option value="16:9 (Widescreen)">16:9 宽屏</option>
-            <option value="21:9 (Ultrawide)">21:9 超宽屏</option>
-          </select>
-        </div>
-        <div>
-          <label for="megapixels">百万像素（megapixels）</label>
-          <select id="megapixels">
-            <option value="0.5">0.5 MP（约 720×720）</option>
-            <option value="1.0" selected>1.0 MP（约 1024×1024）</option>
-            <option value="1.5">1.5 MP</option>
-            <option value="2.0">2.0 MP</option>
-            <option value="4.0">4.0 MP</option>
-            <option value="8.0">8.0 MP</option>
-          </select>
-        </div>
-      </div>
-
-      <div class="grid">
-        <div>
-          <label for="seed">种子 seed（-1 随机）</label>
-          <input id="seed" type="number" value="-1" min="-1">
-        </div>
-      </div>
-
-      <button id="btn-generate">生成图片</button>
-      <div id="status" class="status"></div>
-      <img id="result" class="result-img" alt="" style="display:none;">
-    </div>
-
-    <div class="card">
-      <div class="section-title">AI 对话助手</div>
-      <div class="chat-layout">
-        <div class="chat-sidebar">
-          <div class="sidebar-title">模型</div>
-          <div class="chat-model-item active" data-provider="openai">
-            <span class="dot"></span> OpenAI
-          </div>
-          <div class="chat-model-item" data-provider="llama">
-            <span class="dot"></span> llama.cpp
-          </div>
-        </div>
-        <div class="chat-main">
-          <div id="chat-box" class="chat-box">
-            <div class="chat-msg system">你好，我是对话助手。当前服务：OpenAI。</div>
-          </div>
-          <div class="chat-input-row">
-            <textarea id="chat-input" placeholder="输入消息，回车发送…"></textarea>
-            <button id="btn-chat">发送</button>
-          </div>
-          <div class="chat-fill-hint">左侧切换模型，各模型对话上下文独立保留。</div>
-        </div>
+    <div class="navbar">
+      <button class="nav-tab active" data-view="view-home">生图</button>
+      <button class="nav-tab" data-view="view-video">视频生成<span class="badge">即将上线</span></button>
+      <button class="nav-tab" data-view="view-profile">个人主页</button>
+      <div class="nav-right">
+        <span class="user-info" style="font-size:13px;">已登录：<b id="current-user"></b></span>
+        <button id="btn-logout" class="btn-link">退出登录</button>
       </div>
     </div>
 
-    <div class="card">
-      <div class="section-title">图库</div>
-      <div id="gallery" class="gallery"></div>
-      <div class="hint">点击图片可查看大图；图库在页面加载时自动刷新。</div>
+    <!-- 视图 1：生图主页 -->
+    <div id="view-home" class="view active">
+      <div class="card">
+        <div class="section-title">生成图片</div>
+        <div class="gen-layout">
+          <div class="wf-sidebar">
+            <div class="wf-title">工作流</div>
+            <div id="wf-list">
+              <div class="wf-empty">加载中…</div>
+            </div>
+          </div>
+          <div class="gen-main">
+            <label for="prompt">正向提示词（prompt）</label>
+            <textarea id="prompt" placeholder="例如：a cute corgi astronaut floating in space, digital art, highly detailed">a cute corgi astronaut floating in space, digital art, highly detailed</textarea>
+
+            <label for="negative">负向提示词（negative prompt）</label>
+            <textarea id="negative" placeholder="例如：blurry, low quality, watermark">blurry, low quality, watermark</textarea>
+
+            <div class="grid-2">
+              <div>
+                <label for="model_preset">模型组合</label>
+                <select id="model_preset">
+                  <option value="">默认（工作流内置模型）</option>
+                </select>
+              </div>
+              <div>
+                <label for="aspect_ratio">宽高比</label>
+                <select id="aspect_ratio">
+                  <option value="1:1 (Square)">1:1 方形</option>
+                  <option value="2:3 (Portrait Photo)">2:3 竖版照片</option>
+                  <option value="3:2 (Photo)">3:2 横版照片</option>
+                  <option value="3:4 (Portrait Standard)">3:4 竖版标准</option>
+                  <option value="4:3 (Standard)">4:3 标准</option>
+                  <option value="9:16 (Portrait Widescreen)">9:16 竖版宽屏</option>
+                  <option value="16:9 (Widescreen)">16:9 宽屏</option>
+                  <option value="21:9 (Ultrawide)">21:9 超宽屏</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="grid-2">
+              <div>
+                <label for="megapixels">百万像素（megapixels）</label>
+                <select id="megapixels">
+                  <option value="0.5">0.5 MP（约 720×720）</option>
+                  <option value="1.0" selected>1.0 MP（约 1024×1024）</option>
+                  <option value="1.5">1.5 MP</option>
+                  <option value="2.0">2.0 MP</option>
+                  <option value="4.0">4.0 MP</option>
+                  <option value="8.0">8.0 MP</option>
+                </select>
+              </div>
+              <div>
+                <label for="seed">种子 seed（-1 随机）</label>
+                <input id="seed" type="number" value="-1" min="-1">
+              </div>
+            </div>
+
+            <div class="grid-2">
+              <div>
+                <label for="img-steps">主生成步数（阶段一）</label>
+                <input id="img-steps" type="number" value="8" min="1" max="100" step="1">
+                <div class="hint">从空 latent 生成低清图的主采样步数。</div>
+              </div>
+              <div>
+                <label for="img-refine-steps">放大精修步数（阶段二）</label>
+                <input id="img-refine-steps" type="number" value="4" min="1" max="100" step="1">
+                <div class="hint">放大后 denoise 精修的采样步数。</div>
+              </div>
+            </div>
+
+            <label style="margin-top:4px;">LoRA（可选，可叠加）</label>
+            <div id="img-lora-list" class="lora-list"></div>
+            <button class="btn-upload" id="btn-add-img-lora" type="button">+ 添加 LoRA</button>
+            <div class="hint">不添加则直连原模型；可叠加多个（最多 5 个），串联在模型预设之后。</div>
+
+            <button id="btn-generate">生成图片</button>
+            <div id="status" class="status"></div>
+            <img id="result" class="result-img" alt="" style="display:none;">
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="section-title">AI 对话助手</div>
+        <div class="chat-layout">
+          <div class="chat-sidebar">
+            <div class="sidebar-title">模型</div>
+            <div class="chat-model-item active" data-provider="openai">
+              <span class="dot"></span> OpenAI
+            </div>
+            <div class="chat-model-item" data-provider="llama">
+              <span class="dot"></span> llama.cpp
+            </div>
+          </div>
+          <div class="chat-main">
+            <div id="chat-box" class="chat-box">
+              <div class="chat-msg system">你好，我是对话助手。当前服务：OpenAI。</div>
+            </div>
+            <div class="chat-input-row">
+              <textarea id="chat-input" placeholder="输入消息，回车发送…"></textarea>
+              <button id="btn-chat">发送</button>
+            </div>
+            <div class="chat-fill-hint">左侧切换模型，各模型对话上下文独立保留。</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="section-title">图库</div>
+        <div id="gallery" class="gallery"></div>
+        <div class="hint">点击图片可查看大图；图库在页面加载时自动刷新。</div>
+      </div>
+    </div>
+
+    <!-- 视图 2：视频生成 -->
+    <div id="view-video" class="view">
+      <div class="card">
+        <div class="section-title">视频生成（MiniMax H3）</div>
+
+        <label for="v-prompt">提示词（prompt）</label>
+        <textarea id="v-prompt" placeholder="描述画面与运镜；可用 [image 1]、[video 1]、[audio 1] 引用下方素材"></textarea>
+
+        <div class="grid-2">
+          <div>
+            <label for="v-duration">时长（秒）</label>
+            <input id="v-duration" type="number" value="4" min="2" max="15" step="1">
+          </div>
+          <div>
+            <label for="v-aspect">分辨率选择器（宽高比）</label>
+            <select id="v-aspect">
+              <option value="16:9 (Widescreen)" selected>16:9 宽屏</option>
+              <option value="1:1 (Square)">1:1 方形</option>
+              <option value="4:3 (Standard)">4:3 标准</option>
+              <option value="3:2 (Photo)">3:2 横版照片</option>
+              <option value="21:9 (Ultrawide)">21:9 超宽屏</option>
+              <option value="9:16 (Portrait Widescreen)">9:16 竖版宽屏</option>
+              <option value="3:4 (Portrait Standard)">3:4 竖版标准</option>
+              <option value="2:3 (Portrait Photo)">2:3 竖版照片</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div>
+            <label for="v-megapixels">百万像素（megapixels）</label>
+            <select id="v-megapixels">
+              <option value="0.5">0.5 MP</option>
+              <option value="1.0" selected>1.0 MP</option>
+              <option value="1.5">1.5 MP</option>
+              <option value="2.0">2.0 MP</option>
+            </select>
+          </div>
+          <div>
+            <label for="v-seed">种子 seed（-1 随机）</label>
+            <input id="v-seed" type="number" value="-1" min="-1">
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div>
+            <label for="v-steps">基本调度器步数（steps）</label>
+            <input id="v-steps" type="number" value="20" min="1" max="100" step="1">
+            <div class="hint" id="v-steps-hint">采样步数，始终生效。</div>
+          </div>
+          <div>
+            <label>LoRA（可选，可叠加）</label>
+            <div id="lora-list" class="lora-list"></div>
+            <button class="btn-upload" id="btn-add-lora" type="button">+ 添加 LoRA</button>
+            <div class="hint">不添加则直连原模型；可叠加多个（最多 5 个），按顺序串联。</div>
+          </div>
+        </div>
+
+        <div class="section-title" style="margin-top:4px;">参考素材（可选）</div>
+        <div class="asset-slots">
+          <div class="asset-slot" id="slot-image">
+            <div class="slot-head">
+              <span class="slot-title">图片</span>
+              <span class="slot-hint">参考图，最多 9 张（可选）</span>
+            </div>
+            <div class="slot-files" id="slot-image-files"></div>
+            <button class="btn-upload" id="btn-upload-image">上传图片</button>
+            <input type="file" class="file-input" id="file-image" accept="image/*" multiple>
+          </div>
+
+          <div class="asset-slot" id="slot-video">
+            <div class="slot-head">
+              <span class="slot-title">视频</span>
+              <span class="slot-hint">参考视频，最多 3 个（可选）</span>
+            </div>
+            <div class="slot-files" id="slot-video-files"></div>
+            <button class="btn-upload" id="btn-upload-video">上传视频</button>
+            <input type="file" class="file-input" id="file-video" accept="video/*" multiple>
+          </div>
+
+          <div class="asset-slot" id="slot-audio">
+            <div class="slot-head">
+              <span class="slot-title">音频</span>
+              <span class="slot-hint">参考音频，最多 3 个（可选）</span>
+            </div>
+            <div class="slot-files" id="slot-audio-files"></div>
+            <button class="btn-upload" id="btn-upload-audio">上传音频</button>
+            <input type="file" class="file-input" id="file-audio" accept="audio/*" multiple>
+          </div>
+        </div>
+
+        <button id="btn-generate-video">生成视频</button>
+        <div id="v-status" class="status"></div>
+        <video id="v-result" class="result-img" controls style="display:none;"></video>
+      </div>
+    </div>
+
+    <!-- 视图 3：个人主页 -->
+    <div id="view-profile" class="view">
+      <div class="card profile-card">
+        <div class="profile-avatar" id="profile-avatar">U</div>
+        <div class="profile-info">
+          <div class="profile-name" id="profile-name">-</div>
+          <div class="profile-meta" id="profile-meta">注册时间：-</div>
+          <div class="profile-stats">
+            <div class="stat-item">
+              <div class="stat-num" id="profile-tasks">0</div>
+              <div class="stat-label">生成任务</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-num" id="profile-images">0</div>
+              <div class="stat-label">资产图片</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="section-title">我的资产</div>
+        <div id="profile-gallery" class="gallery"></div>
+        <div class="hint">你生成过的图片和视频都会在这里，点击可放大预览。</div>
+      </div>
     </div>
   </div>
+</div>
+
+<!-- 预览弹层 -->
+<div id="lightbox" class="hidden">
+  <div class="lb-close" id="lb-close">×</div>
 </div>
 
 <script>
@@ -278,9 +762,134 @@ const API = "http://127.0.0.1:8000";
 
 const $ = (id) => document.getElementById(id);
 
+// ---- 登录页粒子背景（浅色漂浮光点 + 鼠标轻微排斥 + 邻近连线）----
+(function () {
+  const canvas = $("auth-particles");
+  const ctx = canvas.getContext("2d");
+  let particles = [];
+  let rafId = null;
+  let running = false;
+  let w = 0, h = 0;
+  const mouse = { x: -9999, y: -9999 };
+
+  // 主题色系（浅色背景上的淡蓝紫光点）
+  const COLORS = ["79,110,242", "127,119,221", "133,183,235", "159,169,224"];
+
+  function resize() {
+    const dpr = window.devicePixelRatio || 1;
+    w = window.innerWidth;
+    h = window.innerHeight;
+    canvas.width = w * dpr;
+    canvas.height = h * dpr;
+    canvas.style.width = w + "px";
+    canvas.style.height = h + "px";
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    // 按面积自适应粒子数量（约每 14000px² 一个）
+    const target = Math.min(90, Math.max(30, Math.round((w * h) / 14000)));
+    particles = [];
+    for (let i = 0; i < target; i++) {
+      particles.push({
+        x: Math.random() * w,
+        y: Math.random() * h,
+        vx: (Math.random() - 0.5) * 0.35,
+        vy: (Math.random() - 0.5) * 0.35,
+        r: Math.random() * 1.8 + 0.6,
+        c: COLORS[(Math.random() * COLORS.length) | 0],
+        a: Math.random() * 0.45 + 0.2,
+      });
+    }
+  }
+
+  function step() {
+    ctx.clearRect(0, 0, w, h);
+    for (let i = 0; i < particles.length; i++) {
+      const p = particles[i];
+      p.x += p.vx;
+      p.y += p.vy;
+
+      // 鼠标排斥：靠近时轻微推开
+      const dx = p.x - mouse.x;
+      const dy = p.y - mouse.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const repelR = 110;
+      if (dist < repelR && dist > 0.01) {
+        const f = (repelR - dist) / repelR * 0.6;
+        p.x += (dx / dist) * f;
+        p.y += (dy / dist) * f;
+      }
+
+      // 边界回弹
+      if (p.x < 0 || p.x > w) p.vx *= -1;
+      if (p.y < 0 || p.y > h) p.vy *= -1;
+      p.x = Math.max(0, Math.min(w, p.x));
+      p.y = Math.max(0, Math.min(h, p.y));
+
+      // 邻近连线
+      for (let j = i + 1; j < particles.length; j++) {
+        const q = particles[j];
+        const ldx = p.x - q.x;
+        const ldy = p.y - q.y;
+        const d2 = ldx * ldx + ldy * ldy;
+        if (d2 < 110 * 110) {
+          const op = (1 - Math.sqrt(d2) / 110) * 0.18;
+          ctx.strokeStyle = "rgba(79,110,242," + op.toFixed(3) + ")";
+          ctx.lineWidth = 0.5;
+          ctx.beginPath();
+          ctx.moveTo(p.x, p.y);
+          ctx.lineTo(q.x, q.y);
+          ctx.stroke();
+        }
+      }
+
+      ctx.beginPath();
+      ctx.fillStyle = "rgba(" + p.c + "," + p.a.toFixed(3) + ")";
+      ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    rafId = requestAnimationFrame(step);
+  }
+
+  function start() {
+    if (running) return;
+    running = true;
+    resize();
+    window.addEventListener("resize", resize);
+    window.addEventListener("mousemove", onMove);
+    rafId = requestAnimationFrame(step);
+  }
+
+  function stop() {
+    if (!running) return;
+    running = false;
+    cancelAnimationFrame(rafId);
+    window.removeEventListener("resize", resize);
+    window.removeEventListener("mousemove", onMove);
+    ctx.clearRect(0, 0, w, h);
+  }
+
+  function onMove(e) {
+    mouse.x = e.clientX;
+    mouse.y = e.clientY;
+  }
+
+  // 暴露给外部：登录态切换时调用
+  window.updateParticles = function (show) {
+    if (show) {
+      canvas.classList.remove("hidden");
+      start();
+    } else {
+      canvas.classList.add("hidden");
+      stop();
+    }
+  };
+})();
+
 // ---- 认证状态管理 ----
 let authToken = localStorage.getItem("auth_token") || "";
 let authUsername = localStorage.getItem("auth_username") || "";
+let availableLoras = [];        // /api/loras 返回的文件名列表
+let loraItems = [];             // 视频区已添加的 LoRA 项 [{name, strength}]
+let imgLoraItems = [];          // 生图区已添加的 LoRA 项 [{name, strength}]
 
 // 统一请求封装：自动带 Authorization 头；401 时清除登录态
 async function apiFetch(path, options = {}) {
@@ -302,6 +911,7 @@ function clearAuth() {
   $("app-main").classList.add("hidden");
   $("auth-card").classList.remove("hidden");
   $("current-user").textContent = "";
+  window.updateParticles(true);
 }
 
 function applyAuth(token, username) {
@@ -315,8 +925,12 @@ function applyAuth(token, username) {
   $("auth-username").value = "";
   $("auth-password").value = "";
   $("auth-error").textContent = "";
+  window.updateParticles(false);
   loadGallery();
   loadAllConversations();
+  loadWorkflows();
+  loadModelPresets();
+  loadLoras();
 }
 
 // 登录/注册 切换
@@ -365,11 +979,16 @@ if (authToken) {
   $("auth-card").classList.add("hidden");
   $("app-main").classList.remove("hidden");
   $("current-user").textContent = authUsername;
+  window.updateParticles(false);
   loadGallery();
   loadAllConversations();
+  loadWorkflows();
+  loadModelPresets();
+  loadLoras();
 } else {
   $("app-main").classList.add("hidden");
   $("auth-card").classList.remove("hidden");
+  window.updateParticles(true);
 }
 
 $("tab-login").addEventListener("click", () => setAuthMode("login"));
@@ -379,6 +998,14 @@ $("auth-password").addEventListener("keydown", (e) => {
   if (e.key === "Enter") submitAuth();
 });
 $("btn-logout").addEventListener("click", clearAuth);
+
+// 导航 Tab 切换
+document.querySelectorAll(".nav-tab").forEach((tab) => {
+  tab.addEventListener("click", () => switchView(tab.dataset.view));
+});
+// 用户名点击进入个人主页
+$("current-user").addEventListener("click", () => switchView("view-profile"));
+$("current-user").style.cursor = "pointer";
 
 function setStatus(text, cls) {
   const el = $("status");
@@ -390,9 +1017,177 @@ function setStatus(text, cls) {
 async function loadAuthedImage(url) {
   const headers = authToken ? { Authorization: "Bearer " + authToken } : {};
   const resp = await fetch(url, { headers });
-  if (!resp.ok) throw new Error("图片加载失败 " + resp.status);
+  if (!resp.ok) throw new Error("媒体加载失败 " + resp.status);
   const blob = await resp.blob();
   return URL.createObjectURL(blob);
+}
+
+// ---- 预览弹层（lightbox） ----
+function openLightbox(url, mediaType) {
+  const lb = $("lightbox");
+  // 清空旧内容（保留关闭按钮）
+  lb.querySelectorAll("img, video").forEach((n) => n.remove());
+  if (mediaType === "video") {
+    const v = document.createElement("video");
+    v.src = url;
+    v.controls = true;
+    v.muted = true;      // 先静音自动播放，规避浏览器 autoplay 拦截
+    v.autoplay = true;
+    v.playsInline = true;
+    v.style.width = "min(90vw, 1000px)";
+    // 用户首次交互后取消静音（点播放控件时恢复声音）
+    v.onplay = () => { v.muted = false; };
+    lb.appendChild(v);
+  } else {
+    const im = document.createElement("img");
+    im.src = url;
+    lb.appendChild(im);
+  }
+  lb.classList.remove("hidden");
+}
+function closeLightbox() {
+  const lb = $("lightbox");
+  lb.classList.add("hidden");
+  const v = lb.querySelector("video");
+  if (v) { v.pause(); v.removeAttribute("src"); v.load(); }
+}
+$("lb-close").addEventListener("click", (e) => { e.stopPropagation(); closeLightbox(); });
+$("lightbox").addEventListener("click", (e) => {
+  if (e.target === $("lightbox")) closeLightbox();
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") closeLightbox();
+});
+
+// ---- 工作流选择 ----
+let workflows = [];           // [{file, is_default}]
+let selectedWorkflow = "";    // 当前选中的工作流文件名（"" = 默认）
+
+function currentWorkflow() {
+  return selectedWorkflow;
+}
+
+function renderWorkflows() {
+  const list = $("wf-list");
+  list.innerHTML = "";
+  if (!workflows.length) {
+    list.innerHTML = '<div class="wf-empty">暂无可用工作流</div>';
+    return;
+  }
+  workflows.forEach((wf) => {
+    const item = document.createElement("div");
+    item.className = "wf-item" + (wf.file === selectedWorkflow ? " active" : "");
+    item.innerHTML = '<span class="dot"></span><span>' + wf.file + (wf.is_default ? ' <span style="color:var(--muted);font-size:11px;">(默认)</span>' : '') + '</span>';
+    item.onclick = () => selectWorkflow(wf.file);
+    list.appendChild(item);
+  });
+}
+
+function selectWorkflow(file) {
+  selectedWorkflow = file;
+  renderWorkflows();
+}
+
+async function loadWorkflows() {
+  try {
+    const resp = await apiFetch("/api/workflows");
+    if (!resp.ok) {
+      $("wf-list").innerHTML = '<div class="wf-empty">工作流加载失败</div>';
+      return;
+    }
+    workflows = await resp.json();
+    // 默认选中 is_default 的工作流；无默认时选中第一个
+    const def = workflows.find((w) => w.is_default) || workflows[0];
+    if (selectedWorkflow === "" || !workflows.some((w) => w.file === selectedWorkflow)) {
+      selectedWorkflow = def ? def.file : "";
+    }
+    renderWorkflows();
+  } catch (err) {
+    $("wf-list").innerHTML = '<div class="wf-empty">工作流加载失败：' + err.message + '</div>';
+  }
+}
+
+// ---- 模型组合预设 ----
+async function loadModelPresets() {
+  try {
+    const resp = await apiFetch("/api/model-presets");
+    if (!resp.ok) return;
+    const presets = await resp.json();
+    const sel = $("model_preset");
+    // 保留第一项「默认」，追加各预设
+    presets.forEach((p) => {
+      const opt = document.createElement("option");
+      opt.value = p.name;
+      opt.textContent = p.display_name;
+      sel.appendChild(opt);
+    });
+  } catch (err) {
+    // 加载失败不阻塞生图（保持只有「默认」选项）
+  }
+}
+
+// ---- 视图切换 ----
+function switchView(viewId) {
+  document.querySelectorAll(".view").forEach((v) => v.classList.remove("active"));
+  document.querySelectorAll(".nav-tab").forEach((t) => t.classList.remove("active"));
+  const view = $(viewId);
+  if (view) view.classList.add("active");
+  const tab = document.querySelector('.nav-tab[data-view="' + viewId + '"]');
+  if (tab) tab.classList.add("active");
+  if (viewId === "view-profile") loadProfile();
+}
+
+// ---- 个人主页 ----
+async function loadProfile() {
+  try {
+    const resp = await apiFetch("/api/me");
+    if (!resp.ok) return;
+    const data = await resp.json();
+    $("profile-name").textContent = data.username || "-";
+    const uname = (data.username || "U").charAt(0).toUpperCase();
+    $("profile-avatar").textContent = uname;
+    $("profile-meta").textContent = "注册时间：" + (data.created_at ? new Date(data.created_at).toLocaleString() : "-");
+    $("profile-tasks").textContent = data.task_count ?? 0;
+    $("profile-images").textContent = data.image_count ?? 0;
+  } catch (err) {
+    // 忽略
+  }
+  // 加载资产图库
+  try {
+    const resp = await apiFetch("/api/images");
+    const images = await resp.json();
+    const gallery = $("profile-gallery");
+    gallery.innerHTML = "";
+    if (!images.length) {
+      gallery.innerHTML = '<div class="hint">暂无资产</div>';
+      return;
+    }
+    for (const img of images) {
+      const item = document.createElement("div");
+      item.className = "gallery-item";
+      const isVideo = img.media_type === "video";
+      try {
+        const url = await loadAuthedImage(API + img.file_url);
+        if (isVideo) {
+          item.innerHTML =
+            '<video src="' + url + '" preload="metadata" muted></video>' +
+            '<div class="type-badge">视频</div>' +
+            '<div class="video-play">▶</div>' +
+            '<div class="meta">任务 #' + img.task_id + '</div>';
+        } else {
+          item.innerHTML =
+            '<img src="' + url + '" loading="lazy">' +
+            '<div class="meta">任务 #' + img.task_id + '</div>';
+        }
+        item.onclick = () => openLightbox(url, isVideo ? "video" : "image");
+      } catch (e) {
+        item.innerHTML = '<div class="meta" style="padding:16px;">加载失败</div>';
+      }
+      gallery.appendChild(item);
+    }
+  } catch (err) {
+    $("profile-gallery").innerHTML = '<div class="hint">资产加载失败：' + err.message + '</div>';
+  }
 }
 
 async function generate() {
@@ -403,6 +1198,11 @@ async function generate() {
     aspect_ratio: $("aspect_ratio").value,
     megapixels: parseFloat($("megapixels").value) || 1.0,
     seed: parseInt($("seed").value) || -1,
+    workflow: currentWorkflow(),
+    model_preset: $("model_preset").value,
+    steps: parseInt($("img-steps").value) || 8,
+    refine_steps: parseInt($("img-refine-steps").value) || 4,
+    loras: collectImgLoras(),
   };
 
   if (!payload.prompt) { setStatus("请先填写正向提示词", "failed"); return; }
@@ -478,15 +1278,23 @@ async function loadGallery() {
     for (const img of images) {
       const item = document.createElement("div");
       item.className = "gallery-item";
+      const isVideo = img.media_type === "video";
       try {
         const url = await loadAuthedImage(API + img.file_url);
-        item.innerHTML = '<img src="' + url + '" loading="lazy"><div class="meta">任务 #' + img.task_id + '</div>';
-        item.onclick = () => {
-          $("result").src = url;
-          $("result").style.display = "block";
-        };
+        if (isVideo) {
+          item.innerHTML =
+            '<video src="' + url + '" preload="metadata" muted></video>' +
+            '<div class="type-badge">视频</div>' +
+            '<div class="video-play">▶</div>' +
+            '<div class="meta">任务 #' + img.task_id + '</div>';
+        } else {
+          item.innerHTML =
+            '<img src="' + url + '" loading="lazy">' +
+            '<div class="meta">任务 #' + img.task_id + '</div>';
+        }
+        item.onclick = () => openLightbox(url, isVideo ? "video" : "image");
       } catch (e) {
-        item.innerHTML = '<div class="meta" style="padding:16px;">图片加载失败</div>';
+        item.innerHTML = '<div class="meta" style="padding:16px;">加载失败</div>';
       }
       gallery.appendChild(item);
     }
@@ -600,6 +1408,332 @@ $("chat-input").addEventListener("keydown", (e) => {
 document.querySelectorAll(".chat-model-item").forEach((item) => {
   item.addEventListener("click", () => switchProvider(item.dataset.provider));
 });
+
+// ---- 视频生成 ----
+// 素材槽状态：{image: [filename], video: [filename], audio: [filename]}
+const assetFiles = { image: [], video: [], audio: [] };
+
+function updateAssetSlots() {
+  // 素材均可选：图片/视频/音频独立添加，无需强制顺序；接线顺序由后端按 图->视频->音频 处理
+  // 渲染已选文件名
+  renderSlotFiles("image");
+  renderSlotFiles("video");
+  renderSlotFiles("audio");
+}
+
+function renderSlotFiles(type) {
+  const container = $(`slot-${type}-files`);
+  container.innerHTML = "";
+  assetFiles[type].forEach((name, idx) => {
+    const chip = document.createElement("span");
+    chip.className = "slot-file";
+    chip.innerHTML = '<span>' + name + '</span><span class="rm" data-idx="' + idx + '">✕</span>';
+    chip.querySelector(".rm").onclick = () => {
+      assetFiles[type].splice(idx, 1);
+      updateAssetSlots();
+    };
+    container.appendChild(chip);
+  });
+}
+
+async function uploadAsset(file, type) {
+  const fd = new FormData();
+  fd.append("file", file);
+  const resp = await fetch(API + "/api/upload", {
+    method: "POST",
+    headers: authToken ? { Authorization: "Bearer " + authToken } : {},
+    body: fd,
+  });
+  const data = await resp.json();
+  if (!resp.ok) {
+    throw new Error(data.detail || "上传失败");
+  }
+  return data.filename;
+}
+
+function bindUpload(type) {
+  const input = $(`file-${type}`);
+  const btn = $(`btn-upload-${type}`);
+  btn.addEventListener("click", () => input.click());
+  input.addEventListener("change", async () => {
+    const files = Array.from(input.files || []);
+    if (!files.length) return;
+    btn.disabled = true;
+    btn.textContent = "上传中…";
+    try {
+      for (const f of files) {
+        // 限制数量
+        if (type === "image" && assetFiles.image.length >= 9) break;
+        if (type === "video" && assetFiles.video.length >= 3) break;
+        if (type === "audio" && assetFiles.audio.length >= 3) break;
+        const name = await uploadAsset(f, type);
+        assetFiles[type].push(name);
+      }
+      updateAssetSlots();
+    } catch (err) {
+      setVideoStatus("上传失败：" + err.message, "failed");
+    } finally {
+      btn.disabled = false;
+      btn.textContent = type === "image" ? "上传图片" : type === "video" ? "上传视频" : "上传音频";
+      input.value = "";
+    }
+  });
+}
+bindUpload("image");
+bindUpload("video");
+bindUpload("audio");
+
+function setVideoStatus(text, cls) {
+  const el = $("v-status");
+  el.textContent = text;
+  el.className = "status " + (cls || "");
+}
+
+async function generateVideo() {
+  const btn = $("btn-generate-video");
+  const payload = {
+    prompt: $("v-prompt").value.trim(),
+    duration: parseFloat($("v-duration").value) || 4.0,
+    aspect_ratio: $("v-aspect").value,
+    megapixels: parseFloat($("v-megapixels").value) || 1.0,
+    seed: parseInt($("v-seed").value) || -1,
+    steps: parseInt($("v-steps").value) || 20,
+    loras: collectLoras(),
+    ref_images: assetFiles.image,
+    ref_videos: assetFiles.video,
+    ref_audios: assetFiles.audio,
+  };
+
+  if (!payload.prompt) { setVideoStatus("请先填写提示词", "failed"); return; }
+
+  btn.disabled = true;
+  setVideoStatus("正在提交视频任务…", "processing");
+
+  try {
+    const resp = await apiFetch("/api/generate-video", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    const task = await resp.json();
+    if (!resp.ok || !task.id) {
+      setVideoStatus("提交失败：" + (task.detail || JSON.stringify(task)), "failed");
+      btn.disabled = false;
+      return;
+    }
+    setVideoStatus("视频任务 #" + task.id + " 已提交，等待生成…", "pending");
+    pollVideoTask(task.id);
+  } catch (err) {
+    setVideoStatus("请求出错：" + err.message, "failed");
+    btn.disabled = false;
+  }
+}
+
+async function pollVideoTask(taskId) {
+  const timer = setInterval(async () => {
+    try {
+      const resp = await apiFetch("/api/tasks/" + taskId);
+      const task = await resp.json();
+      if (task.status === "completed") {
+        clearInterval(timer);
+        const media = task.images && task.images[0];
+        if (media) {
+          try {
+            const url = await loadAuthedImage(API + media.file_url);
+            const v = $("v-result");
+            v.src = url;
+            v.style.display = "block";
+            setVideoStatus("视频生成完成 ✓", "completed");
+          } catch (e) {
+            setVideoStatus("生成完成但加载视频失败：" + e.message, "failed");
+          }
+        } else {
+          setVideoStatus("任务完成但没有视频", "failed");
+        }
+        $("btn-generate-video").disabled = false;
+      } else if (task.status === "failed") {
+        clearInterval(timer);
+        setVideoStatus("视频生成失败：" + (task.error || "未知错误"), "failed");
+        $("btn-generate-video").disabled = false;
+      } else {
+        setVideoStatus("视频任务 #" + taskId + " 状态：" + task.status + "…", "processing");
+      }
+    } catch (err) {
+      clearInterval(timer);
+      setVideoStatus("查询任务出错：" + err.message, "failed");
+      $("btn-generate-video").disabled = false;
+    }
+  }, 3000);
+}
+
+// ---- LoRA 列表 ----
+const MAX_LORAS = 5;
+
+async function loadLoras() {
+  try {
+    const resp = await apiFetch("/api/loras");
+    if (resp.ok) {
+      availableLoras = await resp.json();
+    } else {
+      availableLoras = [];
+    }
+  } catch (err) {
+    availableLoras = [];
+  }
+  renderLoras();
+  renderImgLoras();
+}
+
+function renderLoras() {
+  const list = $("lora-list");
+  list.innerHTML = "";
+  loraItems.forEach((item, idx) => {
+    const row = document.createElement("div");
+    row.className = "lora-row";
+
+    const sel = document.createElement("select");
+    if (!availableLoras.length) {
+      const opt = document.createElement("option");
+      opt.value = "";
+      opt.textContent = "（无可用 LoRA，请先配置）";
+      sel.appendChild(opt);
+    }
+    availableLoras.forEach((name) => {
+      const opt = document.createElement("option");
+      opt.value = name;
+      opt.textContent = name;
+      if (name === item.name) opt.selected = true;
+      sel.appendChild(opt);
+    });
+    // 若当前 name 不在可选列表里，保留一个自定义选项
+    if (item.name && !availableLoras.includes(item.name)) {
+      const opt = document.createElement("option");
+      opt.value = item.name;
+      opt.textContent = item.name;
+      opt.selected = true;
+      sel.appendChild(opt);
+    }
+    sel.onchange = () => { loraItems[idx].name = sel.value; };
+
+    const strength = document.createElement("input");
+    strength.type = "number";
+    strength.step = "0.1";
+    strength.min = "-5";
+    strength.max = "5";
+    strength.value = item.strength;
+    strength.title = "强度";
+    strength.onchange = () => { loraItems[idx].strength = parseFloat(strength.value) || 0; };
+
+    const rm = document.createElement("span");
+    rm.className = "rm";
+    rm.textContent = "✕";
+    rm.title = "删除";
+    rm.onclick = () => {
+      loraItems.splice(idx, 1);
+      renderLoras();
+    };
+
+    row.appendChild(sel);
+    row.appendChild(strength);
+    row.appendChild(rm);
+    list.appendChild(row);
+  });
+}
+
+function addLora() {
+  if (loraItems.length >= MAX_LORAS) {
+    setVideoStatus("LoRA 最多 " + MAX_LORAS + " 个", "failed");
+    return;
+  }
+  // 默认选中第一个可用 lora；无可用则空
+  const defName = availableLoras.length ? availableLoras[0] : "";
+  loraItems.push({ name: defName, strength: 0.7 });
+  renderLoras();
+}
+
+function collectLoras() {
+  return loraItems
+    .filter((it) => it.name)
+    .map((it) => ({ name: it.name, strength: it.strength }));
+}
+
+$("btn-add-lora").addEventListener("click", addLora);
+
+// ---- 生图区 LoRA 列表（与视频区共用 availableLoras，独立已选列表）----
+function renderImgLoras() {
+  const list = $("img-lora-list");
+  list.innerHTML = "";
+  imgLoraItems.forEach((item, idx) => {
+    const row = document.createElement("div");
+    row.className = "lora-row";
+
+    const sel = document.createElement("select");
+    if (!availableLoras.length) {
+      const opt = document.createElement("option");
+      opt.value = "";
+      opt.textContent = "（无可用 LoRA，请先配置）";
+      sel.appendChild(opt);
+    }
+    availableLoras.forEach((name) => {
+      const opt = document.createElement("option");
+      opt.value = name;
+      opt.textContent = name;
+      if (name === item.name) opt.selected = true;
+      sel.appendChild(opt);
+    });
+    if (item.name && !availableLoras.includes(item.name)) {
+      const opt = document.createElement("option");
+      opt.value = item.name;
+      opt.textContent = item.name;
+      opt.selected = true;
+      sel.appendChild(opt);
+    }
+    sel.onchange = () => { imgLoraItems[idx].name = sel.value; };
+
+    const strength = document.createElement("input");
+    strength.type = "number";
+    strength.step = "0.1";
+    strength.min = "-5";
+    strength.max = "5";
+    strength.value = item.strength;
+    strength.title = "强度";
+    strength.onchange = () => { imgLoraItems[idx].strength = parseFloat(strength.value) || 0; };
+
+    const rm = document.createElement("span");
+    rm.className = "rm";
+    rm.textContent = "✕";
+    rm.title = "删除";
+    rm.onclick = () => {
+      imgLoraItems.splice(idx, 1);
+      renderImgLoras();
+    };
+
+    row.appendChild(sel);
+    row.appendChild(strength);
+    row.appendChild(rm);
+    list.appendChild(row);
+  });
+}
+
+function addImgLora() {
+  if (imgLoraItems.length >= MAX_LORAS) {
+    setStatus("LoRA 最多 " + MAX_LORAS + " 个", "failed");
+    return;
+  }
+  const defName = availableLoras.length ? availableLoras[0] : "";
+  imgLoraItems.push({ name: defName, strength: 0.7 });
+  renderImgLoras();
+}
+
+function collectImgLoras() {
+  return imgLoraItems
+    .filter((it) => it.name)
+    .map((it) => ({ name: it.name, strength: it.strength }));
+}
+
+$("btn-add-img-lora").addEventListener("click", addImgLora);
+
+$("btn-generate-video").addEventListener("click", generateVideo);
+updateAssetSlots();
 
 // 初始渲染
 renderChat();

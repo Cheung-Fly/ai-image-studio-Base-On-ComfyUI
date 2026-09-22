@@ -1,8 +1,0 @@
-﻿=== real git version ===
-
-=== status ===
-
-=== tracked count ===
-
-=== commits ===
-

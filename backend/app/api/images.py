@@ -1,5 +1,4 @@
 """图库接口。"""
-from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
@@ -14,7 +13,7 @@ from .auth import get_current_user
 router = APIRouter(tags=["images"])
 
 
-@router.get("/images", response_model=List[ImageOut])
+@router.get("/images", response_model=list[ImageOut])
 def list_images(
     limit: int = 50,
     offset: int = 0,
@@ -39,7 +38,7 @@ def download_image(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """下载图片文件（仅限本人图片）。"""
+    """下载资产文件（图片 / 视频，仅限本人）。"""
     img = (
         db.query(ImageAsset)
         .join(GenerationTask, ImageAsset.task_id == GenerationTask.id)
@@ -47,8 +46,10 @@ def download_image(
         .first()
     )
     if img is None:
-        raise HTTPException(404, "图片不存在")
+        raise HTTPException(404, "资产不存在")
     path = settings.image_dir / img.filepath
     if not path.exists():
-        raise HTTPException(404, "图片文件已丢失")
-    return FileResponse(path, media_type="image/png", filename=img.filename)
+        raise HTTPException(404, "资产文件已丢失")
+
+    media_type = "video/mp4" if img.media_type == "video" else "image/png"
+    return FileResponse(path, media_type=media_type, filename=img.filename)

@@ -1,0 +1,11 @@
+{
+  "presets": [
+    {
+      "name": "krea2-moody",
+      "display_name": "Krea2 Moody（默认）",
+      "unet": "Krea2-Moody-Mix-premium_int8_convrot.safetensors",
+      "clip": "qwen3vl_4b_fp8_scaled.safetensors",
+      "vae": "qwen_image_vae.safetensors"
+    }
+  ]
+}

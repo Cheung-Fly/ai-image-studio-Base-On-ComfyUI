@@ -7,7 +7,8 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models import User
 from ..schemas import ChatRequest, ChatResponse
-from ..services.llm_client import LLMError, chat as llm_chat
+from ..services.llm_client import LLMError
+from ..services.llm_client import chat as llm_chat
 from ..throttle import check_and_increment_chat_quota, check_rate_limit
 from .auth import get_current_user
 from .conversations import persist_message

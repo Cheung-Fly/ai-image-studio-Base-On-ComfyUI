@@ -18,6 +18,9 @@ ignore = [
     # FastAPI 的依赖注入官方写法就是 db=Depends(get_db)，
     # B008 是针对普通 Python 的警告，对 FastAPI 属误报，全局忽略
     "B008",
+    # TaskStatus 用 str+Enum（原生枚举+字符串兼容），StrEnum 虽更现代但需 3.11+
+    # 且 SQLAlchemy 对 str,Enum 的序列化更稳，暂不改
+    "UP042",
 ]
 
 [lint.per-file-ignores]

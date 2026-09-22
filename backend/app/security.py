@@ -10,7 +10,7 @@ import hmac
 import json
 import secrets
 import time
-from typing import Any, Dict, Optional
+from typing import Any
 
 from .config import settings
 
@@ -70,7 +70,7 @@ def create_token(user_id: int) -> str:
     return f"{signing_input}.{_b64url_encode(signature)}"
 
 
-def decode_token(token: str) -> Optional[Dict[str, Any]]:
+def decode_token(token: str) -> dict[str, Any] | None:
     """校验 JWT 并返回 payload；无效/过期返回 None。"""
     try:
         header_b64, payload_b64, signature_b64 = token.split(".")

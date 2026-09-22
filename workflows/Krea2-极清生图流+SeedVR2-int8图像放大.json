@@ -30,13 +30,13 @@
         "20",
         0
       ],
-      "steps": 4,
+      "steps": "{{refine_steps}}",
       "cfg": 1,
       "sampler_name": "euler",
       "scheduler": "simple",
       "denoise": 0.54,
       "model": [
-        "26",
+        "27",
         0
       ],
       "positive": [
@@ -145,15 +145,15 @@
         "20",
         0
       ],
-      "steps": 8,
+      "steps": "{{steps}}",
       "cfg": 1,
       "sampler_name": "euler",
       "scheduler": "simple",
       "start_at_step": 0,
-      "end_at_step": 8,
+      "end_at_step": "{{steps}}",
       "return_with_leftover_noise": "disable",
       "model": [
-        "26",
+        "27",
         0
       ],
       "positive": [
@@ -231,6 +231,20 @@
     "class_type": "UNETLoader",
     "_meta": {
       "title": "UNet加载器"
+    }
+  },
+  "27": {
+    "inputs": {
+      "lora_name": "minimax_h3_fl2v_turbo_4step_v1.2_768p_comfyui_bf16.safetensors",
+      "strength_model": 0.7,
+      "model": [
+        "26",
+        0
+      ]
+    },
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": {
+      "title": "LoRA加载器（仅模型）"
     }
   },
   "29": {

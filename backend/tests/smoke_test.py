@@ -8,7 +8,7 @@
 运行（backend/ 目录下）：
     pip install httpx
     python tests/smoke_test.py
-预期输出：SMOKE TEST PASSED（8/8）
+预期输出：SMOKE TEST PASSED（19/19）
 """
 import base64
 import json
@@ -113,6 +113,7 @@ from fastapi.testclient import TestClient  # noqa: E402
 
 from app.main import app  # noqa: E402
 from app.services.workflow import build_workflow  # noqa: E402
+from app.services.video_workflow import build_video_workflow, VideoWorkflowError  # noqa: E402
 from app.workers.celery_app import celery_app  # noqa: E402
 
 # Celery 不自动读取 CELERY_TASK_ALWAYS_EAGER 环境变量，需显式开启 eager 模式
@@ -137,6 +138,15 @@ def check(name: str, ok: bool, detail: str = ""):
 
 
 with TestClient(app) as client:
+    # 0. 注册拿 token（所有业务接口均需鉴权）
+    r = client.post(
+        "/api/auth/register",
+        json={"username": "smoke_user", "password": "smoke_pass_123"},
+    )
+    reg = r.json()
+    check("注册返回 token", r.status_code == 201 and reg.get("access_token"))
+    auth_headers = {"Authorization": "Bearer " + reg.get("access_token", "")}
+
     # 1. 健康检查
     r = client.get("/health")
     body = r.json()
@@ -151,7 +161,9 @@ with TestClient(app) as client:
             "aspect_ratio": "3:4 (Portrait Standard)",
             "megapixels": 2.0,
             "seed": 42,
+            "workflow": "",
         },
+        headers=auth_headers,
     )
     task = r.json()
     check("提交任务返回 202 与 task_id", r.status_code == 202 and task["id"] > 0)
@@ -161,29 +173,34 @@ with TestClient(app) as client:
 
     # 3. 任务详情含图片
     tid = task["id"]
-    r = client.get(f"/api/tasks/{tid}")
+    r = client.get(f"/api/tasks/{tid}", headers=auth_headers)
     detail = r.json()
     if r.status_code != 200 or len(detail.get("images", [])) != 1:
         print(f"    [诊断] 详情 status={detail.get('status')} error={detail.get('error')} images={len(detail.get('images', []))}")
     check("任务详情包含 1 张产物图片", r.status_code == 200 and len(detail.get("images", [])) == 1)
 
     # 4. 图库列表
-    r = client.get("/api/images")
+    r = client.get("/api/images", headers=auth_headers)
     images = r.json()
     check("图库列表非空", r.status_code == 200 and len(images) >= 1)
 
     # 5. 下载图片
     img_id = images[0]["id"]
-    r = client.get(f"/api/images/{img_id}/file")
+    r = client.get(f"/api/images/{img_id}/file", headers=auth_headers)
     check("下载图片返回 200 且为合法 PNG", r.status_code == 200 and r.content[:8] == b"\x89PNG\r\n\x1a\n" and len(r.content) > 0)
 
     # 6. 状态过滤
-    r = client.get("/api/tasks", params={"status": "completed"})
+    r = client.get("/api/tasks", params={"status": "completed"}, headers=auth_headers)
     check("按 status=completed 过滤生效", r.status_code == 200 and all(t["status"] == "completed" for t in r.json()))
 
     # 7. 不存在任务返回 404
-    r = client.get("/api/tasks/999999")
+    r = client.get("/api/tasks/999999", headers=auth_headers)
     check("不存在任务返回 404", r.status_code == 404)
+
+    # 7.5 工作流列表接口
+    r = client.get("/api/workflows", headers=auth_headers)
+    wf_list = r.json()
+    check("工作流列表接口返回非空", r.status_code == 200 and len(wf_list) >= 1 and all("file" in w and "is_default" in w for w in wf_list))
 
     # 8. 工作流参数注入正确
     wf = build_workflow(
@@ -205,12 +222,104 @@ with TestClient(app) as client:
         and wf["17"]["inputs"]["megapixels"] == 4.0,
     )
 
+    # 9. 模型组合预设应用正确
+    wf2 = build_workflow(
+        prompt="hello",
+        aspect_ratio="1:1 (Square)",
+        model_preset="krea2-moody",
+    )
+    check(
+        "模型预设覆盖 UNET/CLIP/VAE 正确",
+        wf2["26"]["inputs"]["unet_name"] == "Krea2-Moody-Mix-premium_int8_convrot.safetensors"
+        and wf2["29"]["inputs"]["clip_name"] == "qwen3vl_4b_fp8_scaled.safetensors"
+        and wf2["24"]["inputs"]["vae_name"] == "qwen_image_vae.safetensors",
+    )
+
+    # 10. 个人资料接口
+    r = client.get("/api/me", headers=auth_headers)
+    me_data = r.json()
+    check(
+        "个人资料接口返回统计",
+        r.status_code == 200 and me_data.get("username") == "smoke_user" and me_data.get("image_count", 0) >= 1,
+    )
+
+    # 11. 模型预设列表接口
+    r = client.get("/api/model-presets", headers=auth_headers)
+    presets = r.json()
+    check(
+        "模型预设列表接口返回非空",
+        r.status_code == 200 and len(presets) >= 1 and all("name" in p and "display_name" in p for p in presets),
+    )
+
+    # 12. 视频工作流：仅参考图（无视频/音频接线，动态节点 ID 从 900 起）
+    vwf = build_video_workflow(
+        prompt="test video",
+        duration=4.0,
+        aspect_ratio="16:9 (Widescreen)",
+        seed=1,
+        ref_images=["ref_a.png", "ref_b.png"],
+    )
+    ref_inputs = vwf["429"]["inputs"]
+    check(
+        "视频工作流：图片接线正确且无视频/音频接线",
+        ref_inputs.get("ref_images.ref_image_0") == ["900", 0]
+        and ref_inputs.get("ref_images.ref_image_1") == ["901", 0]
+        and "ref_videos.ref_video_0" not in ref_inputs
+        and "ref_audios.ref_audio_0" not in ref_inputs,
+    )
+    check(
+        "视频工作流：动态图片节点文件名正确",
+        vwf["900"]["inputs"]["image"] == "ref_a.png"
+        and vwf["901"]["inputs"]["image"] == "ref_b.png",
+    )
+
+    # 13. 视频工作流：图片+视频+音频全部接线（顺序 图->视频->音频）
+    vwf2 = build_video_workflow(
+        prompt="test",
+        duration=5.0,
+        seed=2,
+        ref_images=["a.png"],
+        ref_videos=["b.mp4"],
+        ref_audios=["c.wav"],
+    )
+    ref2 = vwf2["429"]["inputs"]
+    check(
+        "视频工作流：图/视频/音频全部按顺序接线",
+        ref2.get("ref_images.ref_image_0") == ["900", 0]
+        and ref2.get("ref_videos.ref_video_0") == ["901", 0]
+        and ref2.get("ref_audios.ref_audio_0") == ["902", 0],
+    )
+
+    # 14. 视频工作流：空素材（纯文生视频）可构建
+    vwf3 = build_video_workflow(prompt="t2v only", seed=3)
+    ref3 = vwf3["429"]["inputs"]
+    check(
+        "视频工作流：空素材可构建（纯文生视频，无 ref 接线）",
+        all(not k.startswith("ref_images.") and not k.startswith("ref_videos.") and not k.startswith("ref_audios.") for k in ref3.keys())
+        or not any(k.startswith("ref_") for k in ref3.keys()),
+    )
+
+    # 15. 视频工作流：数量上限 9 图 / 3 视频 / 3 音频
+    vwf4 = build_video_workflow(
+        prompt="max",
+        ref_images=[f"img{i}.png" for i in range(9)],
+        ref_videos=[f"vid{i}.mp4" for i in range(3)],
+        ref_audios=[f"aud{i}.wav" for i in range(3)],
+    )
+    ref4 = vwf4["429"]["inputs"]
+    check(
+        "视频工作流：9图/3视频/3音频全部接线",
+        ref4.get("ref_images.ref_image_8") is not None
+        and ref4.get("ref_videos.ref_video_2") is not None
+        and ref4.get("ref_audios.ref_audio_2") is not None,
+    )
+
 print()
 if FAILED == 0:
-    print(f"SMOKE TEST PASSED（{PASSED}/9）")
+    print(f"SMOKE TEST PASSED（{PASSED}/19）")
     sys.exit(0)
 else:
-    print(f"SMOKE TEST FAILED（{PASSED}/9）")
+    print(f"SMOKE TEST FAILED（{PASSED}/19）")
     for reason in _REASONS:
         print(f"  - {reason}")
     sys.exit(1)

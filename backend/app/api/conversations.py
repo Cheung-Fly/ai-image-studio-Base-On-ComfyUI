@@ -65,7 +65,7 @@ def clear_conversation(
     if conv is not None:
         db.delete(conv)
         db.commit()
-    return None
+    return
 
 
 def persist_message(db: Session, user_id: int, provider: str, role: str, content: str) -> None:
