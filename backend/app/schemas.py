@@ -103,11 +103,12 @@ class ChatMessage(BaseModel):
 
 
 class ChatRequest(BaseModel):
-    """LLM 对话请求。"""
-
     message: str = Field(..., min_length=1, max_length=8000, description="当前用户消息")
     history: list[ChatMessage] = Field([], max_length=20, description="历史对话（最多 20 条）")
-    provider: str = Field("openai", pattern="^(openai|llama)$", description="LLM 服务")
+    provider: str = Field("openai", pattern="^(openai|llama|custom)$", description="LLM 服务")
+    image_base64: str | None = Field(None, description="可选：图片的 data URL（多模态看图）")
+    use_rag: bool = Field(False, description="是否启用知识库检索增强（RAG）")
+    custom_config_id: int | None = Field(None, description="自定义模型配置 ID（provider=custom 时使用）")
 
 
 class ChatResponse(BaseModel):
@@ -183,3 +184,18 @@ class UploadOut(BaseModel):
     filename: str
     media_type: str  # image / video / audio
     size: int
+
+
+class CustomModelIn(BaseModel):
+    """保存自定义模型配置的请求体（含 API Key，后端加密后落库）。"""
+
+    name: str = Field("自定义模型", max_length=64, description="显示名")
+    base_url: str = Field(..., min_length=1, max_length=255, description="OpenAI 兼容服务地址")
+    model: str = Field(..., min_length=1, max_length=128, description="模型名")
+    api_key: str = Field(..., min_length=1, max_length=512, description="API Key")
+
+
+class AgentGenerateRequest(BaseModel):
+    """一句话生图请求（多 Agent 流水线）。"""
+
+    request: str = Field(..., min_length=1, max_length=2000, description="用户的自然语言描述")

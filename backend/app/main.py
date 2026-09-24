@@ -11,14 +11,17 @@ from fastapi.staticfiles import StaticFiles
 from app.workers import tasks as _worker_tasks  # noqa: F401
 
 from .api import (
+    agent,
     auth,
     chat,
     conversations,
+    custom_models,
     generate,
     images,
     loras,
     me,
     model_presets,
+    rag_docs,
     tasks,
     upload,
     video,
@@ -52,14 +55,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(agent.router, prefix="/api")
 app.include_router(auth.router, prefix="/api")
 app.include_router(generate.router, prefix="/api")
 app.include_router(tasks.router, prefix="/api")
 app.include_router(images.router, prefix="/api")
 app.include_router(chat.router, prefix="/api")
 app.include_router(conversations.router, prefix="/api")
+app.include_router(custom_models.router, prefix="/api")
 app.include_router(workflows.router, prefix="/api")
 app.include_router(model_presets.router, prefix="/api")
+app.include_router(rag_docs.router, prefix="/api")
 app.include_router(me.router, prefix="/api")
 app.include_router(upload.router, prefix="/api")
 app.include_router(video.router, prefix="/api")

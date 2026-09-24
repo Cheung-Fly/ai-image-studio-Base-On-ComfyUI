@@ -130,3 +130,17 @@ class Message(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     conversation = relationship("Conversation", back_populates="messages")
+
+
+class CustomModelConfig(Base):
+    """用户自定义模型配置（自带 API Key，加密存储）。"""
+
+    __tablename__ = "custom_model_configs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    name = Column(String(64), default="自定义模型", nullable=False)  # 显示名
+    base_url = Column(String(255), nullable=False)                  # OpenAI 兼容服务地址
+    model = Column(String(128), nullable=False)                     # 模型名
+    api_key_encrypted = Column(Text, nullable=False)                # 加密后的 API Key
+    created_at = Column(DateTime, default=datetime.utcnow)

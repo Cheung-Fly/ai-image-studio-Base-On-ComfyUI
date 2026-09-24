@@ -156,3 +156,15 @@ def run_generation(self, task_id: int):
         return {"status": "failed", "task_id": task_id, "error": str(exc)[:500]}
     finally:
         db.close()
+
+
+@celery_app.task(name="app.workers.tasks.run_agent_pipeline", bind=True)
+def run_agent_pipeline(self, user_request: str, user_id: int):
+    """多 Agent 编排流水线任务：一句话生图（提示词优化 → 生图 → 审图）。"""
+    from ..services.agents import run_pipeline
+
+    try:
+        return run_pipeline(user_request, user_id)
+    except Exception as exc:
+        logger.error("Agent 流水线失败: %s", exc)
+        return {"status": "failed", "error": str(exc)[:500]}

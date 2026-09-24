@@ -87,3 +87,37 @@ def decode_token(token: str) -> dict[str, Any] | None:
         return payload
     except (ValueError, KeyError, json.JSONDecodeError):
         return None
+
+
+# ---------- 对称加密（加密存储 API Key 用） ----------
+
+def _derive_keystream(key: bytes, nonce: bytes, length: int) -> bytes:
+    """用 HMAC-SHA256 作为伪随机函数（PRF），生成指定长度的密钥流（类 CTR 模式）。"""
+    out = b""
+    counter = 0
+    while len(out) < length:
+        out += hmac.new(key, nonce + counter.to_bytes(4, "big"), hashlib.sha256).digest()
+        counter += 1
+    return out[:length]
+
+
+def encrypt_secret(plaintext: str) -> str:
+    """用 settings.encryption_key 加密字符串，返回 base64(nonce + 密文)。"""
+    key = settings.encryption_key.encode("utf-8")
+    nonce = secrets.token_bytes(16)
+    pt = plaintext.encode("utf-8")
+    keystream = _derive_keystream(key, nonce, len(pt))
+    ct = bytes(a ^ b for a, b in zip(pt, keystream))
+    return base64.urlsafe_b64encode(nonce + ct).decode("ascii")
+
+
+def decrypt_secret(token: str) -> str:
+    """解密 encrypt_secret 的输出；失败抛 ValueError。"""
+    raw = base64.urlsafe_b64decode(token)
+    if len(raw) < 17:
+        raise ValueError("密文长度非法")
+    nonce, ct = raw[:16], raw[16:]
+    key = settings.encryption_key.encode("utf-8")
+    keystream = _derive_keystream(key, nonce, len(ct))
+    pt = bytes(a ^ b for a, b in zip(ct, keystream))
+    return pt.decode("utf-8")

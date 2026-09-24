@@ -6,22 +6,28 @@
 
 ## 技术栈
 
-| 层        | 技术                                        |
-| --------- | ------------------------------------------- |
-| 后端      | FastAPI + SQLAlchemy 2 + Pydantic v2        |
-| 任务队列  | Celery 5 + Redis（broker / result backend） |
-| 生成引擎  | ComfyUI（API 模式，`http://127.0.0.1:8188`） |
-| 存储      | SQLite（数据）+ 本地文件（图片）             |
-| 前端      | 原生 HTML / CSS / JS 单页（`frontend/index.html`，无构建步骤） |
-| 安全      | 标准库自研：PBKDF2 密码哈希 + HS256 JWT     |
+| 层    | 技术                                                 |
+| ---- | -------------------------------------------------- |
+| 后端   | FastAPI + SQLAlchemy 2 + Pydantic v2               |
+| 任务队列 | Celery 5 + Redis（broker / result backend）          |
+| 生成引擎 | ComfyUI（API 模式，`http://127.0.0.1:8188`）            |
+| 存储   | SQLite（数据）+ 本地文件（图片）                               |
+| 前端   | 原生 HTML / CSS / JS 单页（`frontend/index.html`，无构建步骤） |
+| 安全   | 标准库自研：PBKDF2 密码哈希 + HS256 JWT                      |
 
 ## 功能一览
 
 1. **用户认证**：注册 / 登录返回 JWT，所有业务接口强制登录，数据按用户隔离。
 2. **文生图**：提交提示词 → 入队 → Celery 异步出图 → 落盘入库 → 图库可查可下载。
-3. **AI 对话助手**：后端代理 LLM，支持 **OpenAI 兼容协议**（OpenAI / DeepSeek / 通义 / vLLM / Ollama）与**本地 llama.cpp** 双 provider 切换，各模型对话上下文独立、历史落库。
-4. **安全与治理**：每用户每日 LLM 额度 + 每分钟频率限流 + LLM 报错脱敏。
-5. **图库管理**：图库列表、单图下载、任务列表 / 详情查询。
+3. **AI 对话助手**（多模态 + RAG + 自定义模型）：
+   - 后端代理 LLM，支持 **OpenAI 兼容协议**（OpenAI / DeepSeek / 通义 / vLLM / Ollama）与**本地 llama.cpp**（Qwen3-VL）双 provider 切换；
+   - **多模态看图**：上传图片让模型理解画面；
+   - **RAG 知识库问答**：基于项目文档检索增强，支持前端动态增删知识库 md；
+   - **自定义模型（BYOK）**：用户自带 Base URL + API Key 连接自己的模型，Key 后端加密存储、前端不接触明文；
+   - 各模型对话上下文独立、历史落库、可一键清空。
+4. **多 Agent 流水线**：一句话生图（提示词优化 → 生图 → 审图），自研轻量编排 + 复用 Celery。
+5. **安全与治理**：每用户每日 LLM 额度 + 每分钟频率限流 + LLM 报错脱敏 + API Key 加密存储。
+6. **图库管理**：图库列表、单图下载、任务列表 / 详情查询。
 
 ## 本机环境（已确认）
 
@@ -94,7 +100,7 @@ cd D:\Study-Plan\ai-image-studio\backend
 .\.venv\Scripts\Activate.ps1
 ```
 
-> 如果以后要重装：
+> 如果以后要重装：  
 > `py -3.13 -m venv .venv` → 激活 → `pip install -r requirements.txt`
 
 ### 第 2 步：先跑冒烟测试（不依赖 ComfyUI/Redis，验证代码链路）
@@ -123,8 +129,8 @@ cd D:\Study-Plan\ai-image-studio\backend
 celery -A app.workers.celery_app worker --loglevel=info --pool=solo
 ```
 
-> **Windows 必须加 `--pool=solo`**（Celery 5 的 prefork 池在 Windows 不可用）。
-> 想要并发可改用 `--pool=threads --concurrency=2`；8GB 显存建议 solo 串行出图。
+> **Windows 必须加 `--pool=solo`**（Celery 5 的 prefork 池在 Windows 不可用）。  
+> 想要并发可改用 `--pool=threads --concurrency=2`；8GB 显存建议 solo 串行出图。  
 > 看到 `celery@... ready.` 即成功。
 
 ### 第 5 步：打开前端
@@ -177,31 +183,38 @@ Invoke-RestMethod http://127.0.0.1:8000/api/images -Headers @{ Authorization = "
 
 ## API 一览
 
-| 方法   | 路径                              | 说明                                   | 需登录 |
-| ------ | --------------------------------- | -------------------------------------- | ------ |
-| GET    | `/health`                         | 健康检查（含 ComfyUI 地址）            | 否     |
-| POST   | `/api/auth/register`              | 注册，返回 JWT                         | 否     |
-| POST   | `/api/auth/login`                 | 登录，返回 JWT                         | 否     |
-| POST   | `/api/generate`                   | 提交文生图任务（返回 202 + task id）   | 是     |
-| GET    | `/api/tasks?status=&limit=&offset=` | 任务列表（状态过滤 / 分页）          | 是     |
-| GET    | `/api/tasks/{id}`                 | 任务详情（含产物图片）                 | 是     |
-| GET    | `/api/images`                     | 图库列表                               | 是     |
-| GET    | `/api/images/{id}/file`           | 下载图片                               | 是     |
-| POST   | `/api/chat`                       | LLM 对话（openai / llama 双 provider） | 是     |
-| GET    | `/api/conversations/{provider}`   | 拉取指定 provider 对话历史             | 是     |
-| DELETE | `/api/conversations/{provider}`   | 清空指定 provider 对话历史             | 是     |
+| 方法     | 路径                                  | 说明                                | 需登录 |
+| ------ | ----------------------------------- | --------------------------------- | --- |
+| GET    | `/health`                           | 健康检查（含 ComfyUI 地址）                | 否   |
+| POST   | `/api/auth/register`                | 注册，返回 JWT                         | 否   |
+| POST   | `/api/auth/login`                   | 登录，返回 JWT                         | 否   |
+| POST   | `/api/generate`                     | 提交文生图任务（返回 202 + task id）         | 是   |
+| GET    | `/api/tasks?status=&limit=&offset=` | 任务列表（状态过滤 / 分页）                   | 是   |
+| GET    | `/api/tasks/{id}`                   | 任务详情（含产物图片）                       | 是   |
+| GET    | `/api/images`                       | 图库列表                              | 是   |
+| GET    | `/api/images/{id}/file`             | 下载图片                              | 是   |
+| POST   | `/api/chat`                         | LLM 对话（openai / llama / custom，支持多模态看图 + RAG） | 是   |
+| GET    | `/api/conversations/{provider}`     | 拉取指定 provider 对话历史                | 是   |
+| DELETE | `/api/conversations/{provider}`     | 清空指定 provider 对话历史                | 是   |
+| POST   | `/api/agent/generate`               | 一句话生图（多 Agent 流水线，返回任务 id）      | 是   |
+| GET    | `/api/rag/docs`                     | 列出知识库文档（固定 + 动态）                | 是   |
+| POST   | `/api/rag/docs`                     | 上传 md 加入知识库                       | 是   |
+| DELETE | `/api/rag/docs/{filename}`          | 删除知识库动态文档                        | 是   |
+| GET    | `/api/custom-models`                | 列出自定义模型配置（不含 key 明文）            | 是   |
+| POST   | `/api/custom-models`                | 保存自定义模型配置（key 加密存储）              | 是   |
+| DELETE | `/api/custom-models/{id}`           | 删除自定义模型配置                        | 是   |
 
-Swagger：http://127.0.0.1:8000/docs
+Swagger：<http://127.0.0.1:8000/docs>
 
 ## 参数说明（Krea 2 工作流）
 
-| 参数              | 说明                                                               |
-| ----------------- | ------------------------------------------------------------------ |
-| `prompt`          | 正向提示词（1–4000 字）                                            |
-| `negative_prompt` | 负向提示词（默认空，≤4000 字）                                     |
-| `aspect_ratio`    | 宽高比，作用于 ResolutionSelector 节点，8 档可选（见下）           |
-| `megapixels`      | 目标百万像素（0.1–16.0），作用于 ResolutionSelector，默认 1.0      |
-| `seed`            | 种子，`-1` 随机、固定数字可复现                                    |
+| 参数                | 说明                                             |
+| ----------------- | ---------------------------------------------- |
+| `prompt`          | 正向提示词（1–4000 字）                                |
+| `negative_prompt` | 负向提示词（默认空，≤4000 字）                             |
+| `aspect_ratio`    | 宽高比，作用于 ResolutionSelector 节点，8 档可选（见下）        |
+| `megapixels`      | 目标百万像素（0.1–16.0），作用于 ResolutionSelector，默认 1.0 |
+| `seed`            | 种子，`-1` 随机、固定数字可复现                             |
 
 宽高比可选值：`1:1 (Square)` · `2:3 (Portrait Photo)` · `3:2 (Photo)` · `3:4 (Portrait Standard)` · `4:3 (Standard)` · `9:16 (Portrait Widescreen)` · `16:9 (Widescreen)` · `21:9 (Ultrawide)`
 
@@ -209,28 +222,28 @@ Swagger：http://127.0.0.1:8000/docs
 
 ## 环境变量（均有默认值，一般不用改）
 
-| 变量                   | 默认值                                       | 说明                         |
-| ---------------------- | -------------------------------------------- | ---------------------------- |
-| `COMFYUI_BASE_URL`     | `http://127.0.0.1:8188`                      | ComfyUI 地址                 |
-| `DATABASE_URL`         | `sqlite:///backend/data/aistudio.db`         | 数据库                       |
-| `IMAGE_STORAGE_DIR`    | `data/images`                                | 图片存储目录                 |
-| `REDIS_URL`            | `redis://127.0.0.1:6379/0`                   | Celery broker                |
-| `WORKFLOW_DIR`         | `../workflows`                               | 工作流模板目录               |
-| `WORKFLOW_FILE`        | `Krea2-极清生图流+SeedVR2-int8图像放大.json` | 工作流模板文件名             |
-| `COMFY_TIMEOUT`        | `900`                                        | 单次生成超时（秒）           |
-| `COMFY_POLL_INTERVAL`  | `2.0`                                        | ComfyUI 输出轮询间隔（秒）   |
-| `OPENAI_BASE_URL`      | `https://api.openai.com/v1`                  | OpenAI 兼容服务地址          |
-| `OPENAI_API_KEY`       | (空)                                         | OpenAI 兼容服务密钥          |
-| `OPENAI_MODEL`         | `gpt-4o-mini`                                | OpenAI 兼容模型名            |
-| `LLAMA_BASE_URL`       | `http://127.0.0.1:8080/v1`                   | 本地 llama.cpp server 地址   |
-| `LLAMA_API_KEY`        | (空)                                         | llama.cpp server 密钥        |
-| `LLAMA_MODEL`          | `llama-3.1-8b`                               | llama.cpp 模型名             |
-| `LLAMA_MAX_TOKENS`     | `1024`                                       | llama.cpp 最大生成 token     |
-| `DEFAULT_LLM_PROVIDER` | `openai`                                     | 默认 LLM provider            |
-| `JWT_SECRET`           | `change-me-in-production-please`             | JWT 签名密钥（生产必改）     |
-| `JWT_EXPIRE_MINUTES`   | `1440`                                       | token 有效期（分钟）         |
-| `DAILY_CHAT_QUOTA`     | `100`                                        | 每用户每日 LLM 额度（-1 不限） |
-| `CORS_ORIGINS`         | `*`                                          | CORS 允许来源（逗号分隔）    |
+| 变量                     | 默认值                                  | 说明                     |
+| ---------------------- | ------------------------------------ | ---------------------- |
+| `COMFYUI_BASE_URL`     | `http://127.0.0.1:8188`              | ComfyUI 地址             |
+| `DATABASE_URL`         | `sqlite:///backend/data/aistudio.db` | 数据库                    |
+| `IMAGE_STORAGE_DIR`    | `data/images`                        | 图片存储目录                 |
+| `REDIS_URL`            | `redis://127.0.0.1:6379/0`           | Celery broker          |
+| `WORKFLOW_DIR`         | `../workflows`                       | 工作流模板目录                |
+| `WORKFLOW_FILE`        | `Krea2-极清生图流+SeedVR2-int8图像放大.json`  | 工作流模板文件名               |
+| `COMFY_TIMEOUT`        | `900`                                | 单次生成超时（秒）              |
+| `COMFY_POLL_INTERVAL`  | `2.0`                                | ComfyUI 输出轮询间隔（秒）      |
+| `OPENAI_BASE_URL`      | `https://api.openai.com/v1`          | OpenAI 兼容服务地址          |
+| `OPENAI_API_KEY`       | (空)                                  | OpenAI 兼容服务密钥          |
+| `OPENAI_MODEL`         | `gpt-4o-mini`                        | OpenAI 兼容模型名           |
+| `LLAMA_BASE_URL`       | `http://127.0.0.1:8080/v1`           | 本地 llama.cpp server 地址 |
+| `LLAMA_API_KEY`        | (空)                                  | llama.cpp server 密钥    |
+| `LLAMA_MODEL`          | `llama-3.1-8b`                       | llama.cpp 模型名          |
+| `LLAMA_MAX_TOKENS`     | `1024`                               | llama.cpp 最大生成 token   |
+| `DEFAULT_LLM_PROVIDER` | `openai`                             | 默认 LLM provider        |
+| `JWT_SECRET`           | `change-me-in-production-please`     | JWT 签名密钥（生产必改）         |
+| `JWT_EXPIRE_MINUTES`   | `1440`                               | token 有效期（分钟）          |
+| `DAILY_CHAT_QUOTA`     | `100`                                | 每用户每日 LLM 额度（-1 不限）    |
+| `CORS_ORIGINS`         | `*`                                  | CORS 允许来源（逗号分隔）        |
 
 > 完整模板见 `.env.example`。生产环境务必覆盖 `JWT_SECRET` 与各 LLM API Key。
 
@@ -243,15 +256,64 @@ Swagger：http://127.0.0.1:8000/docs
 5. **对话返回「LLM 服务暂不可用」** → 未配置对应 provider 的 API Key，或 LLM 服务不可达；配好 Key 后即可调用真实模型（未配 Key 时返回占位回复，保证链路可先跑通）。
 6. **端口被占用** → uvicorn 改 `--port 8001`，同时把前端 `index.html` 里的 `API` 常量一并改掉。
 
-## Docker 部署（进阶，后续里程碑）
 
-ComfyUI 运行在宿主机（GPU 直通），Redis / API / Worker 容器化：
+## Docker 部署（日常开发测试方式）
+
+**架构**：ComfyUI 与 llama.cpp 运行在宿主机（GPU 直通），Redis / API / Worker 容器化。
 
 ```
+宿主机（Windows）
+  ├─ ComfyUI        :8188   ← 生图引擎，GPU 直通
+  └─ llama-server   :8080   ← 本地 LLM，GPU 直通（阶段 1 接入）
+
+Docker 容器
+  ├─ aistudio-redis   :6379
+  ├─ aistudio-api     :8000   ← FastAPI 后端
+  └─ aistudio-worker          ← Celery 出图任务
+```
+
+### 启动后端（三个容器）
+
+```powershell
+cd D:\Study-Plan\ai-image-studio
 docker compose up -d --build
 ```
 
-容器通过 `host.docker.internal` 访问宿主机 ComfyUI，数据挂载在 `./data/`。
+- `docker compose ps` 查看容器状态（三个都应 `Up`）；
+- `docker compose logs -f api` / `-f worker` 跟踪日志；
+- API 代码已挂载热更新（`./backend/app:/app/app` + `--reload`），改后端代码无需重新 build；
+- 改了 `docker-compose.yml` 本身，用 `docker compose up -d api`（或 `--force-recreate`）重建。
+
+### 启动宿主机服务（ComfyUI + llama）
+
+**ComfyUI**（生图）：宿主机启动后监听 `127.0.0.1:8188`，Worker 容器经 `host.docker.internal:8188` 回调。
+
+**llama.cpp 本地 LLM**（对话，阶段 1）：
+
+```powershell
+cd D:\llama\llama-b11105-bin-win-cuda-13.4-x64
+.\llama-server.exe -m .\models\Qwen3-8B-Q4_K_M.gguf --host 0.0.0.0 --port 8080 --n-gpu-layers 45 --ctx-size 4096
+```
+
+> 关键：`--host 0.0.0.0`（让容器能访问）、`--n-gpu-layers 45`（GPU 加速）、`--ctx-size 4096`（省显存）。  
+> 看到 `listening on http://0.0.0.0:8080` 即成功。**该窗口需保持开启**（前台进程，关窗口即停服务）。  
+> 对话走 `provider="llama"`（`DEFAULT_LLM_PROVIDER=llama`），模型 Qwen3-8B Q4_K_M 约 8 token/s。
+
+### 国内拉镜像：配置加速器
+
+国内直连 Docker Hub 会超时，需给 Docker Desktop 配镜像加速器（`registry-mirrors` 字段放在 daemon.json **顶层**）：
+
+```json
+{
+  "registry-mirrors": [
+    "https://docker.m.daocloud.io",
+    "https://mirror.ccs.tencentyun.com",
+    "https://hub-mirror.c.163.com"
+  ]
+}
+```
+
+配置后重启 Docker Desktop，`docker info | Select-String "Registry Mirrors"` 验证生效。
 
 ---
 
@@ -283,13 +345,13 @@ docker compose up -d --build
 
 **多用户压力下的风险与建议**
 
-| 问题       | 表现                             | 建议方案                                                                 |
-| ---------- | -------------------------------- | ------------------------------------------------------------------------ |
-| 生图无配额 | 个别用户狂提交占满队列           | 仿照 `throttle.py` 给 `/api/generate` 加每日额度（`UsageRecord.image_count` 字段已预留） |
-| 长队无感知 | 用户看不到排队位置               | 任务列表已支持 `pending` 状态，前端可展示排队序号 / 预计等待             |
-| 公平性     | 无优先级，纯 FIFO                | 引入 Celery 优先级队列（`x-max-priority`）或按用户加权                    |
-| 显存并发   | 8GB 显存扛不住多任务并行         | 保持 solo 串行；若上多卡 / 大显存，改用 `--pool=threads` 并限制并发       |
-| 内存限流失效 | 多 worker 进程各自计数         | `throttle.py` 已注明：多进程部署需把限流迁到 Redis（Lua 脚本 / `INCR` + 过期） |
-| SQLite 写竞争 | 高并发写库可能锁库           | 多用户规模上去后换 PostgreSQL，Celery 仍用 Redis                         |
+| 问题         | 表现              | 建议方案                                                                      |
+| ---------- | --------------- | ------------------------------------------------------------------------- |
+| 生图无配额      | 个别用户狂提交占满队列     | 仿照 `throttle.py` 给 `/api/generate` 加每日额度（`UsageRecord.image_count` 字段已预留） |
+| 长队无感知      | 用户看不到排队位置       | 任务列表已支持 `pending` 状态，前端可展示排队序号 / 预计等待                                     |
+| 公平性        | 无优先级，纯 FIFO     | 引入 Celery 优先级队列（`x-max-priority`）或按用户加权                                   |
+| 显存并发       | 8GB 显存扛不住多任务并行  | 保持 solo 串行；若上多卡 / 大显存，改用 `--pool=threads` 并限制并发                           |
+| 内存限流失效     | 多 worker 进程各自计数 | `throttle.py` 已注明：多进程部署需把限流迁到 Redis（Lua 脚本 / `INCR` + 过期）                 |
+| SQLite 写竞争 | 高并发写库可能锁库       | 多用户规模上去后换 PostgreSQL，Celery 仍用 Redis                                      |
 
 **若要支撑真正的多用户并发**，建议按优先级推进：① 生图加每日额度与限流；② 前端展示排队状态；③ 限流与额度计数迁到 Redis；④ 数据库换 PostgreSQL；⑤ 按需引入优先级队列与多 worker 水平扩展。

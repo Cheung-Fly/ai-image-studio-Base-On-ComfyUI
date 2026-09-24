@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI生图工坊 · 内容合规方案</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif; color: #1f2937; background: #f3f5f9; line-height: 1.65; padding: 32px 16px; }
+  .wrap { max-width: 1120px; margin: 0 auto; }
+  h1 { font-size: 26px; margin-bottom: 6px; }
+  .sub { color: #6b7280; margin-bottom: 24px; font-size: 14px; }
+  h2 { font-size: 19px; margin: 32px 0 14px; padding-left: 10px; border-left: 4px solid #dc2626; }
+  .key { background: #fef2f2; border: 1px solid #fecaca; border-radius: 12px; padding: 16px 20px; font-size: 15px; }
+  .key b { color: #b91c1c; }
+  .card { background: #fff; border-radius: 12px; padding: 20px 22px; box-shadow: 0 1px 4px rgba(0,0,0,.06); margin-bottom: 16px; }
+  svg { width: 100%; height: auto; display: block; }
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,.06); }
+  th { background: #1e293b; color: #fff; text-align: left; padding: 10px 12px; font-weight: 600; white-space: nowrap; }
+  td { padding: 10px 12px; border-top: 1px solid #e5e7eb; vertical-align: top; }
+  tr:nth-child(even) td { background: #f8fafc; }
+  .cols { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  .col { background: #fff; border-radius: 12px; padding: 16px 18px; box-shadow: 0 1px 4px rgba(0,0,0,.06); }
+  .col h3 { font-size: 15.5px; margin-bottom: 9px; }
+  .col ul { padding-left: 18px; font-size: 13px; }
+  .col li { margin-bottom: 6px; }
+  .g1 { border-top: 4px solid #2563eb; }
+  .g2 { border-top: 4px solid #7c3aed; }
+  .g3 { border-top: 4px solid #dc2626; }
+  .tag { display: inline-block; font-size: 11.5px; padding: 1px 8px; border-radius: 10px; font-weight: 600; }
+  .t-law { background: #fee2e2; color: #b91c1c; }
+  .t-dev { background: #dcfce7; color: #15803d; }
+  .note { font-size: 12.5px; color: #6b7280; margin-top: 8px; }
+  code { background: #f1f5f9; padding: 1px 5px; border-radius: 4px; font-size: 12.5px; }
+  @media (max-width: 860px) { .cols { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>AI 生图工坊 · 内容合规方案</h1>
+  <div class="sub">三道闸门 + AI 生成标识 + 备案资质 —— 让平台"生成不了、展示不出、传播可溯"违规内容</div>
+
+  <div class="key">
+    核心思路：合规不是一个功能，而是一条<b>贯穿全链路的流水线</b> —— <b>事前</b>拦提示词（输入审核）、<b>事中</b>约束模型（负向提示词）、<b>事后</b>审图片（输出审核），再叠加<b>AI 生成标识</b>与<b>备案/人审/日志</b>。求职阶段只需把"输入+输出两道审核"工程化跑通，正式上线才需要完整资质。
+  </div>
+
+  <h2>一、全链路审核流程（标注在现有架构上）</h2>
+  <div class="card">
+  <svg viewBox="0 0 1080 430" xmlns="http://www.w3.org/2000/svg" font-family="Microsoft YaHei, sans-serif">
+    <defs>
+      <marker id="a" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#475569"/></marker>
+    </defs>
+
+    <!-- 用户 -->
+    <rect x="20" y="170" width="110" height="70" rx="10" fill="#e2e8f0" stroke="#64748b"/>
+    <text x="75" y="200" text-anchor="middle" font-size="14" font-weight="bold">用户</text>
+    <text x="75" y="222" text-anchor="middle" font-size="11" fill="#475569">输入提示词</text>
+
+    <!-- 闸门1 文本审核 -->
+    <rect x="175" y="150" width="150" height="110" rx="10" fill="#dbeafe" stroke="#2563eb" stroke-width="2"/>
+    <text x="250" y="178" text-anchor="middle" font-size="13.5" font-weight="bold" fill="#1e3a8a">闸门① 文本审核</text>
+    <text x="250" y="200" text-anchor="middle" font-size="10.5" fill="#3b5998">敏感词库 + 云文本API</text>
+    <text x="250" y="217" text-anchor="middle" font-size="10.5" fill="#3b5998">+ LLM语义判断</text>
+    <text x="250" y="240" font-size="10.5" fill="#b91c1c" text-anchor="middle">违规 → 400拒绝+记录</text>
+
+    <!-- 队列 -->
+    <rect x="370" y="170" width="120" height="70" rx="10" fill="#f1f5f9" stroke="#94a3b8"/>
+    <text x="430" y="200" text-anchor="middle" font-size="13" font-weight="bold">Celery</text>
+    <text x="430" y="220" text-anchor="middle" font-size="10.5" fill="#64748b">任务队列</text>
+
+    <!-- ComfyUI -->
+    <rect x="535" y="170" width="130" height="70" rx="10" fill="#fce7f3" stroke="#db2777"/>
+    <text x="600" y="198" text-anchor="middle" font-size="13" font-weight="bold" fill="#9d174d">ComfyUI</text>
+    <text x="600" y="218" text-anchor="middle" font-size="10.5" fill="#be185d">Krea2 生图</text>
+
+    <!-- 闸门2 图片审核 -->
+    <rect x="710" y="150" width="150" height="110" rx="10" fill="#fee2e2" stroke="#dc2626" stroke-width="2"/>
+    <text x="785" y="178" text-anchor="middle" font-size="13.5" font-weight="bold" fill="#7f1d1d">闸门② 图片审核</text>
+    <text x="785" y="200" text-anchor="middle" font-size="10.5" fill="#991b1b">云图片审核API</text>
+    <text x="785" y="217" text-anchor="middle" font-size="10.5" fill="#991b1b">色情/暴恐/政治/血腥</text>
+    <text x="785" y="240" font-size="10.5" fill="#b91c1c" text-anchor="middle">违规→blocked不展示</text>
+
+    <!-- 标识 -->
+    <rect x="905" y="150" width="150" height="110" rx="10" fill="#fef9c3" stroke="#ca8a04" stroke-width="2"/>
+    <text x="980" y="178" text-anchor="middle" font-size="13.5" font-weight="bold" fill="#713f12">③ 加AI标识</text>
+    <text x="980" y="200" text-anchor="middle" font-size="10.5" fill="#854d0e">显式："AI生成"角标</text>
+    <text x="980" y="217" text-anchor="middle" font-size="10.5" fill="#854d0e">隐式：元数据/水印</text>
+
+    <line x1="130" y1="205" x2="172" y2="205" stroke="#475569" stroke-width="2" marker-end="url(#a)"/>
+    <line x1="325" y1="205" x2="367" y2="205" stroke="#475569" stroke-width="2" marker-end="url(#a)"/>
+    <line x1="490" y1="205" x2="532" y2="205" stroke="#475569" stroke-width="2" marker-end="url(#a)"/>
+    <line x1="665" y1="205" x2="707" y2="205" stroke="#475569" stroke-width="2" marker-end="url(#a)"/>
+    <line x1="860" y1="205" x2="902" y2="205" stroke="#475569" stroke-width="2" marker-end="url(#a)"/>
+
+    <!-- 底部：人工复审 + 日志 -->
+    <rect x="175" y="310" width="320" height="60" rx="10" fill="#f5f3ff" stroke="#7c3aed"/>
+    <text x="335" y="337" text-anchor="middle" font-size="13" font-weight="bold" fill="#5b21b6">存疑结果 → 人工复审队列</text>
+    <text x="335" y="357" text-anchor="middle" font-size="11" fill="#6d28d9">机审置信度低时转人工，通过/拦截二次判定</text>
+
+    <rect x="710" y="310" width="345" height="60" rx="10" fill="#ecfeff" stroke="#0891b2"/>
+    <text x="882" y="337" text-anchor="middle" font-size="13" font-weight="bold" fill="#155e75">全程留痕：审核日志</text>
+    <text x="882" y="357" text-anchor="middle" font-size="11" fill="#0e7490">谁/何时/输入内容/审核结论/标签，按法规留存备查</text>
+
+    <line x1="785" y1="260" x2="785" y2="307" stroke="#7c3aed" stroke-width="1.5" stroke-dasharray="4" marker-end="url(#a)"/>
+  </svg>
+  <div class="note">示意图：两道审核闸门分别在 API 层（提交前）与 worker 层（出图后）；模型本身无法被"命令"不画违规内容，必须靠输入、输出双侧兜底。</div>
+  </div>
+
+  <h2>二、三道闸门详解</h2>
+  <div class="cols">
+    <div class="col g1">
+      <h3>① 输入：文本审核</h3>
+      <ul>
+        <li><b>位置</b>：<code>api/generate.py</code> 提交任务前</li>
+        <li>本地敏感词/正则兜底（零成本、防断网）</li>
+        <li>云文本审核 API：涉黄涉政、暴恐违法、未成年人</li>
+        <li>用已有 LLM 做语义判断（零成本第一道）</li>
+        <li>云厂商可识别拼音、拆字、谐音、emoji、英文绕过</li>
+        <li>命中 → 拒绝并记录，不消耗 GPU</li>
+      </ul>
+    </div>
+    <div class="col g2">
+      <h3>② 模型：负向约束</h3>
+      <ul>
+        <li><b>位置</b>：<code>services/workflow.py</code></li>
+        <li>负向提示词固定追加：<code>nsfw, nude, blood, gore, violence, minor</code></li>
+        <li>扩散模型无"安全开关"，此项仅降低概率</li>
+        <li>不能作为唯一手段，必须配合输出审核</li>
+        <li>可选经过安全对齐的底模</li>
+      </ul>
+    </div>
+    <div class="col g3">
+      <h3>③ 输出：图片审核</h3>
+      <ul>
+        <li><b>位置</b>：<code>workers/tasks.py</code> 落盘后、入库前</li>
+        <li>云图片审核：色情、性感、暴恐、政治人物、血腥、违禁</li>
+        <li>命中 → 任务 blocked、图片不展示</li>
+        <li>存疑 → 人工复审</li>
+        <li>参考成本：通用图片审核约 1.5~2.7 元/千次</li>
+      </ul>
+    </div>
+  </div>
+
+  <h2>三、AI 生成标识（法规强制，2025-09-01 起施行）</h2>
+  <table>
+    <tr><th style="width:16%">类型</th><th style="width:42%">做法</th><th>在你项目里的实现</th></tr>
+    <tr>
+      <td><span class="tag t-law">显式标识</span></td>
+      <td>图片适当位置添加用户可明显感知的提示（"AI 生成 / AI Generated"）</td>
+      <td>Pillow <code>ImageDraw</code> 在右下角绘制文字角标（你已有 Pillow）</td>
+    </tr>
+    <tr>
+      <td><span class="tag t-law">隐式标识</span></td>
+      <td>文件元数据中写入：内容属性信息、服务提供者名称/编码、内容编号</td>
+      <td>Pillow <code>PngInfo</code> 写入 PNG 元数据；进阶用 C2PA / 不可见数字水印</td>
+    </tr>
+  </table>
+
+  <h2>四、工程改造清单</h2>
+  <table>
+    <tr><th style="width:30%">改动</th><th>内容</th></tr>
+    <tr><td>新建 <code>services/moderation.py</code></td><td>ModerationProvider 抽象（多 provider 模式）+ DevMockProvider + LocalWordlistProvider + AliyunProvider；方法 check_text() / check_image()</td></tr>
+    <tr><td><code>config.py</code></td><td>moderation_provider、moderation_api_key、moderation_enabled、违规阈值等配置</td></tr>
+    <tr><td><code>models.py</code></td><td>TaskStatus 增加 blocked；任务加 moderation_status / moderation_labels；ImageAsset 加 is_blocked；（可选）审核日志表</td></tr>
+    <tr><td><code>api/generate.py</code></td><td>提交前文本审核，违规返 400；用户违规计数累计、超限封禁</td></tr>
+    <tr><td><code>workers/tasks.py</code></td><td>图片审核 → 加角标与元数据 → 违规标记 blocked、不入展示</td></tr>
+    <tr><td>查询接口</td><td>图库/任务列表默认过滤 blocked 内容</td></tr>
+  </table>
+
+  <h2>五、正式对公众上线：资质与组织措施</h2>
+  <table>
+    <tr><th style="width:34%">事项</th><th>依据 / 说明</th></tr>
+    <tr><td>算法备案 / 深度合成备案 + 安全评估</td><td>《生成式 AI 服务管理暂行办法》第17条；通常要求<b>企业主体</b>，网站显著位置标备案号</td></tr>
+    <tr><td>ICP 备案 + HTTPS</td><td>域名备案；小程序与内容安全接口均强制 HTTPS</td></tr>
+    <tr><td>人工审核机制</td><td>机审 + 人审 SOP、投诉举报入口、违规处置流程</td></tr>
+    <tr><td>未成年人保护</td><td>青少年模式、年龄分级</td></tr>
+    <tr><td>用户协议 / 隐私政策</td><td>个人信息收集告知、日志按规定期限留存</td></tr>
+  </table>
+
+  <h2>六、学习/求职阶段的最小实现（不花钱）</h2>
+  <div class="card">
+    <ul style="padding-left:20px; font-size:14px;">
+      <li><span class="tag t-dev">第1步</span> 写 <code>DevModerationProvider</code>：内置几十个敏感词做本地拦截，其余放行，把"审核拦截→任务 blocked"的<b>工程链路</b>跑通；</li>
+      <li><span class="tag t-dev">第2步</span> 用你已有的 LLM（llama.cpp）做文本审核：让它判断 prompt 是否违规并按 JSON 返回，零成本；</li>
+      <li><span class="tag t-dev">第3步</span> 云厂商（阿里云/腾讯云）内容安全<b>新用户免费额度</b>内测试真实文本+图片审核，截图写进作品集；</li>
+      <li><span class="tag t-dev">第4步</span> Pillow 实现"AI 生成"角标 + PNG 元数据，满足标识要求；</li>
+      <li><span class="tag t-dev">第5步</span> 面试串讲："输入-输出双侧机审、存疑转人审、AI 标识、违规熔断、日志留存"。</li>
+    </ul>
+    <div class="note">本地运行、课堂演示、给面试官看 Demo 均不触发备案要求；备案是"向境内公众提供服务"时才需要。</div>
+  </div>
+
+  <h2>七、技术选型：为什么用云审核 API</h2>
+  <table>
+    <tr><th>方案</th><th>优点</th><th>缺点</th></tr>
+    <tr><td>纯敏感词库</td><td>免费、快</td><td>不懂语义、变体绕过、图片完全无法审</td></tr>
+    <tr><td>开源模型（Nudenet 等）</td><td>免费、可本地部署</td><td>只覆盖裸露等单一场景，政治/暴恐缺失，要自己运维 GPU</td></tr>
+    <tr><td><b>云内容安全 API</b></td><td>场景全、更新快、按次计费约 1.5~2.7 元/千次、免运维</td><td>依赖网络、需 HTTPS 与密钥管理</td></tr>
+  </table>
+</div>
+</body>
+</html>

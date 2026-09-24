@@ -19,19 +19,36 @@ SUPPORTED_PROVIDERS = {"openai", "llama"}
 class LLMError(Exception):
     """LLM 调用失败。"""
 
-
 def _build_messages(
-    message: str, history: list[dict[str, str]] | None = None
-) -> list[dict[str, str]]:
-    """把前端传来的 history + 当前消息拼成 messages 列表。"""
-    messages: list[dict[str, str]] = []
+    message: str,
+    history: list[dict[str, str]] | None = None,
+    image_base64: str | None = None,
+) -> list[dict[str, Any]]:
+    """把前端传来的 history + 当前消息拼成 messages 列表。
+
+    当 image_base64 非空时，当前用户消息用 OpenAI 多模态 content 数组格式
+    （image_url + text），否则用纯文本字符串。
+    """
+    messages: list[dict[str, Any]] = []
     for item in history or []:
         role = item.get("role")
         content = item.get("content", "")
         if role in ("user", "assistant") and content:
             messages.append({"role": role, "content": content})
-    messages.append({"role": "user", "content": message})
+    if image_base64:
+        messages.append(
+            {
+                "role": "user",
+                "content": [
+                    {"type": "image_url", "image_url": {"url": image_base64}},
+                    {"type": "text", "text": message},
+                ],
+            }
+        )
+    else:
+        messages.append({"role": "user", "content": message})
     return messages
+
 
 
 def _resolve(provider: str) -> dict[str, Any]:
@@ -50,7 +67,12 @@ def _resolve(provider: str) -> dict[str, Any]:
     }
 
 
-def chat(message: str, history: list[dict[str, str]] | None = None, provider: str = "") -> str:
+def chat(
+    message: str,
+    history: list[dict[str, str]] | None = None,
+    provider: str = "",
+    image_base64: str | None = None,
+) -> str:
     """调用指定 provider 的 LLM，返回回复文本。"""
     provider = provider or settings.default_llm_provider
     if provider not in SUPPORTED_PROVIDERS:
@@ -67,7 +89,7 @@ def chat(message: str, history: list[dict[str, str]] | None = None, provider: st
             f"已收到你的消息：{message!r}。配置后即可调用真实模型。"
         )
 
-    messages = _build_messages(message, history)
+    messages = _build_messages(message, history, image_base64=image_base64)
 
     payload: dict[str, Any] = {
         "model": cfg["model"],
@@ -85,7 +107,7 @@ def chat(message: str, history: list[dict[str, str]] | None = None, provider: st
 
     url = base_url + "/chat/completions"
     try:
-        resp = httpx.post(url, json=payload, headers=headers, timeout=120.0)
+        resp = httpx.post(url, json=payload, headers=headers, timeout=300.0)
     except httpx.HTTPError as exc:
         raise LLMError(f"无法连接 LLM 服务（{url}）: {exc}") from exc
 
@@ -109,4 +131,51 @@ def chat(message: str, history: list[dict[str, str]] | None = None, provider: st
     if text is not None:
         return text
 
+    raise LLMError(f"LLM 响应缺少内容字段: {data}")
+
+
+def chat_with_config(
+    message: str,
+    base_url: str,
+    api_key: str,
+    model: str,
+    history: list[dict[str, str]] | None = None,
+    image_base64: str | None = None,
+) -> str:
+    """用运行时传入的自定义配置调用 OpenAI 兼容 LLM（用于用户自带模型）。
+
+    与 chat() 的区别：base_url/api_key/model 来自请求而非环境变量。
+    """
+    base_url = base_url.rstrip("/")
+    if not api_key:
+        raise LLMError("自定义模型未提供 API Key")
+
+    messages = _build_messages(message, history, image_base64=image_base64)
+    payload: dict[str, Any] = {"model": model, "messages": messages}
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+    url = base_url + "/chat/completions"
+    try:
+        resp = httpx.post(url, json=payload, headers=headers, timeout=300.0)
+    except httpx.HTTPError as exc:
+        raise LLMError(f"无法连接 LLM 服务（{url}）: {exc}") from exc
+
+    if resp.status_code != 200:
+        raise LLMError(f"LLM 返回 {resp.status_code}: {resp.text[:500]}")
+
+    data = resp.json()
+    try:
+        choice = data["choices"][0]
+    except (KeyError, IndexError) as exc:
+        raise LLMError(f"LLM 响应格式异常: {data}") from exc
+
+    msg = choice.get("message") or {}
+    content = msg.get("content")
+    if content is not None:
+        return content
+    text = choice.get("text")
+    if text is not None:
+        return text
     raise LLMError(f"LLM 响应缺少内容字段: {data}")

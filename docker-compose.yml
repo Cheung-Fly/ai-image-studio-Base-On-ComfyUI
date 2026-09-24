@@ -9,7 +9,9 @@ services:
       - redis-data:/data
 
   api:
-    build: ./backend
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
     container_name: aistudio-api
     restart: unless-stopped
     depends_on:
@@ -22,11 +24,19 @@ services:
       - DATABASE_URL=sqlite:////data/aistudio.db
       - IMAGE_STORAGE_DIR=/data/images
       - WORKFLOW_DIR=/workflows
+      - COMFYUI_LORAS_DIR=/comfyui/loras
+      - LLAMA_BASE_URL=http://host.docker.internal:8080/v1
+      - LLAMA_API_KEY=not-needed
+      - DEFAULT_LLM_PROVIDER=llama
     volumes:
       - ./data:/data
+      - ./backend/app:/app/app
+      - "D:/AI_MOVIE/ComfyUI_windows_portable/ComfyUI/models/loras:/comfyui/loras"
 
   worker:
-    build: ./backend
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
     container_name: aistudio-worker
     restart: unless-stopped
     depends_on:
@@ -37,8 +47,12 @@ services:
       - DATABASE_URL=sqlite:////data/aistudio.db
       - IMAGE_STORAGE_DIR=/data/images
       - WORKFLOW_DIR=/workflows
+      - LLAMA_BASE_URL=http://host.docker.internal:8080/v1
+      - LLAMA_API_KEY=not-needed
+      - DEFAULT_LLM_PROVIDER=llama
     volumes:
       - ./data:/data
+      - ./backend/app:/app/app
     command: ["celery", "-A", "app.workers.celery_app", "worker", "--loglevel=info", "--concurrency=2"]
 
 volumes:

@@ -1,0 +1,33 @@
+# 虚拟环境（体积巨大，且容器内会重装）
+backend/.venv
+**/.venv
+
+# Python 缓存
+**/__pycache__
+**/*.pyc
+
+# 本地数据与图片（走 volume 挂载，不打包进镜像）
+data
+backend/data
+
+# 前端（后端镜像不需要）
+frontend
+
+# 文档：.md 进镜像作 RAG 知识库，.html 排除；测试排除
+docs/*.html
+backend/tests
+
+# 版本控制与编辑器
+.git
+.gitignore
+.vscode
+.idea
+
+# 环境变量（含密钥，绝不能进镜像）
+.env
+.env.*
+!.env.example
+
+# 其他
+*.db
+*.log

@@ -315,6 +315,8 @@ Authorization: Bearer <access_token>
 | message | string | 是 | — | 当前用户消息（1–8000 字符） |
 | history | object[] | 否 | `[]` | 历史消息（最多 20 条），元素为 `{role, content}` |
 | provider | string | 否 | `"openai"` | LLM 服务：`openai` / `llama` |
+| image_base64 | string | 否 | `null` | 可选：图片 data URL（`data:image/...;base64,...`），启用多模态看图 |
+| use_rag | boolean | 否 | `false` | 是否启用知识库检索增强（RAG）：`true` 时自动检索项目文档并增强回答 |
 
 **响应 `200`：**
 

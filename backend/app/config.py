@@ -44,17 +44,26 @@ class Settings(BaseSettings):
     llama_api_key: str = ""
     llama_model: str = "llama-3.1-8b"
     # llama.cpp server 专用：最大生成 token 数（其部分版本不传 max_tokens 会报错）
-    llama_max_tokens: int = 1024
+    llama_max_tokens: int = 512
     # 默认使用的 provider：openai / llama
     default_llm_provider: str = "openai"
     # JWT 签名密钥（生产环境务必通过环境变量覆盖为随机长字符串）
     jwt_secret: str = "change-me-in-production-please"
+    # API Key 加密密钥（用于加密存储用户自定义模型的 API Key，生产环境务必覆盖）
+    encryption_key: str = "change-me-in-production-encryption-key"
     # token 有效期（分钟）
     jwt_expire_minutes: int = 60 * 24
     # 每用户每日 LLM 调用额度（-1 表示不限）
     daily_chat_quota: int = 100
     # CORS 允许来源（逗号分隔），生产环境收敛为具体前端域名
     cors_origins: str = "*"
+    # RAG 知识库
+    rag_docs_dir: str = "/app/knowledge"      # 固定文档目录（镜像内）
+    rag_chroma_dir: str = "/data/chroma_db"   # 向量库持久化目录
+    rag_hf_cache_dir: str = "/data/hf_cache"  # HF 模型缓存（bge 下载一次可复用）
+    rag_embed_model: str = "BAAI/bge-small-zh-v1.5"
+    rag_top_k: int = 5
+    rag_dynamic_dir: str = "/data/rag_docs"   # 动态文档目录（前端上传，可增删）
 
     @property
     def image_dir(self) -> Path:

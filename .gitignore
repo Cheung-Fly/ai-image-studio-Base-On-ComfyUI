@@ -25,3 +25,16 @@ Thumbs.db
 
 # 工具缓存
 .ruff_cache/
+
+# 开发文档
+.docs/
+
+# 运行时数据（根目录，Docker 挂载：数据库/图片/向量库/模型缓存）
+data/
+
+# 本地临时文件（RAG 演示脚本 + 虚拟环境）
+rag-venv/
+rag_demo.py
+
+# 简历（不属于本项目）
+resume/

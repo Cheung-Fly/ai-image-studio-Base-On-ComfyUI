@@ -504,7 +504,8 @@
   <div id="app-main" class="hidden">
     <div class="navbar">
       <button class="nav-tab active" data-view="view-home">生图</button>
-      <button class="nav-tab" data-view="view-video">视频生成<span class="badge">即将上线</span></button>
+      <button class="nav-tab" data-view="view-video">视频生成</button>
+      <button class="nav-tab" data-view="view-chat">对话助手</button>
       <button class="nav-tab" data-view="view-profile">个人主页</button>
       <div class="nav-right">
         <span class="user-info" style="font-size:13px;">已登录：<b id="current-user"></b></span>
@@ -591,31 +592,6 @@
             <button id="btn-generate">生成图片</button>
             <div id="status" class="status"></div>
             <img id="result" class="result-img" alt="" style="display:none;">
-          </div>
-        </div>
-      </div>
-
-      <div class="card">
-        <div class="section-title">AI 对话助手</div>
-        <div class="chat-layout">
-          <div class="chat-sidebar">
-            <div class="sidebar-title">模型</div>
-            <div class="chat-model-item active" data-provider="openai">
-              <span class="dot"></span> OpenAI
-            </div>
-            <div class="chat-model-item" data-provider="llama">
-              <span class="dot"></span> llama.cpp
-            </div>
-          </div>
-          <div class="chat-main">
-            <div id="chat-box" class="chat-box">
-              <div class="chat-msg system">你好，我是对话助手。当前服务：OpenAI。</div>
-            </div>
-            <div class="chat-input-row">
-              <textarea id="chat-input" placeholder="输入消息，回车发送…"></textarea>
-              <button id="btn-chat">发送</button>
-            </div>
-            <div class="chat-fill-hint">左侧切换模型，各模型对话上下文独立保留。</div>
           </div>
         </div>
       </div>
@@ -721,6 +697,65 @@
         <button id="btn-generate-video">生成视频</button>
         <div id="v-status" class="status"></div>
         <video id="v-result" class="result-img" controls style="display:none;"></video>
+      </div>
+    </div>
+
+    <!-- 视图：对话助手 -->
+    <div id="view-chat" class="view">
+      <div class="card">
+        <div class="section-title" style="display:flex; justify-content:space-between; align-items:center;">
+          <span>AI 对话助手</span>
+          <button id="btn-clear-chat" type="button" style="font-size:12px; padding:2px 10px;">清空对话</button>
+        </div>
+        <div class="chat-layout">
+          <div class="chat-sidebar">
+            <div class="sidebar-title">模型</div>
+            <div class="chat-model-item active" data-provider="openai">
+              <span class="dot"></span> OpenAI
+            </div>
+            <div class="chat-model-item" data-provider="llama">
+              <span class="dot"></span> llama.cpp
+            </div>
+            <div id="custom-model-list"></div>
+            <button id="btn-add-custom-model" type="button" class="chat-model-item" style="color:var(--muted); border:none; width:100%; text-align:left;">+ 自定义模型</button>
+            <div id="custom-model-form" style="display:none; margin-top:6px; padding:8px; border-top:1px solid var(--border);">
+              <input id="cm-name" placeholder="名称（可选）">
+              <input id="cm-base-url" placeholder="Base URL，如 https://api.deepseek.com/v1">
+              <input id="cm-model" placeholder="模型名，如 deepseek-chat">
+              <input id="cm-key" type="password" placeholder="API Key">
+              <div style="display:flex; gap:6px; margin-top:6px;">
+                <button id="btn-save-custom-model" type="button">保存</button>
+                <button id="btn-cancel-custom-model" type="button">取消</button>
+              </div>
+            </div>
+          </div>
+          <div class="chat-main">
+            <div id="chat-box" class="chat-box">
+              <div class="chat-msg system">你好，我是对话助手。当前服务：OpenAI。</div>
+            </div>
+              <div class="chat-input-row">
+              <textarea id="chat-input" placeholder="输入消息，回车发送…"></textarea>
+              <label class="rag-toggle" style="display:flex; align-items:center; gap:4px; white-space:nowrap; font-size:13px; color:var(--muted); cursor:pointer;" title="开启后回答基于项目文档知识库"><input type="checkbox" id="chat-rag-toggle"> 知识库</label>
+              <button id="btn-rag-manage" type="button" title="管理知识库文档" style="flex-shrink:0;">管理</button>
+              <button id="btn-chat-image" type="button" title="上传图片让模型看图">传图</button>
+              <input type="file" id="chat-image-input" accept="image/*" style="display:none">
+              <button id="btn-chat">发送</button>
+              </div>
+            <div id="chat-image-preview" style="display:none; margin-top:6px; align-items:center; gap:8px;">
+              <img id="chat-image-preview-img" style="max-width:120px; max-height:120px; border-radius:6px; border:1px solid var(--border);">
+              <button id="btn-chat-image-clear" type="button" style="padding:4px 10px;">移除</button>
+            </div>
+            <div class="chat-fill-hint">左侧切换模型，各模型对话上下文独立保留。</div>
+            <div id="rag-manage-panel" style="display:none; margin-top:8px; border:1px solid var(--border); border-radius:8px; padding:10px;">
+              <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+                <span style="font-weight:500; font-size:13px;">知识库文档</span>
+                <button id="btn-rag-upload" type="button" style="padding:2px 10px;">+ 上传 md</button>
+              </div>
+              <input type="file" id="rag-file-input" accept=".md" style="display:none">
+              <div id="rag-doc-list" style="font-size:13px;"></div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -928,6 +963,7 @@ function applyAuth(token, username) {
   window.updateParticles(false);
   loadGallery();
   loadAllConversations();
+  loadCustomModels();
   loadWorkflows();
   loadModelPresets();
   loadLoras();
@@ -982,6 +1018,7 @@ if (authToken) {
   window.updateParticles(false);
   loadGallery();
   loadAllConversations();
+  loadCustomModels();
   loadWorkflows();
   loadModelPresets();
   loadLoras();
@@ -1308,8 +1345,11 @@ loadGallery();
 
 // ---- 对话助手 ----
 // 每个 provider 独立保存上下文（多轮历史），互不串扰
-let chatHistories = { openai: [], llama: [] };   // provider -> [{role, content}]
-let chatMessages = { openai: [], llama: [] };    // provider -> [{role, text}] 界面显示用
+let chatHistories = { openai: [], llama: [], custom: [] };   // provider -> [{role, content}]
+let chatMessages = { openai: [], llama: [], custom: [] };    // provider -> [{role, text}] 界面显示用
+let chatImageBase64 = null;   // 当前待发送的图片 data URL（多模态看图）
+let currentCustomConfigId = null;   // 当前选中的自定义模型配置 ID
+
 
 function currentProvider() {
   const active = document.querySelector(".chat-model-item.active");
@@ -1360,8 +1400,100 @@ function switchProvider(provider) {
   document.querySelectorAll(".chat-model-item").forEach((item) => {
     item.classList.toggle("active", item.dataset.provider === provider);
   });
+  currentCustomConfigId = null;   // 切回内置模型时清空自定义配置
   renderChat();
 }
+
+// ---- 自定义模型 ----
+async function loadCustomModels() {
+  const list = $("custom-model-list");
+  list.innerHTML = "";
+  try {
+    const resp = await apiFetch("/api/custom-models");
+    const data = await resp.json();
+    if (!Array.isArray(data)) return;
+    data.forEach((cfg) => {
+      const item = document.createElement("div");
+      item.className = "chat-model-item";
+      item.dataset.provider = "custom";
+      item.dataset.customId = cfg.id;
+      item.style.cssText = "display:flex; align-items:center;";
+      const dot = document.createElement("span");
+      dot.className = "dot";
+      item.appendChild(dot);
+      const name = document.createElement("span");
+      name.textContent = cfg.name;
+      name.title = cfg.base_url + " / " + cfg.model;
+      item.appendChild(name);
+      const del = document.createElement("button");
+      del.textContent = "×";
+      del.type = "button";
+      del.style.cssText = "margin-left:auto; border:none; background:none; cursor:pointer; color:var(--muted); font-size:14px;";
+      del.addEventListener("click", (e) => { e.stopPropagation(); deleteCustomModel(cfg.id); });
+      item.appendChild(del);
+      item.addEventListener("click", () => {
+        document.querySelectorAll(".chat-model-item").forEach((it) => it.classList.remove("active"));
+        item.classList.add("active");
+        currentCustomConfigId = cfg.id;
+        renderChat();
+      });
+      list.appendChild(item);
+    });
+  } catch (err) {
+    // 忽略
+  }
+}
+
+async function deleteCustomModel(id) {
+  if (!confirm("确认删除该自定义模型？")) return;
+  try {
+    const resp = await apiFetch("/api/custom-models/" + id, { method: "DELETE" });
+    if (resp.ok) {
+      if (currentCustomConfigId === id) currentCustomConfigId = null;
+      loadCustomModels();
+    }
+  } catch (err) {
+    // 忽略
+  }
+}
+
+$("btn-add-custom-model").addEventListener("click", () => {
+  $("custom-model-form").style.display = "block";
+});
+
+$("btn-cancel-custom-model").addEventListener("click", () => {
+  $("custom-model-form").style.display = "none";
+});
+
+$("btn-save-custom-model").addEventListener("click", async () => {
+  const name = $("cm-name").value.trim() || "自定义模型";
+  const base_url = $("cm-base-url").value.trim();
+  const model = $("cm-model").value.trim();
+  const api_key = $("cm-key").value.trim();
+  if (!base_url || !model || !api_key) {
+    alert("请填写 Base URL、模型名和 API Key");
+    return;
+  }
+  try {
+    const resp = await apiFetch("/api/custom-models", {
+      method: "POST",
+      body: JSON.stringify({ name, base_url, model, api_key }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) {
+      alert("保存失败：" + (data.detail || JSON.stringify(data)));
+      return;
+    }
+    $("cm-name").value = "";
+    $("cm-base-url").value = "";
+    $("cm-model").value = "";
+    $("cm-key").value = "";
+    $("custom-model-form").style.display = "none";
+    loadCustomModels();
+  } catch (err) {
+    alert("保存出错：" + err.message);
+  }
+});
 
 async function sendChat() {
   const input = $("chat-input");
@@ -1370,21 +1502,27 @@ async function sendChat() {
   if (!text) return;
 
   const provider = currentProvider();
+  const image = chatImageBase64;   // 取当前待发送的图片
   input.value = "";
   appendChatMsg("user", text);
   btn.disabled = true;
 
   try {
+    const body = { message: text, history: chatHistories[provider], provider };
+    if (provider === "custom" && currentCustomConfigId) {
+      body.custom_config_id = currentCustomConfigId;
+    }
+    if (image) body.image_base64 = image;
+    if ($("chat-rag-toggle").checked) body.use_rag = true;
     const resp = await apiFetch("/api/chat", {
       method: "POST",
-      body: JSON.stringify({ message: text, history: chatHistories[provider], provider }),
+      body: JSON.stringify(body),
     });
     const data = await resp.json();
     if (!resp.ok) {
       appendChatMsg("system", "请求失败：" + (data.detail || JSON.stringify(data)));
     } else {
       appendChatMsg("assistant", data.reply);
-      // 只更新当前 provider 自己的上下文
       chatHistories[provider].push({ role: "user", content: text });
       chatHistories[provider].push({ role: "assistant", content: data.reply });
       chatMessages[provider].push({ role: "user", text });
@@ -1395,10 +1533,141 @@ async function sendChat() {
   } finally {
     btn.disabled = false;
     input.focus();
+    if (chatImageBase64) {
+      chatImageBase64 = null;
+      $("chat-image-input").value = "";
+      $("chat-image-preview").style.display = "none";
+    }
   }
 }
 
+
 $("btn-chat").addEventListener("click", sendChat);
+
+// 清空对话：内置模型调后端清空 + 清前端；自定义模型仅清前端内存
+async function clearChat() {
+  const provider = currentProvider();
+  if (!confirm("确认清空当前对话记录？")) return;
+  if (provider === "openai" || provider === "llama") {
+    try {
+      await apiFetch("/api/conversations/" + provider, { method: "DELETE" });
+    } catch (err) {
+      // 后端清空失败不阻塞
+    }
+  }
+  chatHistories[provider] = [];
+  chatMessages[provider] = [];
+  renderChat();
+}
+
+$("btn-clear-chat").addEventListener("click", clearChat);
+// 传图按钮 → 触发隐藏的文件选择框
+$("btn-chat-image").addEventListener("click", () => $("chat-image-input").click());
+
+// 选中图片后 → 转 base64 + 显示预览
+$("chat-image-input").addEventListener("change", (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    chatImageBase64 = reader.result;
+    $("chat-image-preview-img").src = reader.result;
+    $("chat-image-preview").style.display = "flex";
+  };
+  reader.readAsDataURL(file);
+});
+
+// 移除图片
+$("btn-chat-image-clear").addEventListener("click", () => {
+  chatImageBase64 = null;
+  $("chat-image-input").value = "";
+  $("chat-image-preview").style.display = "none";
+});
+
+// ---- 知识库管理 ----
+$("btn-rag-manage").addEventListener("click", () => {
+  const panel = $("rag-manage-panel");
+  if (panel.style.display === "none") {
+    panel.style.display = "block";
+    loadRagDocs();
+  } else {
+    panel.style.display = "none";
+  }
+});
+
+async function loadRagDocs() {
+  const list = $("rag-doc-list");
+  list.innerHTML = "加载中...";
+  try {
+    const resp = await apiFetch("/api/rag/docs");
+    const data = await resp.json();
+    if (!Array.isArray(data) || data.length === 0) {
+      list.innerHTML = '<div style="color:var(--muted)">暂无文档</div>';
+      return;
+    }
+    list.innerHTML = "";
+    data.forEach((doc) => {
+      const row = document.createElement("div");
+      row.style.cssText = "display:flex; align-items:center; justify-content:space-between; padding:4px 0; border-bottom:1px solid var(--border);";
+      const name = document.createElement("span");
+      name.textContent = doc.filename + (doc.dynamic ? "" : "（内置）");
+      name.style.color = doc.dynamic ? "var(--text-primary)" : "var(--muted)";
+      row.appendChild(name);
+      if (doc.dynamic) {
+        const del = document.createElement("button");
+        del.textContent = "删除";
+        del.type = "button";
+        del.style.cssText = "padding:1px 8px; font-size:12px;";
+        del.addEventListener("click", () => deleteRagDoc(doc.filename));
+        row.appendChild(del);
+      }
+      list.appendChild(row);
+    });
+  } catch (err) {
+    list.innerHTML = '<div style="color:#d93026">加载失败：' + err.message + '</div>';
+  }
+}
+
+$("btn-rag-upload").addEventListener("click", () => $("rag-file-input").click());
+
+$("rag-file-input").addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const fd = new FormData();
+  fd.append("file", file);
+  try {
+    const resp = await fetch(API + "/api/rag/docs", {
+      method: "POST",
+      headers: { Authorization: "Bearer " + authToken },
+      body: fd,
+    });
+    const data = await resp.json();
+    if (!resp.ok) {
+      alert("上传失败：" + (data.detail || JSON.stringify(data)));
+    } else {
+      loadRagDocs();
+    }
+  } catch (err) {
+    alert("上传出错：" + err.message);
+  }
+  e.target.value = "";
+});
+
+async function deleteRagDoc(filename) {
+  if (!confirm("确认删除 " + filename + " ？")) return;
+  try {
+    const resp = await apiFetch("/api/rag/docs/" + encodeURIComponent(filename), { method: "DELETE" });
+    if (!resp.ok) {
+      const data = await resp.json();
+      alert("删除失败：" + (data.detail || "未知错误"));
+    } else {
+      loadRagDocs();
+    }
+  } catch (err) {
+    alert("删除出错：" + err.message);
+  }
+}
+
 $("chat-input").addEventListener("keydown", (e) => {
   if (e.key === "Enter" && !e.shiftKey) {
     e.preventDefault();
