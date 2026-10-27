@@ -72,6 +72,7 @@ def main() -> None:
         **os.environ,
         "COMFYUI_BASE_URL": f"http://127.0.0.1:{srv.server_port}",
         "IMAGE_STORAGE_DIR": tmp,
+        "DATABASE_URL": f"sqlite:///{(Path(tmp) / 'agent.db').as_posix()}",
         "WORKFLOW_DIR": str(backend / ".." / "workflows"),
         "COMFY_POLL_INTERVAL": "0.1",
     }
@@ -114,15 +115,35 @@ def main() -> None:
                 },
             ]
         },
-        {"content": "完成"},
+        {
+            "tool_calls": [
+                {
+                    "id": "5",
+                    "type": "function",
+                    "function": {
+                        "name": "comfy_remember_preferences",
+                        "arguments": json.dumps({"style": "blue watercolor"}),
+                    },
+                },
+                {
+                    "id": "6",
+                    "type": "function",
+                    "function": {"name": "comfy_get_preferences", "arguments": "{}"},
+                },
+            ]
+        },
+        {"content": "已记住"},
     ]
     seen_tools: list[str] = []
     progress: list[dict] = []
     confirmation_requests: list[tuple[str, dict]] = []
+    system_prompts: list[str] = []
 
     def fake_llm(messages, tools, provider):
         if not seen_tools:
             seen_tools.extend(t["function"]["name"] for t in tools)
+        if not system_prompts:
+            system_prompts.append(messages[0]["content"])
         return script.pop(0)
 
     def approve_action(tool, arguments):
@@ -133,11 +154,12 @@ def main() -> None:
 
     out = asyncio.run(
         run_mcp_agent(
-            "画只柯基",
+            "画只柯基，并记住我喜欢蓝色水彩风格",
             llm=fake_llm,
             params=params,
             on_progress=progress.append,
             confirm_action=approve_action,
+            memory={"style": "soft watercolor", "aspect_ratio": "16:9 (Widescreen)"},
         )
     )
 
@@ -148,16 +170,24 @@ def main() -> None:
         "comfy_workflow_details",
         "comfy_describe_node",
         "comfy_list_input_files",
+        "comfy_get_preferences",
+        "comfy_remember_preferences",
+        "comfy_forget_preferences",
     }
     assert expected_tools.issubset(seen_tools), seen_tools
-    assert out["answer"] == "完成", out
+    assert (
+        "soft watercolor" in system_prompts[0] and "当前请求" in system_prompts[0]
+    ), system_prompts
+    assert out["answer"] == "已记住", out
     assert [s["tool"] for s in out["steps"]] == [
         "comfy_status",
         "comfy_generate_image",
         "comfy_interrupt",
         "comfy_delete_queued",
+        "comfy_remember_preferences",
+        "comfy_get_preferences",
     ]
-    assert len(progress) == 8 and progress[-1]["current_tool"] == "comfy_delete_queued", progress
+    assert len(progress) == 12 and progress[-1]["current_tool"] == "comfy_get_preferences", progress
     assert progress[0]["running"] is True and progress[-1]["running"] is False, progress
     assert confirmation_requests == [
         ("comfy_interrupt", {}),
@@ -168,6 +198,9 @@ def main() -> None:
     assert Path(gen["files"][0]["path"]).read_bytes() == PNG
     assert json.loads(out["steps"][2]["result"])["ok"]
     assert json.loads(out["steps"][3]["result"])["deleted"] == ["waiting-123"]
+    assert json.loads(out["steps"][4]["result"])["preferences"]["style"] == "blue watercolor"
+    saved = json.loads(out["steps"][5]["result"])["preferences"]
+    assert saved["style"] == "blue watercolor", saved
     assert "POST /interrupt" in CALLS and "POST /prompt" in CALLS and "POST /queue" in CALLS, CALLS
     assert ("/queue", {"delete": ["waiting-123"]}) in POST_BODIES, POST_BODIES
 
@@ -177,7 +210,7 @@ def main() -> None:
         {
             "tool_calls": [
                 {
-                    "id": "5",
+                    "id": "7",
                     "type": "function",
                     "function": {"name": "comfy_clear_queue", "arguments": "{}"},
                 }

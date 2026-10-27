@@ -483,6 +483,30 @@ Agent 请求中断生成、清理队列、删除排队任务/输入素材或释�
 
 `confirmed` 为 `false` 时操作不会执行；过期或已处理的确认请求返回 `409`。
 
+### 11.6 个人助手偏好记忆
+
+记忆是个人实例级别的单份 ComfyUI 偏好，不按账号拆分。
+
+- `GET /api/agent/memory`：读取全部偏好。
+- `PATCH /api/agent/memory`：只更新请求体中提供的字段；支持 `style`、`model_preset`、`workflow`、`aspect_ratio`、`megapixels`、`negative_prompt`、`notes`。
+- `DELETE /api/agent/memory`：清除全部偏好并返回空记忆。
+
+例如：
+
+```json
+{
+  "style": "soft watercolor, warm natural light",
+  "model_preset": "",
+  "workflow": "",
+  "aspect_ratio": "16:9 (Widescreen)",
+  "megapixels": 2.0,
+  "negative_prompt": "blurry, low quality",
+  "notes": "Prefer a clear subject and uncluttered composition"
+}
+```
+
+工作流和模型预设必须是当前可用项；宽高比和百万像素使用与生图接口相同的约束。MCP Agent 会把已保存偏好作为生成默认值，用户当前请求中的明确参数优先。
+
 ---
 
 ## 12. 系统接口

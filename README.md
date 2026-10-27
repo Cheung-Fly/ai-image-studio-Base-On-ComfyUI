@@ -202,6 +202,9 @@ Invoke-RestMethod http://127.0.0.1:8000/api/images -Headers @{ Authorization = "
 | POST   | `/api/agent/mcp`                    | MCP Agent 直连 ComfyUI 自主控制（返回任务 id）   | 是   |
 | GET    | `/api/agent/result/{task_id}`       | 查询 Agent 任务状态与结果                      | 是   |
 | GET    | `/api/agent/files/{filename}`       | 读取 MCP Agent 生成的媒体文件用于预览           | 是   |
+| GET    | `/api/agent/memory`                 | 查看个人助手保存的 ComfyUI 偏好                 | 是   |
+| PATCH  | `/api/agent/memory`                 | 更新个人助手偏好                               | 是   |
+| DELETE | `/api/agent/memory`                 | 清除个人助手全部偏好记忆                         | 是   |
 | GET    | `/api/rag/docs`                     | 列出知识库文档（固定 + 动态）                | 是   |
 | POST   | `/api/rag/docs`                     | 上传 md 加入知识库                       | 是   |
 | DELETE | `/api/rag/docs/{filename}`          | 删除知识库动态文档                        | 是   |
@@ -219,9 +222,10 @@ Swagger：<http://127.0.0.1:8000/docs>
 - **V4**：多 Agent 固定流水线（提示词优化 → 生图 → 审图）。
 - **V5**：MCP Agent 直连 ComfyUI（查询状态/队列、生成、中断、清队列、释放显存）。
 - **V6**：对话助手加入 ComfyUI 控制模式，显示 MCP 工具执行进度，并在会话中预览生成图片/视频。
-- **V7（当前）**：增强 ComfyUI 管理（查看工作流/节点/输入素材、按 ID 删除排队任务），中断、清队列、删除素材及释放显存前需在界面确认。
+- **V7**：增强 ComfyUI 管理（查看工作流/节点/输入素材、按 ID 删除排队任务），中断、清队列、删除素材及释放显存前需在界面确认。
+- **V8（当前）**：为个人助手增加可查看/编辑/清除的持久偏好记忆，并让 MCP Agent 在生成时使用这些默认偏好。
 
-### V5–V7：MCP Agent 使用方式
+### V5–V8：MCP Agent 使用方式
 
 在对话助手界面勾选 **控制 ComfyUI**，输入自然语言指令（例如“先看下状态，再画一只太空柯基”）。也可以直接调用 API：
 
@@ -247,6 +251,7 @@ Authorization: Bearer <token>
 > 说明：MCP Server 进程由 Agent 任务内部自动拉起（stdio 传输），无需单独常驻守护。
 > Agent 生成的图片/视频会在对话中预览；后端使用默认配置的 LLM provider，不受侧边栏当前模型选择影响。
 > V7 中断、清空队列、删除指定队列任务/输入素材、释放显存等有影响的操作会暂停并弹出确认框；确认状态最多等待 5 分钟。
+> V8 点击 **个人记忆** 可设置偏好画风、模型预设、工作流、宽高比、分辨率、负向提示词和其他生成习惯。用户明确说“记住”时，Agent 也会通过工具保存；当前指令中的明确参数优先于已保存默认值。
 
 ## 开发与贡献
 

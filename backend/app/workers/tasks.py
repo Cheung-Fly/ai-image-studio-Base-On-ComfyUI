@@ -180,9 +180,17 @@ def run_mcp_agent_task(self, user_request: str, provider: str = ""):
     from redis import Redis
 
     from ..config import settings
+    from ..database import SessionLocal
+    from ..services.agent_memory import get_preferences
     from ..services.mcp_agent import run_mcp_agent
 
     try:
+        db = SessionLocal()
+        try:
+            memory = get_preferences(db)
+        finally:
+            db.close()
+
         def report_progress(progress):
             self.update_state(state="PROGRESS", meta=progress)
 
@@ -219,6 +227,7 @@ def run_mcp_agent_task(self, user_request: str, provider: str = ""):
                 provider,
                 on_progress=report_progress,
                 confirm_action=confirm_action,
+                memory=memory,
             )
         )
     except Exception as exc:

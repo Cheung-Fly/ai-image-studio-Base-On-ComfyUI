@@ -144,3 +144,13 @@ class CustomModelConfig(Base):
     model = Column(String(128), nullable=False)                     # 模型名
     api_key_encrypted = Column(Text, nullable=False)                # 加密后的 API Key
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class AgentMemory(Base):
+    """单实例个人 ComfyUI 偏好记忆（固定 singleton id，不按账号拆分）。"""
+
+    __tablename__ = "agent_memory"
+
+    id = Column(Integer, primary_key=True, default=1)
+    preferences = Column(Text, nullable=False, default="{}")
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
