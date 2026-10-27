@@ -174,14 +174,53 @@ def run_agent_pipeline(self, user_request: str, user_id: int):
 def run_mcp_agent_task(self, user_request: str, provider: str = ""):
     """MCP Agent 任务：LLM 经 MCP 协议自主控制 ComfyUI。"""
     import asyncio
+    import time
+    import uuid
 
+    from redis import Redis
+
+    from ..config import settings
     from ..services.mcp_agent import run_mcp_agent
 
     try:
         def report_progress(progress):
             self.update_state(state="PROGRESS", meta=progress)
 
-        return asyncio.run(run_mcp_agent(user_request, provider, on_progress=report_progress))
+        def confirm_action(tool: str, arguments: dict) -> bool:
+            confirmation_id = uuid.uuid4().hex
+            task_id = self.request.id
+            key = f"aistudio:mcp-agent-confirm:{task_id}:{confirmation_id}"
+            expires_at = int(time.time() + 300)
+            self.update_state(
+                state="CONFIRMATION_REQUIRED",
+                meta={
+                    "confirmation_id": confirmation_id,
+                    "tool": tool,
+                    "arguments": arguments,
+                    "expires_at": expires_at,
+                },
+            )
+            client = Redis.from_url(settings.redis_url, decode_responses=True)
+            deadline = time.monotonic() + 300
+            try:
+                while time.monotonic() < deadline:
+                    answer = client.get(key)
+                    if answer is not None:
+                        return answer == "yes"
+                    time.sleep(0.5)
+                return False
+            finally:
+                client.delete(key)
+                client.close()
+
+        return asyncio.run(
+            run_mcp_agent(
+                user_request,
+                provider,
+                on_progress=report_progress,
+                confirm_action=confirm_action,
+            )
+        )
     except Exception as exc:
         logger.error("MCP Agent 失败: %s", exc)
         return {"status": "failed", "error": str(exc)[:500]}

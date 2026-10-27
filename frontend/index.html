@@ -1570,13 +1570,18 @@ function agentProgressText(progress) {
     comfy_status: "查询 ComfyUI 状态",
     comfy_list_models: "查询可用模型",
     comfy_list_workflows: "查询工作流",
+    comfy_workflow_details: "查看工作流结构",
+    comfy_describe_node: "查询 ComfyUI 节点详情",
+    comfy_list_input_files: "查看输入素材",
     comfy_generate_image: "生成图片",
     comfy_run_workflow: "执行工作流",
     comfy_queue: "查询队列",
     comfy_history: "查询生成历史",
     comfy_interrupt: "中断当前任务",
     comfy_clear_queue: "清空等待队列",
+    comfy_delete_queued: "删除指定排队任务",
     comfy_free_memory: "释放显存",
+    comfy_delete_input_file: "删除输入素材",
   };
   const completed = steps.map((step, i) =>
     (i + 1) + ". " + (labels[step.tool] || step.tool)
@@ -1586,6 +1591,19 @@ function agentProgressText(progress) {
     : "";
   if (progress.running) completed.push("正在执行：" + current);
   return completed.length ? "MCP 执行进度：\n" + completed.join("\n") : "MCP Agent 正在准备工具…";
+}
+
+function agentConfirmationText(confirmation) {
+  const tool = confirmation.tool;
+  const args = confirmation.arguments || {};
+  const prompts = {
+    comfy_interrupt: "中断当前正在执行的 ComfyUI 任务？当前生成可能不完整。",
+    comfy_clear_queue: "清空 ComfyUI 所有等待中的任务？",
+    comfy_delete_queued: "从等待队列中删除指定任务：\n" + (args.prompt_ids || []).join("\n"),
+    comfy_free_memory: "释放 ComfyUI 显存" + (args.unload_models ? "并卸载已加载模型" : "") + "？",
+    comfy_delete_input_file: "删除 ComfyUI 输入素材：\n" + (args.filename || ""),
+  };
+  return prompts[tool] || ("确认执行操作：" + tool);
 }
 
 async function showAgentFiles(assistantMsg, steps) {
@@ -1642,11 +1660,31 @@ async function sendMcpAgent(text, provider) {
   const progressMsg = appendChatMsg("assistant", "MCP Agent 已接收，正在连接 ComfyUI…");
   const deadline = Date.now() + 20 * 60 * 1000;
   let progressKey = "";
+  const handledConfirmations = new Set();
   while (Date.now() < deadline) {
     await sleep(2000);
     const statusResp = await apiFetch("/api/agent/result/" + encodeURIComponent(submitted.task_id));
     const status = await statusResp.json();
     if (!statusResp.ok) throw new Error(status.detail || "读取 Agent 任务状态失败");
+
+    if (status.state === "CONFIRMATION_REQUIRED" && status.confirmation) {
+      const confirmation = status.confirmation;
+      const confirmationId = confirmation.confirmation_id;
+      if (!handledConfirmations.has(confirmationId)) {
+        handledConfirmations.add(confirmationId);
+        const confirmed = window.confirm(agentConfirmationText(confirmation));
+        const confirmResp = await apiFetch(
+          "/api/agent/confirm/" + encodeURIComponent(submitted.task_id),
+          {
+            method: "POST",
+            body: JSON.stringify({ confirmation_id: confirmationId, confirmed }),
+          }
+        );
+        const confirmResult = await confirmResp.json();
+        if (!confirmResp.ok) throw new Error(confirmResult.detail || "提交操作确认失败");
+        progressMsg.textContent = confirmed ? "已确认操作，Agent 继续执行…" : "已拒绝操作，Agent 正在收尾…";
+      }
+    }
 
     if (status.progress) {
       const key = [

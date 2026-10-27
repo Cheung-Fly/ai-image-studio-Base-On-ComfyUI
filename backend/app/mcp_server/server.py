@@ -6,6 +6,7 @@
 """
 import json
 import random
+import re
 import uuid
 from pathlib import Path
 from typing import Any
@@ -14,7 +15,7 @@ from mcp.server.fastmcp import FastMCP
 
 from ..config import settings
 from ..services.comfy_client import ComfyClient, ComfyError
-from ..services.workflow import WorkflowError, build_workflow, list_workflows
+from ..services.workflow import WorkflowError, build_workflow, list_workflows, load_template
 
 mcp = FastMCP("comfyui")
 
@@ -96,6 +97,94 @@ def comfy_list_models(kind: str = "unet") -> str:
 def comfy_list_workflows() -> str:
     """列出本项目内置的工作流模板文件名（可传给 comfy_generate_image 的 workflow_file）。"""
     return _ok(workflows=list_workflows(), default=settings.workflow_file)
+
+
+@mcp.tool()
+def comfy_workflow_details(workflow_file: str) -> str:
+    """查看指定内置工作流包含的节点 ID 和节点类型，不返回庞大的完整 JSON。"""
+    if workflow_file not in list_workflows():
+        return _err(ValueError("工作流必须是 comfy_list_workflows 返回的内置文件名"))
+    try:
+        workflow = load_template(workflow_file)
+        nodes = [
+            {"id": node_id, "type": node.get("class_type", "unknown")}
+            for node_id, node in workflow.items()
+            if isinstance(node, dict)
+        ]
+        return _ok(filename=workflow_file, node_count=len(nodes), nodes=nodes)
+    except WorkflowError as exc:
+        return _err(exc)
+
+
+@mcp.tool()
+def comfy_describe_node(node_class: str) -> str:
+    """查询 ComfyUI 节点的描述、输入项与下拉选项，便于检查自定义工作流节点。"""
+    if not re.fullmatch(r"[A-Za-z0-9_.-]{1,128}", node_class):
+        return _err(ValueError("非法节点类型名"))
+    try:
+        info = _client().object_info(node_class).get(node_class)
+        if not info:
+            return _err(ValueError(f"未找到节点类型: {node_class}"))
+        inputs: dict[str, Any] = {}
+        for group in ("required", "optional"):
+            for name, spec in (info.get("input") or {}).get(group, {}).items():
+                if not isinstance(spec, (list, tuple)) or not spec:
+                    inputs[name] = {"type": str(spec)}
+                    continue
+                kind = spec[0]
+                item: dict[str, Any] = {"type": kind if isinstance(kind, str) else "enum"}
+                if isinstance(kind, list):
+                    item["options"] = kind[:100]
+                if len(spec) > 1 and isinstance(spec[1], dict):
+                    item["config"] = spec[1]
+                inputs[name] = item
+        return _ok(
+            node_class=node_class,
+            display_name=info.get("display_name", node_class),
+            category=info.get("category", ""),
+            description=info.get("description", ""),
+            inputs=inputs,
+        )
+    except ComfyError as exc:
+        return _err(exc)
+
+
+@mcp.tool()
+def comfy_list_input_files() -> str:
+    """列出 ComfyUI 输入目录中的图片、视频和音频素材；上传仍通过平台素材上传接口完成。"""
+    directory = settings.comfyui_input_path
+    if directory is None or not directory.is_dir():
+        return _ok(files=[])
+    supported = {".png", ".jpg", ".jpeg", ".webp", ".mp4", ".mov", ".webm", ".mkv",
+                 ".mp3", ".wav", ".flac", ".aac", ".m4a", ".ogg"}
+    files = [
+        {"filename": path.name, "size": path.stat().st_size}
+        for path in sorted(directory.iterdir(), key=lambda p: p.name.lower())
+        if path.is_file() and path.suffix.lower() in supported
+    ]
+    return _ok(files=files)
+
+
+@mcp.tool()
+def comfy_delete_input_file(filename: str) -> str:
+    """删除 ComfyUI 输入目录中的素材（会要求用户在助手界面确认）。"""
+    directory = settings.comfyui_input_path
+    if directory is None:
+        return _err(ValueError("未配置 ComfyUI 输入目录"))
+    root = directory.resolve()
+    target = (root / filename).resolve()
+    if target.parent != root or target.suffix.lower() not in {
+        ".png", ".jpg", ".jpeg", ".webp", ".mp4", ".mov", ".webm", ".mkv",
+        ".mp3", ".wav", ".flac", ".aac", ".m4a", ".ogg",
+    }:
+        return _err(ValueError("非法素材文件名或类型"))
+    try:
+        target.unlink()
+    except FileNotFoundError:
+        return _err(ValueError("素材文件不存在"))
+    except OSError as exc:
+        return _err(exc)
+    return _ok(deleted=filename)
 
 
 @mcp.tool()
@@ -193,10 +282,25 @@ def comfy_interrupt() -> str:
 
 @mcp.tool()
 def comfy_clear_queue() -> str:
-    """清空 ComfyUI 排队中（未开始）的任务。"""
+    """清空 ComfyUI 排队中（未开始）的任务（会要求用户在助手界面确认）。"""
     try:
         _client().clear_queue()
         return _ok(message="已清空排队任务")
+    except ComfyError as exc:
+        return _err(exc)
+
+
+@mcp.tool()
+def comfy_delete_queued(prompt_ids: list[str]) -> str:
+    """从等待队列中删除指定 prompt_id 的任务（会要求用户在助手界面确认）。"""
+    prompt_ids = list(dict.fromkeys(pid.strip() for pid in prompt_ids if pid.strip()))
+    if not prompt_ids:
+        return _err(ValueError("至少需要一个有效 prompt_id"))
+    if len(prompt_ids) > 50:
+        return _err(ValueError("单次最多删除 50 个排队任务"))
+    try:
+        _client().delete_queued(prompt_ids)
+        return _ok(deleted=prompt_ids)
     except ComfyError as exc:
         return _err(exc)
 

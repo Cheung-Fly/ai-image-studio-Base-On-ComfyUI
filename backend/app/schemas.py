@@ -108,7 +108,9 @@ class ChatRequest(BaseModel):
     provider: str = Field("openai", pattern="^(openai|llama|custom)$", description="LLM 服务")
     image_base64: str | None = Field(None, description="可选：图片的 data URL（多模态看图）")
     use_rag: bool = Field(False, description="是否启用知识库检索增强（RAG）")
-    custom_config_id: int | None = Field(None, description="自定义模型配置 ID（provider=custom 时使用）")
+    custom_config_id: int | None = Field(
+        None, description="自定义模型配置 ID（provider=custom 时使用）"
+    )
 
 
 class ChatResponse(BaseModel):
@@ -199,3 +201,10 @@ class AgentGenerateRequest(BaseModel):
     """一句话生图请求（多 Agent 流水线）。"""
 
     request: str = Field(..., min_length=1, max_length=2000, description="用户的自然语言描述")
+
+
+class AgentConfirmationRequest(BaseModel):
+    """MCP Agent 有影响操作的用户确认。"""
+
+    confirmation_id: str = Field(..., min_length=1, max_length=64)
+    confirmed: bool
