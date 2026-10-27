@@ -37,12 +37,13 @@ jobs:
 
       - name: Import MCP API routes
         working-directory: backend
-        run: python -c "from app.api.agent import router"
+        run: python -c "from app.api.agent import router; from app.api.chat import router as chat_router"
 
       - name: Lint changed backend areas
         run: >-
           ruff check
           backend/app/api/agent.py
+          backend/app/api/chat.py
           backend/app/mcp_server
           backend/app/services/comfy_client.py
           backend/app/services/llm_client.py
@@ -53,6 +54,7 @@ jobs:
           backend/app/models.py
           backend/tests/test_mcp_agent.py
           backend/tests/test_agent_memory.py
+          backend/tests/test_chat_stream.py
 
       - name: Test MCP Agent with mocked ComfyUI
         working-directory: backend
@@ -61,3 +63,7 @@ jobs:
       - name: Test personal preference memory
         working-directory: backend
         run: python -m tests.test_agent_memory
+
+      - name: Test streamed chat
+        working-directory: backend
+        run: python -m tests.test_chat_stream

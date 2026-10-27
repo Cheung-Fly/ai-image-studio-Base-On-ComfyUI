@@ -351,6 +351,22 @@ Authorization: Bearer <access_token>
 
 - 响应 `204 No Content`。
 
+### 8.4 流式对话
+
+`POST /api/chat/stream`
+
+请求字段与 `POST /api/chat` 相同；支持内置模型、自定义模型、RAG 和多模态图片输入。响应类型为 `text/event-stream`，文本片段以 SSE 事件逐段返回：
+
+```text
+data: {"delta":"你好"}
+
+data: {"delta":"，世界"}
+
+data: [DONE]
+```
+
+模型在响应开始后发生错误时，返回 `event: error`，其 `data` 为 JSON 格式的通用错误信息。`POST /api/chat` 保持原有 JSON 响应，供未迁移的客户端继续使用。
+
 ---
 
 ## 9. 工作流 / 模型预设接口

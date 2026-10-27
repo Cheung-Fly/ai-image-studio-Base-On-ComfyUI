@@ -1411,6 +1411,79 @@ function renderChat() {
   msgs.forEach((m) => appendChatMsg(m.role, m.text));
 }
 
+async function readChatStream(resp) {
+  const contentType = resp.headers.get("content-type") || "";
+  if (!contentType.includes("text/event-stream") || !resp.body) {
+    throw new Error("服务器未返回有效的流式响应");
+  }
+
+  const reader = resp.body.getReader();
+  const decoder = new TextDecoder();
+  const assistantNode = appendChatMsg("assistant", "正在生成…");
+  let buffer = "";
+  let reply = "";
+  let completed = false;
+
+  function consumeEvent(block) {
+    let eventName = "message";
+    const dataLines = [];
+    for (const line of block.split("\n")) {
+      if (line.startsWith("event:")) eventName = line.slice(6).trim();
+      else if (line.startsWith("data:")) dataLines.push(line.slice(5).trimStart());
+    }
+    if (!dataLines.length) return;
+    const data = dataLines.join("\n");
+    if (eventName === "error") {
+      let detail = "流式生成失败";
+      try {
+        detail = JSON.parse(data).detail || detail;
+      } catch {
+        detail = data || detail;
+      }
+      throw new Error(detail);
+    }
+    if (data === "[DONE]") {
+      completed = true;
+      return;
+    }
+    let payload;
+    try {
+      payload = JSON.parse(data);
+    } catch {
+      throw new Error("流式响应格式无效");
+    }
+    if (typeof payload.delta !== "string") {
+      throw new Error("流式响应缺少文本片段");
+    }
+    reply += payload.delta;
+    assistantNode.textContent = reply || "正在生成…";
+    $("chat-box").scrollTop = $("chat-box").scrollHeight;
+  }
+
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      buffer += done ? decoder.decode() : decoder.decode(value, { stream: true });
+      buffer = buffer.replace(/\r\n/g, "\n");
+      let separator;
+      while ((separator = buffer.indexOf("\n\n")) !== -1) {
+        const block = buffer.slice(0, separator);
+        buffer = buffer.slice(separator + 2);
+        consumeEvent(block);
+        if (completed) break;
+      }
+      if (completed || done) break;
+    }
+    if (!completed && buffer.trim()) consumeEvent(buffer);
+    if (!completed) throw new Error("流式响应意外结束");
+    if (!reply) throw new Error("助手未返回文本");
+    return reply;
+  } catch (err) {
+    if (!reply) assistantNode.remove();
+    throw err;
+  }
+}
+
 // 登录后从后端拉取各 provider 的历史，填充上下文与界面
 async function loadAllConversations() {
   for (const provider of ["openai", "llama"]) {
@@ -1560,19 +1633,19 @@ async function sendChat() {
     }
     if (image) body.image_base64 = image;
     if ($("chat-rag-toggle").checked) body.use_rag = true;
-    const resp = await apiFetch("/api/chat", {
+    const resp = await apiFetch("/api/chat/stream", {
       method: "POST",
       body: JSON.stringify(body),
     });
-    const data = await resp.json();
     if (!resp.ok) {
+      const data = await resp.json();
       appendChatMsg("system", "请求失败：" + (data.detail || JSON.stringify(data)));
     } else {
-      appendChatMsg("assistant", data.reply);
+      const reply = await readChatStream(resp);
       chatHistories[provider].push({ role: "user", content: text });
-      chatHistories[provider].push({ role: "assistant", content: data.reply });
+      chatHistories[provider].push({ role: "assistant", content: reply });
       chatMessages[provider].push({ role: "user", text });
-      chatMessages[provider].push({ role: "assistant", text: data.reply });
+      chatMessages[provider].push({ role: "assistant", text: reply });
     }
   } catch (err) {
     appendChatMsg("system", "请求出错：" + err.message);
