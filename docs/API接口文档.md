@@ -21,8 +21,9 @@
 8. [对话助手接口](#8-对话助手接口)
 9. [工作流 / 模型预设接口](#9-工作流--模型预设接口)
 10. [个人资料接口](#10-个人资料接口)
-11. [系统接口](#11-系统接口)
-12. [错误码与通用错误响应](#12-错误码与通用错误响应)
+11. [Agent 接口](#11-agent-接口)
+12. [系统接口](#12-系统接口)
+13. [错误码与通用错误响应](#13-错误码与通用错误响应)
 
 ---
 
@@ -398,7 +399,78 @@ Authorization: Bearer <access_token>
 
 ---
 
-## 11. 系统接口
+## 11. Agent 接口
+
+### 11.1 固定流水线生图
+
+`POST /api/agent/generate`
+
+提交“一句话生图”固定流程（提示词优化 → 生图 → 审图），返回 Celery 任务 ID。
+
+**请求体：**
+
+| 字段 | 类型 | 必填 | 约束 | 说明 |
+|---|---|---|---|---|
+| request | string | 是 | 1–2000 字符 | 用户自然语言描述 |
+
+**响应 `202`：**
+
+```json
+{
+  "task_id": "9e0f7f20-....",
+  "request": "帮我画一只在太空的柯基"
+}
+```
+
+### 11.2 MCP Agent 控制 ComfyUI
+
+`POST /api/agent/mcp`
+
+提交自然语言控制任务，Agent 通过 MCP 直连 ComfyUI，可自主选择工具（查状态、查队列、生成、中断、释放显存等）。
+
+**请求体：** 同 [11.1](#111-固定流水线生图)。
+
+**响应 `202`：**
+
+```json
+{
+  "task_id": "2bf8a8d0-....",
+  "request": "先看下状态，再生成一张赛博风格城市夜景"
+}
+```
+
+### 11.3 查询 Agent 任务结果
+
+`GET /api/agent/result/{task_id}`
+
+**响应 `200`：**
+
+```json
+{
+  "task_id": "2bf8a8d0-....",
+  "state": "SUCCESS",
+  "progress": null,
+  "result": {
+    "answer": "已完成：图片已生成，路径如下 ...",
+    "steps": [
+      {"tool": "comfy_status", "arguments": {}, "result": "{\"ok\":true,...}"},
+      {"tool": "comfy_generate_image", "arguments": {"prompt":"..."}, "result": "{\"ok\":true,...}"}
+    ]
+  }
+}
+```
+
+任务执行期间，`state` 可为 `STARTED` 或 `PROGRESS`；`PROGRESS` 时 `progress.current_tool` 和 `progress.running` 表示正在执行的工具，`progress.steps` 包含已完成的 MCP 工具调用记录。完成后 `result` 返回最终回答和全部调用步骤。`result` 内输出文件包含 `filename`、`kind` 和本机路径。
+
+### 11.4 预览 MCP Agent 生成文件
+
+`GET /api/agent/files/{filename}`
+
+返回 MCP Agent 生成的图片或视频二进制内容，需要登录。此接口只从 MCP Agent 专用输出目录读取文件。
+
+---
+
+## 12. 系统接口
 
 ### 11.1 健康检查
 
@@ -415,7 +487,7 @@ Authorization: Bearer <access_token>
 
 ---
 
-## 12. 错误码与通用错误响应
+## 13. 错误码与通用错误响应
 
 | 状态码 | 含义 | 场景 |
 |---|---|---|

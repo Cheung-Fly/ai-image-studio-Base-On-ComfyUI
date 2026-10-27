@@ -3,6 +3,8 @@
 基于 **ComfyUI API** 的全栈 AIGC 生图平台：网页 / 接口提交提示词与参数 → FastAPI 入队 → Celery 调度 ComfyUI 出图 → 图片落盘并入库，支持用户认证、任务状态查询、图库管理与多模型 AI 对话助手。
 
 > 就业导向项目：覆盖 ComfyUI 工作流产品化、任务队列、鉴权与限流、LLM 多 provider 集成、工程化部署。
+>
+> **项目定位：个人 AI 助手 / 单实例部署。** 登录用于保护个人实例，不以多用户 SaaS、团队或租户管理为目标。
 
 ## 技术栈
 
@@ -197,6 +199,9 @@ Invoke-RestMethod http://127.0.0.1:8000/api/images -Headers @{ Authorization = "
 | GET    | `/api/conversations/{provider}`     | 拉取指定 provider 对话历史                | 是   |
 | DELETE | `/api/conversations/{provider}`     | 清空指定 provider 对话历史                | 是   |
 | POST   | `/api/agent/generate`               | 一句话生图（多 Agent 流水线，返回任务 id）      | 是   |
+| POST   | `/api/agent/mcp`                    | MCP Agent 直连 ComfyUI 自主控制（返回任务 id）   | 是   |
+| GET    | `/api/agent/result/{task_id}`       | 查询 Agent 任务状态与结果                      | 是   |
+| GET    | `/api/agent/files/{filename}`       | 读取 MCP Agent 生成的媒体文件用于预览           | 是   |
 | GET    | `/api/rag/docs`                     | 列出知识库文档（固定 + 动态）                | 是   |
 | POST   | `/api/rag/docs`                     | 上传 md 加入知识库                       | 是   |
 | DELETE | `/api/rag/docs/{filename}`          | 删除知识库动态文档                        | 是   |
@@ -205,6 +210,47 @@ Invoke-RestMethod http://127.0.0.1:8000/api/images -Headers @{ Authorization = "
 | DELETE | `/api/custom-models/{id}`           | 删除自定义模型配置                        | 是   |
 
 Swagger：<http://127.0.0.1:8000/docs>
+
+## 版本迭代（V）
+
+- **V1**：ComfyUI 后端闭环（文生图、任务状态、图库下载）。
+- **V2**：登录鉴权与账号数据隔离（用于保护个人实例）。
+- **V3**：LLM 对话助手（OpenAI 兼容 / llama.cpp）+ 多模态看图 + RAG。
+- **V4**：多 Agent 固定流水线（提示词优化 → 生图 → 审图）。
+- **V5**：MCP Agent 直连 ComfyUI（查询状态/队列、生成、中断、清队列、释放显存）。
+- **V6（当前）**：对话助手加入 ComfyUI 控制模式，显示 MCP 工具执行进度，并在会话中预览生成图片/视频。
+
+### V5/V6：MCP Agent 使用方式
+
+在对话助手界面勾选 **控制 ComfyUI**，输入自然语言指令（例如“先看下状态，再画一只太空柯基”）。也可以直接调用 API：
+
+1. 提交自然语言指令：
+
+```http
+POST /api/agent/mcp
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "request": "先看下 ComfyUI 状态，然后生成一张太空柯基，最后告诉我图片路径"
+}
+```
+
+2. 查询任务进度和最终结果：
+
+```http
+GET /api/agent/result/{task_id}
+Authorization: Bearer <token>
+```
+
+> 说明：MCP Server 进程由 Agent 任务内部自动拉起（stdio 传输），无需单独常驻守护。
+> Agent 生成的图片/视频会在对话中预览；后端使用默认配置的 LLM provider，不受侧边栏当前模型选择影响。
+
+## 开发与贡献
+
+- [贡献指南](CONTRIBUTING.md)
+- [MIT License](LICENSE)
+- GitHub Actions CI 自动编译后端，并使用模拟 ComfyUI 测试 MCP Agent。
 
 ## 参数说明（Krea 2 工作流）
 

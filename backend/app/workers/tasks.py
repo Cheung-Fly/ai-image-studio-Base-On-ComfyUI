@@ -168,3 +168,20 @@ def run_agent_pipeline(self, user_request: str, user_id: int):
     except Exception as exc:
         logger.error("Agent 流水线失败: %s", exc)
         return {"status": "failed", "error": str(exc)[:500]}
+
+
+@celery_app.task(name="app.workers.tasks.run_mcp_agent", bind=True)
+def run_mcp_agent_task(self, user_request: str, provider: str = ""):
+    """MCP Agent 任务：LLM 经 MCP 协议自主控制 ComfyUI。"""
+    import asyncio
+
+    from ..services.mcp_agent import run_mcp_agent
+
+    try:
+        def report_progress(progress):
+            self.update_state(state="PROGRESS", meta=progress)
+
+        return asyncio.run(run_mcp_agent(user_request, provider, on_progress=report_progress))
+    except Exception as exc:
+        logger.error("MCP Agent 失败: %s", exc)
+        return {"status": "failed", "error": str(exc)[:500]}
