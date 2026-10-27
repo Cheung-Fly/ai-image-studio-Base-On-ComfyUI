@@ -449,6 +449,7 @@ Authorization: Bearer <access_token>
 {
   "task_id": "2bf8a8d0-....",
   "state": "SUCCESS",
+  "progress": null,
   "result": {
     "answer": "已完成：图片已生成，路径如下 ...",
     "steps": [
@@ -458,6 +459,14 @@ Authorization: Bearer <access_token>
   }
 }
 ```
+
+任务执行期间，`state` 可为 `STARTED` 或 `PROGRESS`；`PROGRESS` 时 `progress.current_tool` 和 `progress.running` 表示正在执行的工具，`progress.steps` 包含已完成的 MCP 工具调用记录。完成后 `result` 返回最终回答和全部调用步骤。`result` 内输出文件包含 `filename`、`kind` 和本机路径。
+
+### 11.4 预览 MCP Agent 生成文件
+
+`GET /api/agent/files/{filename}`
+
+返回 MCP Agent 生成的图片或视频二进制内容，需要登录。此接口只从 MCP Agent 专用输出目录读取文件。
 
 ---
 

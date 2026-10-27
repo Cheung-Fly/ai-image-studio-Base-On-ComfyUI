@@ -57,7 +57,9 @@ def _run_and_save(workflow: dict[str, Any]) -> dict[str, Any]:
         )
         target = _out_dir() / f"{uuid.uuid4().hex[:8]}-{Path(meta['filename']).name}"
         target.write_bytes(data)
-        files.append({"path": str(target), "kind": meta.get("kind", "image")})
+        files.append(
+            {"path": str(target), "filename": target.name, "kind": meta.get("kind", "image")}
+        )
     return {"prompt_id": prompt_id, "files": files}
 
 

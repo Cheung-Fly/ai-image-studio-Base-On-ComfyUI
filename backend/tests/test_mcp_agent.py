@@ -2,6 +2,7 @@
 
 运行（backend/ 目录下）：python tests/test_mcp_agent.py
 """
+
 import asyncio
 import base64
 import json
@@ -43,7 +44,9 @@ class Mock(BaseHTTPRequestHandler):
             pid = self.path.rsplit("/", 1)[1]
             entry = {
                 "status": {"completed": True, "status_str": "success"},
-                "outputs": {"9": {"images": [{"filename": "a.png", "subfolder": "", "type": "output"}]}},
+                "outputs": {
+                    "9": {"images": [{"filename": "a.png", "subfolder": "", "type": "output"}]}
+                },
             }
             self._send(json.dumps({pid: entry}).encode())
         elif self.path.startswith("/view"):
@@ -75,7 +78,15 @@ def main() -> None:
     )
 
     script = [
-        {"tool_calls": [{"id": "1", "type": "function", "function": {"name": "comfy_status", "arguments": "{}"}}]},
+        {
+            "tool_calls": [
+                {
+                    "id": "1",
+                    "type": "function",
+                    "function": {"name": "comfy_status", "arguments": "{}"},
+                }
+            ]
+        },
         {
             "tool_calls": [
                 {
@@ -86,12 +97,17 @@ def main() -> None:
                         "arguments": json.dumps({"prompt": "a corgi in space"}),
                     },
                 },
-                {"id": "3", "type": "function", "function": {"name": "comfy_interrupt", "arguments": "{}"}},
+                {
+                    "id": "3",
+                    "type": "function",
+                    "function": {"name": "comfy_interrupt", "arguments": "{}"},
+                },
             ]
         },
         {"content": "完成"},
     ]
     seen_tools: list[str] = []
+    progress: list[dict] = []
 
     def fake_llm(messages, tools, provider):
         if not seen_tools:
@@ -100,11 +116,24 @@ def main() -> None:
 
     from app.services.mcp_agent import run_mcp_agent
 
-    out = asyncio.run(run_mcp_agent("画只柯基", llm=fake_llm, params=params))
+    out = asyncio.run(
+        run_mcp_agent(
+            "画只柯基",
+            llm=fake_llm,
+            params=params,
+            on_progress=progress.append,
+        )
+    )
 
     assert "comfy_generate_image" in seen_tools and "comfy_interrupt" in seen_tools, seen_tools
     assert out["answer"] == "完成", out
-    assert [s["tool"] for s in out["steps"]] == ["comfy_status", "comfy_generate_image", "comfy_interrupt"]
+    assert [s["tool"] for s in out["steps"]] == [
+        "comfy_status",
+        "comfy_generate_image",
+        "comfy_interrupt",
+    ]
+    assert len(progress) == 6 and progress[-1]["current_tool"] == "comfy_interrupt", progress
+    assert progress[0]["running"] is True and progress[-1]["running"] is False, progress
     gen = json.loads(out["steps"][1]["result"])
     assert gen["ok"] and gen["prompt_id"] == "p1", gen
     assert Path(gen["files"][0]["path"]).read_bytes() == PNG

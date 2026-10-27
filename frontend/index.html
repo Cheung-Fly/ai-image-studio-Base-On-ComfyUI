@@ -738,6 +738,7 @@
               <label class="rag-toggle" style="display:flex; align-items:center; gap:4px; white-space:nowrap; font-size:13px; color:var(--muted); cursor:pointer;" title="开启后回答基于项目文档知识库"><input type="checkbox" id="chat-rag-toggle"> 知识库</label>
               <button id="btn-rag-manage" type="button" title="管理知识库文档" style="flex-shrink:0;">管理</button>
               <button id="btn-chat-image" type="button" title="上传图片让模型看图">传图</button>
+              <label style="display:flex; align-items:center; gap:4px; white-space:nowrap; font-size:13px; color:var(--muted); cursor:pointer;" title="切换为通过 MCP 工具直接控制 ComfyUI"><input type="checkbox" id="chat-mcp-toggle"> 控制 ComfyUI</label>
               <input type="file" id="chat-image-input" accept="image/*" style="display:none">
               <button id="btn-chat">发送</button>
               </div>
@@ -745,7 +746,7 @@
               <img id="chat-image-preview-img" style="max-width:120px; max-height:120px; border-radius:6px; border:1px solid var(--border);">
               <button id="btn-chat-image-clear" type="button" style="padding:4px 10px;">移除</button>
             </div>
-            <div class="chat-fill-hint">左侧切换模型，各模型对话上下文独立保留。</div>
+            <div id="chat-mode-hint" class="chat-fill-hint">左侧切换模型，各模型对话上下文独立保留。</div>
             <div id="rag-manage-panel" style="display:none; margin-top:8px; border:1px solid var(--border); border-radius:8px; padding:10px;">
               <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
                 <span style="font-weight:500; font-size:13px;">知识库文档</span>
@@ -1349,6 +1350,7 @@ let chatHistories = { openai: [], llama: [], custom: [] };   // provider -> [{ro
 let chatMessages = { openai: [], llama: [], custom: [] };    // provider -> [{role, text}] 界面显示用
 let chatImageBase64 = null;   // 当前待发送的图片 data URL（多模态看图）
 let currentCustomConfigId = null;   // 当前选中的自定义模型配置 ID
+let chatAgentBusy = false;
 
 
 function currentProvider() {
@@ -1363,6 +1365,7 @@ function appendChatMsg(role, text) {
   div.textContent = text;
   box.appendChild(div);
   box.scrollTop = box.scrollHeight;
+  return div;
 }
 
 // 切换 provider 时重建聊天框，展示该 provider 自己的历史消息
@@ -1397,6 +1400,7 @@ async function loadAllConversations() {
 
 // 侧边栏点击切换模型
 function switchProvider(provider) {
+  if (chatAgentBusy) return;
   document.querySelectorAll(".chat-model-item").forEach((item) => {
     item.classList.toggle("active", item.dataset.provider === provider);
   });
@@ -1432,6 +1436,7 @@ async function loadCustomModels() {
       del.addEventListener("click", (e) => { e.stopPropagation(); deleteCustomModel(cfg.id); });
       item.appendChild(del);
       item.addEventListener("click", () => {
+        if (chatAgentBusy) return;
         document.querySelectorAll(".chat-model-item").forEach((it) => it.classList.remove("active"));
         item.classList.add("active");
         currentCustomConfigId = cfg.id;
@@ -1502,12 +1507,23 @@ async function sendChat() {
   if (!text) return;
 
   const provider = currentProvider();
+  const mcpMode = $("chat-mcp-toggle").checked;
   const image = chatImageBase64;   // 取当前待发送的图片
   input.value = "";
   appendChatMsg("user", text);
   btn.disabled = true;
+  if (mcpMode) {
+    chatAgentBusy = true;
+    $("chat-mcp-toggle").disabled = true;
+  }
 
   try {
+    if (mcpMode) {
+      chatMessages[provider].push({ role: "user", text });
+      await sendMcpAgent(text, provider);
+      return;
+    }
+
     const body = { message: text, history: chatHistories[provider], provider };
     if (provider === "custom" && currentCustomConfigId) {
       body.custom_config_id = currentCustomConfigId;
@@ -1532,7 +1548,10 @@ async function sendChat() {
     appendChatMsg("system", "请求出错：" + err.message);
   } finally {
     btn.disabled = false;
+    btn.textContent = "发送";
     input.focus();
+    chatAgentBusy = false;
+    $("chat-mcp-toggle").disabled = false;
     if (chatImageBase64) {
       chatImageBase64 = null;
       $("chat-image-input").value = "";
@@ -1541,8 +1560,139 @@ async function sendChat() {
   }
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function agentProgressText(progress) {
+  const steps = progress.steps || [];
+  const labels = {
+    comfy_status: "查询 ComfyUI 状态",
+    comfy_list_models: "查询可用模型",
+    comfy_list_workflows: "查询工作流",
+    comfy_generate_image: "生成图片",
+    comfy_run_workflow: "执行工作流",
+    comfy_queue: "查询队列",
+    comfy_history: "查询生成历史",
+    comfy_interrupt: "中断当前任务",
+    comfy_clear_queue: "清空等待队列",
+    comfy_free_memory: "释放显存",
+  };
+  const completed = steps.map((step, i) =>
+    (i + 1) + ". " + (labels[step.tool] || step.tool)
+  );
+  const current = progress.current_tool
+    ? (labels[progress.current_tool] || progress.current_tool)
+    : "";
+  if (progress.running) completed.push("正在执行：" + current);
+  return completed.length ? "MCP 执行进度：\n" + completed.join("\n") : "MCP Agent 正在准备工具…";
+}
+
+async function showAgentFiles(assistantMsg, steps) {
+  const files = [];
+  (steps || []).forEach((step) => {
+    try {
+      const result = JSON.parse(step.result || "{}");
+      if (result.ok && Array.isArray(result.files)) files.push(...result.files);
+    } catch (err) {
+      // Ignore non-JSON tool output; the text remains available in the step log.
+    }
+  });
+  if (!files.length) return;
+
+  const gallery = document.createElement("div");
+  gallery.style.cssText = "display:flex; flex-wrap:wrap; gap:8px; margin-top:8px;";
+  for (const file of files) {
+    const resp = await apiFetch("/api/agent/files/" + encodeURIComponent(file.filename));
+    if (!resp.ok) continue;
+    const url = URL.createObjectURL(await resp.blob());
+    if (file.kind === "video") {
+      const video = document.createElement("video");
+      video.src = url;
+      video.controls = true;
+      video.style.cssText = "max-width:100%; max-height:320px; border-radius:8px;";
+      gallery.appendChild(video);
+    } else {
+      const img = document.createElement("img");
+      img.src = url;
+      img.alt = "MCP Agent 生成结果";
+      img.style.cssText = "max-width:100%; max-height:320px; border-radius:8px;";
+      gallery.appendChild(img);
+    }
+  }
+  if (gallery.childElementCount) {
+    assistantMsg.appendChild(gallery);
+    $("chat-box").scrollTop = $("chat-box").scrollHeight;
+  }
+}
+
+async function sendMcpAgent(text, provider) {
+  const btn = $("btn-chat");
+  const resp = await apiFetch("/api/agent/mcp", {
+    method: "POST",
+    body: JSON.stringify({ request: text }),
+  });
+  const submitted = await resp.json();
+  if (!resp.ok) {
+    appendChatMsg("system", "MCP Agent 提交失败：" + (submitted.detail || JSON.stringify(submitted)));
+    return;
+  }
+
+  btn.textContent = "执行中…";
+  const progressMsg = appendChatMsg("assistant", "MCP Agent 已接收，正在连接 ComfyUI…");
+  const deadline = Date.now() + 20 * 60 * 1000;
+  let progressKey = "";
+  while (Date.now() < deadline) {
+    await sleep(2000);
+    const statusResp = await apiFetch("/api/agent/result/" + encodeURIComponent(submitted.task_id));
+    const status = await statusResp.json();
+    if (!statusResp.ok) throw new Error(status.detail || "读取 Agent 任务状态失败");
+
+    if (status.progress) {
+      const key = [
+        (status.progress.steps || []).length,
+        status.progress.current_tool || "",
+        Boolean(status.progress.running),
+      ].join(":");
+      if (key !== progressKey) {
+        progressKey = key;
+        progressMsg.textContent = agentProgressText(status.progress);
+        $("chat-box").scrollTop = $("chat-box").scrollHeight;
+      }
+    }
+
+    if (status.state === "SUCCESS") {
+      const result = status.result || {};
+      if (result.status === "failed") {
+        progressMsg.textContent = "MCP Agent 执行失败：" + (result.error || "未知错误");
+        return;
+      }
+      const answer = result.answer || "MCP Agent 已完成。";
+      progressMsg.textContent = answer;
+      chatMessages[provider].push({ role: "assistant", text: answer });
+      await showAgentFiles(progressMsg, result.steps);
+      return;
+    }
+    if (status.state === "FAILURE" || status.state === "REVOKED") {
+      progressMsg.textContent = "MCP Agent 任务失败：" + (status.result || status.state);
+      return;
+    }
+  }
+  progressMsg.textContent += "\n等待超时；任务可能仍在后台运行。";
+}
+
 
 $("btn-chat").addEventListener("click", sendChat);
+
+$("chat-mcp-toggle").addEventListener("change", (event) => {
+  const active = event.target.checked;
+  $("chat-rag-toggle").disabled = active;
+  $("btn-rag-manage").disabled = active;
+  $("btn-chat-image").disabled = active;
+  $("chat-mode-hint").textContent = active
+    ? "ComfyUI 控制模式：自然语言将交给 MCP Agent 执行，使用后端配置的默认 LLM。"
+    : "左侧切换模型，各模型对话上下文独立保留。";
+});
 
 // 清空对话：内置模型调后端清空 + 清前端；自定义模型仅清前端内存
 async function clearChat() {

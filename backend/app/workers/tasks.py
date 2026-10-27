@@ -178,7 +178,10 @@ def run_mcp_agent_task(self, user_request: str, provider: str = ""):
     from ..services.mcp_agent import run_mcp_agent
 
     try:
-        return asyncio.run(run_mcp_agent(user_request, provider))
+        def report_progress(progress):
+            self.update_state(state="PROGRESS", meta=progress)
+
+        return asyncio.run(run_mcp_agent(user_request, provider, on_progress=report_progress))
     except Exception as exc:
         logger.error("MCP Agent 失败: %s", exc)
         return {"status": "failed", "error": str(exc)[:500]}
