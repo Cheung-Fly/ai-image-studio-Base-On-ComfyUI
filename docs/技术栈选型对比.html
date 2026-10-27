@@ -71,15 +71,18 @@
     <span class="badge b-mid">特定场景可用</span>
     <span class="badge b-no">本项目不合适</span>
   </p>
+  <div class="card">
+    <b>当前实现（2026-10-27）：</b>这是单实例个人助手，不是多租户 SaaS。前端仍是单文件 HTML/CSS/JavaScript；后端使用 FastAPI、Celery、Redis、SQLite 和 ComfyUI API。对话支持 OpenAI 兼容模型、llama.cpp、自定义模型、RAG、多模态看图和 SSE 流式输出；ComfyUI 控制由 MCP Agent 提供。Vue3/Vite 是可选的后续重构方向，不是当前已采用的技术。
+  </div>
 
   <!-- ========== 总览 ========== -->
   <h2>一、技术栈全景（按层）</h2>
   <div class="card">
     <div class="layer">
-      <div class="lname">前端<br><small>（第2周）</small></div>
+      <div class="lname">前端<br><small>（当前实现）</small></div>
       <div class="lbody">
-        <div class="chip c-teal">Vue 3 + Vite<small>界面框架 + 构建工具</small></div>
-        <div class="chip c-teal">Pinia<small>前端状态管理</small></div>
+        <div class="chip c-teal">HTML + CSS + JavaScript<small>当前单文件前端</small></div>
+        <div class="chip c-slate">Vue 3 + Vite<small>可选的渐进迁移方案</small></div>
       </div>
     </div>
     <div class="layer">
@@ -146,7 +149,7 @@
       <tr><td>Spring Boot (Java)</td><td><span class="badge b-mid">WebFlux</span></td><td><span class="badge b-yes">Bean Validation</span></td><td><span class="badge b-mid">springdoc</span></td><td><span class="badge b-no">很重</span></td><td><span class="badge b-mid">传统后端高，AI 侧低</span></td></tr>
       <tr><td>Express / Nest (Node)</td><td><span class="badge b-yes">是</span></td><td><span class="badge b-mid">需配 zod 等</span></td><td><span class="badge b-mid">需配</span></td><td>轻/中</td><td><span class="badge b-mid">前端全栈方向</span></td></tr>
     </table>
-    <div class="why"><b>为什么是 FastAPI：</b>① 一个 Pydantic 模型同时搞定"请求校验 + 422 错误 + OpenAPI schema + Swagger UI"，本项目的 <code>/docs</code> 零手写；② 类型注解即文档，简历上"FastAPI + 类型驱动开发"是 AIGC 应用岗高频要求；③ 异步底子好，未来接 WebSocket 实时进度顺理成章。</div>
+    <div class="why"><b>为什么是 FastAPI：</b>① 一个 Pydantic 模型同时搞定"请求校验 + 422 错误 + OpenAPI schema + Swagger UI"，本项目的 <code>/docs</code> 零手写；② 类型注解即文档；③ 支持异步和流式响应，本项目对话通过 <code>StreamingResponse</code> 返回 SSE。</div>
     <div class="swap"><b>Flask 为什么不选：</b>什么都要自己拼（校验、序列化、文档、异步），小项目看似轻，做到本项目这个规模反而要造一堆轮子。<b>Django 为什么不选：</b>自带的 admin、auth、模板、Django ORM 全用不上，却要接受它的目录约定和同步包袱。</div>
   </div>
 
@@ -243,15 +246,16 @@
   </div>
 
   <!-- ========== 前端 ========== -->
-  <h2>十、前端：Vue 3 + Vite + Pinia（第 2 周里程碑）</h2>
+  <h2>十、前端：原生 HTML/CSS/JavaScript（当前）→ Vue 3 + Vite（可选）</h2>
   <div class="card">
     <table>
       <tr><th>候选</th><th>定位</th><th>像不像"产品"</th><th>上手成本</th><th>结论</th></tr>
-      <tr class="pick"><td>Vue 3 + Vite + Pinia <span class="badge b-pick">选用</span></td><td>主流 SPA 框架</td><td><span class="badge b-yes">完整前端工程</span></td><td><span class="badge b-mid">中</span></td><td>模板语法直观、中文生态强、Vite 秒级热更新；Pinot 是 Vue 官方状态库</td></tr>
-      <tr><td>React + Vite</td><td>主流 SPA 框架</td><td><span class="badge b-yes">是</span></td><td><span class="badge b-mid">中高（JSX/hooks）</span></td><td>岗位更多但概念更碎；两个都会更好，先 Vue 快速出活</td></tr>
+      <tr class="pick"><td>原生 HTML + CSS + JavaScript <span class="badge b-pick">当前使用</span></td><td>单页助手界面</td><td><span class="badge b-yes">满足个人实例需求</span></td><td><span class="badge b-yes">低</span></td><td>无需构建链，当前页面已覆盖生图、对话、RAG、MCP 控制和 SSE 流式展示；代价是单文件较大、组件复用有限</td></tr>
+      <tr><td>Vue 3 + Vite + Pinia</td><td>可选的渐进式 SPA 重构</td><td><span class="badge b-yes">适合长期维护</span></td><td><span class="badge b-mid">中</span></td><td>组件化适合后续维护；只有界面复杂度确实增加时再迁移，Pinia 是 Vue 状态管理库</td></tr>
+      <tr><td>React + Vite</td><td>主流 SPA 框架</td><td><span class="badge b-yes">是</span></td><td><span class="badge b-mid">中高（JSX/hooks）</span></td><td>生态成熟，但当前个人助手没有必须切换框架的需求</td></tr>
       <tr><td>Gradio / Streamlit</td><td>AI 演示框架</td><td><span class="badge b-no">像 demo 不像产品</span></td><td><span class="badge b-yes">极低</span></td><td>算法演示神器，但没有队列/图库/工程化展示，<b>撑不起"全栈平台"简历叙事</b></td></tr>
     </table>
-    <div class="why">就业项目要证明的是"能把模型包成产品"：提示词面板、参数表单、任务进度轮询、图库管理——这是标准前端工程，Vue 正好覆盖这些训练点。</div>
+    <div class="why">当前优先维护已有页面和 API；需要组件化时按模块迁移到 Vue，不推倒重来，也不为多用户 SaaS 提前引入复杂度。</div>
   </div>
 
   <!-- ========== 工程化 ========== -->
@@ -286,7 +290,7 @@
   <h2>十二、选型演进路线（讲给面试官听的"成长感"）</h2>
   <div class="card">
     <div class="flow">
-      <div class="f">SQLite + 单机<br><small>现在：跑通链路</small></div><div class="ar">→</div>
+      <div class="f">SQLite + 私有单实例<br><small>当前：个人助手</small></div><div class="ar">→</div>
       <div class="f">Docker Compose<br><small>环境一致</small></div><div class="ar">→</div>
       <div class="f">PostgreSQL<br><small>生产数据库</small></div><div class="ar">→</div>
       <div class="f">Redis → RabbitMQ<br><small>可靠投递</small></div><div class="ar">→</div>
@@ -294,7 +298,7 @@
       <div class="f">S3/OSS 存图<br><small>对象存储</small></div><div class="ar">→</div>
       <div class="f">K8s + 监控<br><small>平台化</small></div>
     </div>
-    <div class="note" style="margin-bottom:0">每一步升级都<b>不需要推翻重写</b>：ORM 屏蔽数据库差异、Celery 屏蔽 broker 差异、存储层屏蔽文件系统/对象存储差异——这正是分层架构（api / services / workers / models）的意义，也是本项目代码刻意分层的原因。</div>
+    <div class="note" style="margin-bottom:0">以上是可选的技术演进方向，不代表当前已经部署为公有云或支持多租户。个人使用优先保持单实例：ORM 屏蔽数据库差异、Celery 屏蔽 broker 差异，只有实际需求出现时才升级数据库、存储和部署形态。</div>
   </div>
 
 </div>

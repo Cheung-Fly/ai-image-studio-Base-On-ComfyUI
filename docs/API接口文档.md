@@ -1,6 +1,7 @@
 # AI 生图工坊 · API 接口文档
 
-> 基于 FastAPI + Celery + SQLite + ComfyUI 的 AIGC 生图/生视频平台后端接口。
+> 基于 FastAPI + Celery + SQLite + ComfyUI 的个人 AIGC 生图/生视频助手接口。
+> 当前按单实例个人使用设计；登录用于保护该实例，不代表多租户或 SaaS 支持。
 >
 > - **版本**：0.1.0
 > - **Base URL**：`http://127.0.0.1:8000`
@@ -315,9 +316,10 @@ Authorization: Bearer <access_token>
 |---|---|---|---|---|
 | message | string | 是 | — | 当前用户消息（1–8000 字符） |
 | history | object[] | 否 | `[]` | 历史消息（最多 20 条），元素为 `{role, content}` |
-| provider | string | 否 | `"openai"` | LLM 服务：`openai` / `llama` |
+| provider | string | 否 | `"openai"` | LLM 服务：`openai` / `llama` / `custom` |
 | image_base64 | string | 否 | `null` | 可选：图片 data URL（`data:image/...;base64,...`），启用多模态看图 |
 | use_rag | boolean | 否 | `false` | 是否启用知识库检索增强（RAG）：`true` 时自动检索项目文档并增强回答 |
+| custom_config_id | int | 否 | `null` | `provider=custom` 时选择当前账号的自定义模型配置 |
 
 **响应 `200`：**
 
@@ -325,7 +327,7 @@ Authorization: Bearer <access_token>
 { "reply": "助手回复文本" }
 ```
 
-> 受限流与每日额度控制；消息自动落库。
+> 受限流与每日额度控制。内置 `openai` / `llama` 对话会落库；`custom` 对话仅保留在当前前端会话中。启用 RAG 时，当前请求会使用检索上下文构造 prompt。
 
 ### 8.2 拉取对话历史
 
@@ -365,7 +367,7 @@ data: {"delta":"，世界"}
 data: [DONE]
 ```
 
-模型在响应开始后发生错误时，返回 `event: error`，其 `data` 为 JSON 格式的通用错误信息。`POST /api/chat` 保持原有 JSON 响应，供未迁移的客户端继续使用。
+模型在响应开始后发生错误时，返回 `event: error`，其 `data` 为 JSON 格式的通用错误信息。`POST /api/chat` 保持原有 JSON 响应，供未迁移的客户端继续使用。使用 RAG 时，检索基于当前问题；图片和历史消息不会并入 RAG prompt。
 
 ---
 
@@ -527,7 +529,7 @@ Agent 请求中断生成、清理队列、删除排队任务/输入素材或释�
 
 ## 12. 系统接口
 
-### 11.1 健康检查
+### 12.1 健康检查
 
 `GET /health`（无需鉴权）
 

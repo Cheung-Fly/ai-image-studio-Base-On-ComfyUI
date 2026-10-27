@@ -104,18 +104,19 @@
 <div class="wrap">
 
   <h1>AI 生图工坊 · 本地全流程原理讲解</h1>
-  <p class="sub">对应你在本机执行的每一条命令：它启动了什么进程、为什么需要它、数据在组件之间怎么流动。建议配合 <span class="mono">README.md</span> 一起看。</p>
+  <p class="sub">以 ComfyUI 生图主链路为例，解释进程职责和数据流。当前项目还包含生视频、AI 对话/RAG、MCP 控制、个人偏好记忆和 SSE 流式回复；本页不再把早期生图原型当作完整系统。</p>
+  <div class="note"><b>当前定位：</b>个人单实例助手。V8 已发布；V9 流式对话已在开发分支实现。项目保留登录以保护实例，不按多租户 SaaS 设计。</div>
 
   <!-- ============ 1. 全景架构 ============ -->
-  <h2>一、全景架构：一共 5 个独立进程</h2>
+  <h2>一、核心架构：生成任务与对话助手两条链路</h2>
   <div class="card">
     <div class="arch">
       <!-- 调用方 -->
       <div class="lane">
         <div class="stack-label">调用方</div>
         <div class="node n-client">
-          <b>Swagger UI / curl / 未来的 Vue 前端</b>
-          <small>发 HTTP 请求、看任务状态、取图片</small>
+          <b>当前网页助手 / Swagger / curl</b>
+          <small>提交生成任务、聊天或 ComfyUI 控制请求</small>
         </div>
       </div>
       <div class="arrowcol"><div class="ar">→</div><div>HTTP<br>JSON</div></div>
@@ -128,7 +129,7 @@
         </div>
         <div class="node n-db">
           <b>SQLite 文件数据库 <span class="mono">data/aistudio.db</span></b>
-          <small>tasks 表（参数+状态）、images 表（产物记录）</small>
+          <small>任务、媒体、对话、模型配置和个人偏好等数据</small>
         </div>
       </div>
       <div class="arrowcol"><div class="ar">→</div><div>任务消息<br>JSON</div></div>
@@ -151,8 +152,8 @@
       <div></div>
       <div></div>
       <div class="node n-fs" style="margin:0 12px;">
-        <b>图片存储 <span class="mono">backend/data/images/&lt;任务id&gt;/</span></b>
-        <small>从 ComfyUI 下载的 PNG 落盘，供 <span class="mono">/api/images/{id}/file</span> 下载</small>
+        <b>媒体存储 <span class="mono">backend/data/images/&lt;任务id&gt;/</span></b>
+        <small>生成图片/视频落盘，供 <span class="mono">/api/images/{id}/file</span> 下载</small>
       </div>
       <div class="arrowcol"><div class="ar">←</div><div>写文件</div></div>
       <div class="node n-comfy">
@@ -169,7 +170,7 @@
       <span><i class="dot" style="background:var(--teal)"></i>SQLite（记账）</span>
       <span><i class="dot" style="background:var(--gold)"></i>文件存储（存图）</span>
     </div>
-    <div class="note"><b>一句话理解分工：</b>FastAPI 像"前台接单员"，Redis 像"工单传送带"，Celery worker 像"后厨"，ComfyUI 是"炉灶（GPU）"，SQLite 是"订单台账"，文件夹是"取餐柜"。前台绝不站在炉灶前等菜做完——接单、派单后立刻回去接待下一位客人。</div>
+    <div class="note"><b>一句话理解分工：</b>FastAPI 处理 HTTP API 和流式对话；Celery/Redis 负责较长的生成任务；ComfyUI 执行工作流和 GPU 推理；MCP Agent 则通过专用 MCP Server 调用 ComfyUI 工具。普通聊天走 LLM API，不进入生图队列。</div>
   </div>
 
   <!-- ============ 2. 为什么是队列架构 ============ -->
@@ -179,7 +180,7 @@
     <table>
       <tr><th>问题</th><th>后果</th><th>队列架构如何解决</th></tr>
       <tr><td>请求长时间挂起</td><td>浏览器/网关一般 30～60 秒超时，页面转圈失败</td><td>API 入库+发消息后<b>立即返回 202 和 task_id</b>（毫秒级）</td></tr>
-      <tr><td>并发请求堆积</td><td>10 个人同时点，10 个出图任务一起挤进 8GB 显存，直接 OOM</td><td>任务在 Redis 排队，worker 按 <span class="mono">--pool=solo</span> 串行处理，削峰填谷</td></tr>
+      <tr><td>生成请求堆积</td><td>同一实例短时间收到多个生成请求，任务同时争用有限显存</td><td>任务在 Redis 排队，worker 按 <span class="mono">--pool=solo</span> 串行处理，避免 GPU 超载</td></tr>
       <tr><td>失败无法恢复</td><td>出图中途网络抖动，整个请求白等，只能用户手动重来</td><td>Celery 内置<b>重试</b>（本项目连接类失败自动重试 2 次）、状态可追踪</td></tr>
       <tr><td>API 重启任务全丢</td><td>正在等的请求随进程一起消失</td><td>任务持久在 Redis + 状态在 SQLite，worker 重启后可继续/可查</td></tr>
     </table>
@@ -239,7 +240,7 @@
     <h3><span class="tag t-green">第 3 步</span>启动 API：<span class="mono">uvicorn app.main:app --port 8000</span></h3>
     <p style="margin:6px 0">
       <span class="mono">app.main:app</span> 的含义是"从 <span class="mono">app/main.py</span> 里导入名为 <span class="mono">app</span> 的 FastAPI 实例"。启动时发生：<br>
-      ① uvicorn 绑定 8000 端口开始监听；② 触发 lifespan，调用 <span class="mono">init_db()</span> 在 SQLite 里建好 tasks/images 两张表；③ 注册三个路由模块（generate / tasks / images）；④ 根据代码里的类型注解自动生成 OpenAPI 文档，所以 <span class="mono">/docs</span> 的 Swagger 页面是"白送"的。<br>
+      ① uvicorn 绑定 8000 端口开始监听；② 触发 lifespan，调用 <span class="mono">init_db()</span> 创建/校验数据库表；③ 注册认证、生图/视频、任务、图库、对话、RAG、Agent 等路由；④ 根据代码里的类型注解自动生成 OpenAPI 文档，所以 <span class="mono">/docs</span> 的 Swagger 页面是"白送"的。<br>
       一次请求进来后：路由函数接收 → Pydantic 把 JSON 校验为 <span class="mono">GenerateRequest</span>（width 超出 256~2048 直接 422）→ <span class="mono">get_db()</span> 依赖注入给一个数据库会话，请求结束自动关闭 → 业务处理 → response_model 把 ORM 对象转成 JSON 返回。
     </p>
   </div>
@@ -269,8 +270,33 @@
     </div>
   </div>
 
-  <!-- ============ 4. 状态机 ============ -->
-  <h2>四、任务状态机</h2>
+  <!-- ============ 4. 对话与 MCP Agent ============ -->
+  <h2>四、AI 对话、SSE 与 MCP Agent 控制</h2>
+  <div class="card grid2">
+    <div>
+      <h3 style="margin-top:0">普通对话</h3>
+      <ol>
+        <li>网页把消息、provider、历史和可选图片提交到 <span class="mono">POST /api/chat/stream</span>。</li>
+        <li>FastAPI 校验登录、频率和每日额度；RAG 开启时先检索文档。</li>
+        <li><span class="mono">llm_client.py</span> 调用 OpenAI 兼容接口，以 <span class="mono">stream:true</span> 读取分片。</li>
+        <li>后端把分片包装为 SSE <span class="mono">data: {"delta":"..."}</span>；前端用 <span class="mono">ReadableStream</span> 逐段更新回答。</li>
+        <li>生成完成后，内置 provider 的完整问答才落库；旧 <span class="mono">POST /api/chat</span> 仍返回普通 JSON。</li>
+      </ol>
+    </div>
+    <div>
+      <h3 style="margin-top:0">ComfyUI MCP 控制</h3>
+      <ol>
+        <li>网页将自然语言请求发往 <span class="mono">POST /api/agent/mcp</span>，由 Celery worker 异步执行。</li>
+        <li>worker 启动 MCP Agent 和 stdio MCP Server；Agent 根据工具说明选择 ComfyUI 查询、生成或管理工具。</li>
+        <li>MCP Server 通过 ComfyUI HTTP API 执行实际操作，任务进度和工具步骤反馈给界面。</li>
+        <li>中断、删除、清队列、释放显存和清除记忆等操作须先由界面请求用户确认。</li>
+        <li>保存的个人偏好作为生成默认值；当前请求中明确给出的参数优先。</li>
+      </ol>
+    </div>
+  </div>
+
+  <!-- ============ 5. 状态机 ============ -->
+  <h2>五、任务状态机</h2>
   <div class="card">
     <div class="fsm">
       <div class="state s-pending">pending<br><small>已入库待处理</small></div>
@@ -288,8 +314,8 @@
     <p style="margin-bottom:0" class="mono" style="font-size:13px">GET /api/tasks?status=completed 就是按这张状态机的枚举值做过滤。</p>
   </div>
 
-  <!-- ============ 5. ComfyUI 工作流原理 ============ -->
-  <h2>五、ComfyUI API 模式与工作流模板注入</h2>
+  <!-- ============ 6. ComfyUI 工作流原理 ============ -->
+  <h2>六、ComfyUI API 模式与工作流模板注入</h2>
   <div class="card">
     <p>平时你在 ComfyUI 网页里拖节点连线；开启 API 模式后，画布可以导出成一份 JSON：<b>key 是节点编号，value 是 <span class="mono">{"class_type": 节点类型, "inputs": 参数}</span></b>；inputs 里形如 <span class="mono">["1", 0]</span> 的数组表示"接 1 号节点的第 0 个输出口"——这就是连线。本机没有传统 SD checkpoint，模板已按 <b>Krea 2</b> 组合模型配好，节点链如下：</p>
     <div class="wf">
@@ -318,19 +344,20 @@
   </div>
 
   <!-- ============ 6. 数据存在哪 ============ -->
-  <h2>六、数据落在哪里：两张表 + 一个文件夹</h2>
+  <h2>七、数据落在哪里：业务表 + 媒体文件目录</h2>
   <div class="card">
     <table>
       <tr><th>存储</th><th>内容</th><th>为什么这么设计</th></tr>
       <tr><td>SQLite：<b>tasks</b> 表</td><td>提示词、负向词、宽高、steps、cfg、seed、status、error、comfy_prompt_id、创建/更新时间</td><td>任务台账：支持列表分页、状态过滤、失败排查</td></tr>
-      <tr><td>SQLite：<b>images</b> 表</td><td>所属 task_id（外键）、磁盘文件名/相对路径、宽高</td><td>图库：一个任务可对应多张图（以后支持 batch）</td></tr>
-      <tr><td>文件夹 <span class="mono">data/images/&lt;id&gt;/</span></td><td>真实 PNG 文件</td><td>数据库只存路径，二进制不入库；<span class="mono">/api/images/{id}/file</span> 用 FileResponse 回传</td></tr>
+      <tr><td>SQLite：<b>images</b> 表</td><td>所属 task_id、媒体类型、文件名/相对路径、宽高</td><td>图库索引；同一任务可以关联多个媒体产物</td></tr>
+      <tr><td>SQLite：其他业务表</td><td>账号、对话消息、自定义模型配置、Agent 单例偏好等</td><td>保存助手会话和配置；偏好记忆不是按账号拆分</td></tr>
+      <tr><td>媒体目录</td><td>生成图片、视频以及 Agent 输出文件</td><td>二进制不直接放入数据库；API 按授权返回文件</td></tr>
     </table>
     <p style="margin-bottom:0">SQLite 是<b>嵌入式文件数据库</b>，无需独立安装服务，适合本机开发；将来上生产只需把 <span class="mono">DATABASE_URL</span> 换成 PostgreSQL 连接串，ORM 代码基本不动——这就是数据访问层抽象的意义。</p>
   </div>
 
-  <!-- ============ 7. 代码地图 ============ -->
-  <h2>七、代码文件职责地图（出问题知道去哪改）</h2>
+  <!-- ============ 8. 代码地图 ============ -->
+  <h2>八、代码文件职责地图（出问题知道去哪改）</h2>
   <div class="card">
     <table>
       <tr><th>文件</th><th>职责</th><th>常见排查场景</th></tr>
@@ -339,8 +366,15 @@
       <tr><td class="mono">app/models.py</td><td>Task / Image ORM 模型与状态枚举</td><td>要加字段（如模型名、批量数）</td></tr>
       <tr><td class="mono">app/schemas.py</td><td>请求/响应的 Pydantic 模型与参数范围</td><td>参数校验规则调整</td></tr>
       <tr><td class="mono">app/api/generate.py</td><td>POST /api/generate：入库 + 投递任务</td><td>接单逻辑</td></tr>
+      <tr><td class="mono">app/api/video.py</td><td>提交视频生成任务及音视频参考素材参数</td><td>视频工作流失败</td></tr>
       <tr><td class="mono">app/api/tasks.py</td><td>任务列表/详情/状态过滤</td><td>查询类问题</td></tr>
       <tr><td class="mono">app/api/images.py</td><td>图库列表、图片文件下载</td><td>图片打不开</td></tr>
+      <tr><td class="mono">app/api/agent.py</td><td>固定流水线、MCP Agent、任务进度/确认和个人记忆 API</td><td>Agent 任务或偏好问题</td></tr>
+      <tr><td class="mono">app/api/chat.py</td><td>JSON 对话与 SSE 流式对话入口，处理 RAG、图片输入和消息存储</td><td>聊天失败、流式响应异常</td></tr>
+      <tr><td class="mono">app/services/llm_client.py</td><td>内置/自定义 LLM 调用、OpenAI 兼容 SSE 解析与多模态消息</td><td>上游模型响应或分片问题</td></tr>
+      <tr><td class="mono">app/mcp_server/server.py</td><td>ComfyUI MCP 工具，包括状态、工作流、队列、生成和偏好记忆</td><td>Agent 找不到工具或 ComfyUI 调用失败</td></tr>
+      <tr><td class="mono">app/services/mcp_agent.py</td><td>Agent 工具循环、危险操作确认和偏好上下文</td><td>Agent 决策、确认或执行问题</td></tr>
+      <tr><td class="mono">app/services/agent_memory.py</td><td>实例级个人偏好的读取、更新、校验和清除</td><td>偏好未保存或未生效</td></tr>
       <tr><td class="mono">app/services/comfy_client.py</td><td>ComfyUI 三个接口的 HTTP 客户端 + 轮询</td><td>连不上 ComfyUI、取不到图、超时</td></tr>
       <tr><td class="mono">app/services/workflow.py</td><td>模板加载与 {{占位符}} 注入</td><td>换模型、加参数、节点报错</td></tr>
       <tr><td class="mono">app/workers/celery_app.py</td><td>Celery 实例、broker/backend、队列配置</td><td>worker 连不上 Redis</td></tr>
@@ -350,11 +384,11 @@
     </table>
   </div>
 
-  <!-- ============ 8. 面试串讲 ============ -->
-  <h2>八、30 秒串讲（可以直接讲给面试官）</h2>
+  <!-- ============ 9. 面试串讲 ============ -->
+  <h2>九、30 秒串讲（可以直接讲给面试官）</h2>
   <div class="card">
     <p style="margin:0">
-      "这是一个把 ComfyUI 工作流产品化的 AIGC 生图平台。前端提交提示词和参数到 <b>FastAPI</b>，API 用 Pydantic 校验后把任务写入 <b>SQLite</b>（状态 pending），并通过 <b>Celery 向 Redis 队列投递消息</b>，立即返回任务 ID。<b>Celery worker</b> 异步消费任务，把参数注入参数化的 ComfyUI 工作流模板，调用 ComfyUI 的 <span class="mono">/prompt</span> 接口提交、轮询 <span class="mono">/history</span> 等待完成、再经 <span class="mono">/view</span> 下载图片落盘并回写状态为 completed，全程是 pending→processing→completed/failed 的状态机，失败可重试。我还写了基于模拟服务和 Celery eager 模式的端到端冒烟测试，不依赖 GPU 即可验证全链路。下一步是 Vue 前端、WebSocket 实时进度和 Docker 编排。"
+      "这是一个面向个人单实例使用的 ComfyUI 助手。生图/生视频请求由 <b>FastAPI</b> 校验后写入 <b>SQLite</b>，通过 <b>Celery + Redis</b> 异步派发给 worker；worker 注入参数化工作流，调用 ComfyUI 并保存媒体和任务状态。AI 对话走独立 LLM 路径，支持多模态、RAG、自定义模型和 SSE；MCP Agent 可用自然语言查看或控制 ComfyUI，危险操作需要用户确认。V8 加入了个人偏好记忆，V9 开发分支加入流式回复。"
     </p>
   </div>
 
