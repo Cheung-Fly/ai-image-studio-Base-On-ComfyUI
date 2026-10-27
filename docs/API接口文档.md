@@ -468,6 +468,21 @@ Authorization: Bearer <access_token>
 
 返回 MCP Agent 生成的图片或视频二进制内容，需要登录。此接口只从 MCP Agent 专用输出目录读取文件。
 
+### 11.5 确认 MCP Agent 有影响的操作
+
+`POST /api/agent/confirm/{task_id}`
+
+Agent 请求中断生成、清理队列、删除排队任务/输入素材或释放显存时，任务状态变为 `CONFIRMATION_REQUIRED`，`GET /api/agent/result/{task_id}` 的 `confirmation` 字段包含确认信息。需要在 5 分钟内提交：
+
+```json
+{
+  "confirmation_id": "从任务状态中取得的确认 ID",
+  "confirmed": true
+}
+```
+
+`confirmed` 为 `false` 时操作不会执行；过期或已处理的确认请求返回 `409`。
+
 ---
 
 ## 12. 系统接口

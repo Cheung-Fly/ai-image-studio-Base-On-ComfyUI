@@ -21,6 +21,7 @@ PNG = base64.b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
 )
 CALLS: list[str] = []
+POST_BODIES: list[tuple[str, dict]] = []
 
 
 class Mock(BaseHTTPRequestHandler):
@@ -56,7 +57,8 @@ class Mock(BaseHTTPRequestHandler):
 
     def do_POST(self):
         n = int(self.headers.get("Content-Length", 0))
-        self.rfile.read(n)
+        raw_body = self.rfile.read(n)
+        POST_BODIES.append((self.path, json.loads(raw_body) if raw_body else {}))
         CALLS.append("POST " + self.path)
         self._send(json.dumps({"prompt_id": "p1"}).encode() if self.path == "/prompt" else b"")
 
@@ -102,17 +104,30 @@ def main() -> None:
                     "type": "function",
                     "function": {"name": "comfy_interrupt", "arguments": "{}"},
                 },
+                {
+                    "id": "4",
+                    "type": "function",
+                    "function": {
+                        "name": "comfy_delete_queued",
+                        "arguments": json.dumps({"prompt_ids": ["waiting-123"]}),
+                    },
+                },
             ]
         },
         {"content": "完成"},
     ]
     seen_tools: list[str] = []
     progress: list[dict] = []
+    confirmation_requests: list[tuple[str, dict]] = []
 
     def fake_llm(messages, tools, provider):
         if not seen_tools:
             seen_tools.extend(t["function"]["name"] for t in tools)
         return script.pop(0)
+
+    def approve_action(tool, arguments):
+        confirmation_requests.append((tool, arguments))
+        return True
 
     from app.services.mcp_agent import run_mcp_agent
 
@@ -122,23 +137,68 @@ def main() -> None:
             llm=fake_llm,
             params=params,
             on_progress=progress.append,
+            confirm_action=approve_action,
         )
     )
 
-    assert "comfy_generate_image" in seen_tools and "comfy_interrupt" in seen_tools, seen_tools
+    expected_tools = {
+        "comfy_generate_image",
+        "comfy_interrupt",
+        "comfy_delete_queued",
+        "comfy_workflow_details",
+        "comfy_describe_node",
+        "comfy_list_input_files",
+    }
+    assert expected_tools.issubset(seen_tools), seen_tools
     assert out["answer"] == "完成", out
     assert [s["tool"] for s in out["steps"]] == [
         "comfy_status",
         "comfy_generate_image",
         "comfy_interrupt",
+        "comfy_delete_queued",
     ]
-    assert len(progress) == 6 and progress[-1]["current_tool"] == "comfy_interrupt", progress
+    assert len(progress) == 8 and progress[-1]["current_tool"] == "comfy_delete_queued", progress
     assert progress[0]["running"] is True and progress[-1]["running"] is False, progress
+    assert confirmation_requests == [
+        ("comfy_interrupt", {}),
+        ("comfy_delete_queued", {"prompt_ids": ["waiting-123"]}),
+    ], confirmation_requests
     gen = json.loads(out["steps"][1]["result"])
     assert gen["ok"] and gen["prompt_id"] == "p1", gen
     assert Path(gen["files"][0]["path"]).read_bytes() == PNG
     assert json.loads(out["steps"][2]["result"])["ok"]
-    assert "POST /interrupt" in CALLS and "POST /prompt" in CALLS, CALLS
+    assert json.loads(out["steps"][3]["result"])["deleted"] == ["waiting-123"]
+    assert "POST /interrupt" in CALLS and "POST /prompt" in CALLS and "POST /queue" in CALLS, CALLS
+    assert ("/queue", {"delete": ["waiting-123"]}) in POST_BODIES, POST_BODIES
+
+    CALLS.clear()
+    POST_BODIES.clear()
+    denied_script = [
+        {
+            "tool_calls": [
+                {
+                    "id": "5",
+                    "type": "function",
+                    "function": {"name": "comfy_clear_queue", "arguments": "{}"},
+                }
+            ]
+        },
+        {"content": "已取消清队列操作。"},
+    ]
+
+    def deny_llm(messages, tools, provider):
+        return denied_script.pop(0)
+
+    denied = asyncio.run(
+        run_mcp_agent(
+            "清空等待队列",
+            llm=deny_llm,
+            params=params,
+            confirm_action=lambda tool, arguments: False,
+        )
+    )
+    assert json.loads(denied["steps"][0]["result"])["cancelled"]
+    assert "POST /queue" not in CALLS, CALLS
     print("MCP AGENT TEST PASSED")
 
 

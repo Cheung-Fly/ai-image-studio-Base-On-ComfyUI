@@ -20,11 +20,24 @@ jobs:
           python-version: "3.13"
 
       - name: Install test dependencies
-        run: python -m pip install "mcp>=1.2,<2" "pydantic-settings>=2.2" ruff
+        run: >-
+          python -m pip install
+          "mcp>=1.2,<2"
+          "pydantic-settings>=2.2"
+          "fastapi>=0.110,<1.0"
+          "sqlalchemy>=2.0.25"
+          "celery>=5.4"
+          "redis>=5.0"
+          "pillow>=10.0"
+          ruff
 
       - name: Compile backend
         working-directory: backend
         run: python -m compileall -q app
+
+      - name: Import MCP API routes
+        working-directory: backend
+        run: python -c "from app.api.agent import router"
 
       - name: Lint changed backend areas
         run: >-
@@ -35,6 +48,7 @@ jobs:
           backend/app/services/llm_client.py
           backend/app/services/mcp_agent.py
           backend/app/workers/tasks.py
+          backend/app/schemas.py
           backend/tests/test_mcp_agent.py
 
       - name: Test MCP Agent with mocked ComfyUI
