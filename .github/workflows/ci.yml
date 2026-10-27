@@ -47,10 +47,17 @@ jobs:
           backend/app/services/comfy_client.py
           backend/app/services/llm_client.py
           backend/app/services/mcp_agent.py
+          backend/app/services/agent_memory.py
           backend/app/workers/tasks.py
           backend/app/schemas.py
+          backend/app/models.py
           backend/tests/test_mcp_agent.py
+          backend/tests/test_agent_memory.py
 
       - name: Test MCP Agent with mocked ComfyUI
         working-directory: backend
         run: python tests/test_mcp_agent.py
+
+      - name: Test personal preference memory
+        working-directory: backend
+        run: python -m tests.test_agent_memory

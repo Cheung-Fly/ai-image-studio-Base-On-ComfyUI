@@ -2,7 +2,7 @@
 
 独立运行：``python -m app.mcp_server``（在 backend/ 目录下），
 也可被任何 MCP 客户端（Claude Desktop、Copilot、本项目 Agent）接入。
-不依赖数据库 / Celery，只依赖 ComfyUI HTTP API。
+ComfyUI 操作使用 HTTP API，个人偏好记忆保存在项目数据库。
 """
 import json
 import random
@@ -14,6 +14,8 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 
 from ..config import settings
+from ..database import SessionLocal, init_db
+from ..services.agent_memory import clear_preferences, get_preferences, update_preferences
 from ..services.comfy_client import ComfyClient, ComfyError
 from ..services.workflow import WorkflowError, build_workflow, list_workflows, load_template
 
@@ -188,6 +190,62 @@ def comfy_delete_input_file(filename: str) -> str:
 
 
 @mcp.tool()
+def comfy_get_preferences() -> str:
+    """读取助手已保存的个人生成偏好。"""
+    db = SessionLocal()
+    try:
+        return _ok(preferences=get_preferences(db))
+    finally:
+        db.close()
+
+
+@mcp.tool()
+def comfy_remember_preferences(
+    style: str | None = None,
+    model_preset: str | None = None,
+    workflow: str | None = None,
+    aspect_ratio: str | None = None,
+    megapixels: float | None = None,
+    negative_prompt: str | None = None,
+    notes: str | None = None,
+) -> str:
+    """保存用户明确要求记住的生成偏好；只传需要新增或修改的字段。"""
+    patch = {
+        key: value
+        for key, value in {
+            "style": style,
+            "model_preset": model_preset,
+            "workflow": workflow,
+            "aspect_ratio": aspect_ratio,
+            "megapixels": megapixels,
+            "negative_prompt": negative_prompt,
+            "notes": notes,
+        }.items()
+        if value is not None
+    }
+    if not patch:
+        return _err(ValueError("至少提供一个需要记住的偏好"))
+    db = SessionLocal()
+    try:
+        preferences = update_preferences(db, patch)
+        return _ok(preferences=preferences)
+    except ValueError as exc:
+        return _err(exc)
+    finally:
+        db.close()
+
+
+@mcp.tool()
+def comfy_forget_preferences() -> str:
+    """清除助手的全部个人偏好记忆（会要求用户在助手界面确认）。"""
+    db = SessionLocal()
+    try:
+        return _ok(preferences=clear_preferences(db))
+    finally:
+        db.close()
+
+
+@mcp.tool()
 def comfy_generate_image(
     prompt: str,
     negative_prompt: str = "",
@@ -316,4 +374,5 @@ def comfy_free_memory(unload_models: bool = True) -> str:
 
 
 def main() -> None:
+    init_db()
     mcp.run(transport="stdio")

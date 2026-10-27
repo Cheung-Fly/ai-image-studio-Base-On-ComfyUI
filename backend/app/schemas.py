@@ -208,3 +208,37 @@ class AgentConfirmationRequest(BaseModel):
 
     confirmation_id: str = Field(..., min_length=1, max_length=64)
     confirmed: bool
+
+
+class AgentMemoryUpdate(BaseModel):
+    """个人 ComfyUI 偏好记忆的局部更新。"""
+
+    style: str | None = Field(None, max_length=500, description="偏好画风")
+    model_preset: str | None = Field(None, max_length=255, description="默认模型预设")
+    workflow: str | None = Field(None, max_length=255, description="默认工作流文件名")
+    aspect_ratio: str | None = Field(None, description="默认宽高比")
+    megapixels: float | None = Field(None, ge=0.1, le=16.0, description="默认百万像素")
+    negative_prompt: str | None = Field(None, max_length=4000, description="默认负向提示词")
+    notes: str | None = Field(None, max_length=2000, description="其他生成习惯")
+
+    model_config = {"extra": "forbid"}
+
+    @field_validator("aspect_ratio")
+    @classmethod
+    def _check_memory_aspect_ratio(cls, value: str | None) -> str | None:
+        if value is not None and value not in ASPECT_RATIO_OPTIONS:
+            raise ValueError(f"非法宽高比: {value}，可选值: {sorted(ASPECT_RATIO_OPTIONS)}")
+        return value
+
+
+class AgentMemoryOut(BaseModel):
+    """完整个人偏好记忆响应。"""
+
+    style: str = ""
+    model_preset: str = ""
+    workflow: str = ""
+    aspect_ratio: str | None = None
+    megapixels: float | None = None
+    negative_prompt: str = ""
+    notes: str = ""
+    updated_at: datetime | None = None

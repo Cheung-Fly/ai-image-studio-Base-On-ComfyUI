@@ -705,7 +705,10 @@
       <div class="card">
         <div class="section-title" style="display:flex; justify-content:space-between; align-items:center;">
           <span>AI 对话助手</span>
-          <button id="btn-clear-chat" type="button" style="font-size:12px; padding:2px 10px;">清空对话</button>
+          <div style="display:flex; gap:6px;">
+            <button id="btn-agent-memory" type="button" style="font-size:12px; padding:2px 10px;">个人记忆</button>
+            <button id="btn-clear-chat" type="button" style="font-size:12px; padding:2px 10px;">清空对话</button>
+          </div>
         </div>
         <div class="chat-layout">
           <div class="chat-sidebar">
@@ -747,6 +750,33 @@
               <button id="btn-chat-image-clear" type="button" style="padding:4px 10px;">移除</button>
             </div>
             <div id="chat-mode-hint" class="chat-fill-hint">左侧切换模型，各模型对话上下文独立保留。</div>
+            <div id="agent-memory-panel" style="display:none; margin-top:8px; border:1px solid var(--border); border-radius:8px; padding:10px;">
+              <div style="font-weight:500; font-size:13px; margin-bottom:8px;">个人 ComfyUI 偏好</div>
+              <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:8px;">
+                <label style="font-size:12px;">偏好画风<textarea id="memory-style" rows="2" placeholder="如：柔和水彩、温暖自然光"></textarea></label>
+                <label style="font-size:12px;">默认工作流<input id="memory-workflow" list="memory-workflow-options" placeholder="选择或输入工作流文件名"></label>
+                <datalist id="memory-workflow-options"></datalist>
+                <label style="font-size:12px;">默认模型预设<input id="memory-model-preset" list="memory-preset-options" placeholder="选择或输入预设名"></label>
+                <datalist id="memory-preset-options"></datalist>
+                <label style="font-size:12px;">默认宽高比
+                  <select id="memory-aspect-ratio">
+                    <option value="">不指定</option>
+                    <option>1:1 (Square)</option><option>2:3 (Portrait Photo)</option>
+                    <option>3:2 (Photo)</option><option>3:4 (Portrait Standard)</option>
+                    <option>4:3 (Standard)</option><option>9:16 (Portrait Widescreen)</option>
+                    <option>16:9 (Widescreen)</option><option>21:9 (Ultrawide)</option>
+                  </select>
+                </label>
+                <label style="font-size:12px;">默认百万像素<input id="memory-megapixels" type="number" min="0.1" max="16" step="0.1" placeholder="不指定"></label>
+                <label style="font-size:12px;">默认负向提示词<textarea id="memory-negative-prompt" rows="2"></textarea></label>
+                <label style="font-size:12px; grid-column:1/-1;">其他生成习惯<textarea id="memory-notes" rows="2" maxlength="2000" placeholder="仅记录生成偏好，例如构图习惯或常用质量要求"></textarea></label>
+              </div>
+              <div id="agent-memory-updated" class="chat-fill-hint"></div>
+              <div style="display:flex; gap:6px; justify-content:flex-end; margin-top:8px;">
+                <button id="btn-clear-agent-memory" type="button">清除记忆</button>
+                <button id="btn-save-agent-memory" type="button">保存偏好</button>
+              </div>
+            </div>
             <div id="rag-manage-panel" style="display:none; margin-top:8px; border:1px solid var(--border); border-radius:8px; padding:10px;">
               <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
                 <span style="font-weight:500; font-size:13px;">知识库文档</span>
@@ -1573,6 +1603,9 @@ function agentProgressText(progress) {
     comfy_workflow_details: "查看工作流结构",
     comfy_describe_node: "查询 ComfyUI 节点详情",
     comfy_list_input_files: "查看输入素材",
+    comfy_get_preferences: "读取个人偏好",
+    comfy_remember_preferences: "保存个人偏好",
+    comfy_forget_preferences: "清除个人偏好",
     comfy_generate_image: "生成图片",
     comfy_run_workflow: "执行工作流",
     comfy_queue: "查询队列",
@@ -1602,6 +1635,7 @@ function agentConfirmationText(confirmation) {
     comfy_delete_queued: "从等待队列中删除指定任务：\n" + (args.prompt_ids || []).join("\n"),
     comfy_free_memory: "释放 ComfyUI 显存" + (args.unload_models ? "并卸载已加载模型" : "") + "？",
     comfy_delete_input_file: "删除 ComfyUI 输入素材：\n" + (args.filename || ""),
+    comfy_forget_preferences: "清除助手保存的全部个人生成偏好？",
   };
   return prompts[tool] || ("确认执行操作：" + tool);
 }
@@ -1719,6 +1753,105 @@ async function sendMcpAgent(text, provider) {
   progressMsg.textContent += "\n等待超时；任务可能仍在后台运行。";
 }
 
+async function loadAgentMemoryOptions() {
+  const [workflowsResp, presetsResp] = await Promise.all([
+    apiFetch("/api/workflows"),
+    apiFetch("/api/model-presets"),
+  ]);
+  if (workflowsResp.ok) {
+    const workflows = await workflowsResp.json();
+    $("memory-workflow-options").replaceChildren(
+      ...workflows.map((item) => {
+        const option = document.createElement("option");
+        option.value = item.file;
+        return option;
+      })
+    );
+  }
+  if (presetsResp.ok) {
+    const presets = await presetsResp.json();
+    $("memory-preset-options").replaceChildren(
+      ...presets.map((item) => {
+        const option = document.createElement("option");
+        option.value = item.name;
+        option.label = item.display_name;
+        return option;
+      })
+    );
+  }
+}
+
+async function loadAgentMemory() {
+  await loadAgentMemoryOptions();
+  const resp = await apiFetch("/api/agent/memory");
+  const memory = await resp.json();
+  if (!resp.ok) throw new Error(memory.detail || "读取个人记忆失败");
+  $("memory-style").value = memory.style || "";
+  $("memory-workflow").value = memory.workflow || "";
+  $("memory-model-preset").value = memory.model_preset || "";
+  $("memory-aspect-ratio").value = memory.aspect_ratio || "";
+  $("memory-megapixels").value = memory.megapixels ?? "";
+  $("memory-negative-prompt").value = memory.negative_prompt || "";
+  $("memory-notes").value = memory.notes || "";
+  $("agent-memory-updated").textContent = memory.updated_at
+    ? "上次更新：" + new Date(memory.updated_at).toLocaleString()
+    : "尚未保存个人偏好";
+}
+
+async function saveAgentMemory() {
+  const megapixelsInput = $("memory-megapixels").value.trim();
+  const body = {
+    style: $("memory-style").value.trim(),
+    workflow: $("memory-workflow").value.trim(),
+    model_preset: $("memory-model-preset").value.trim(),
+    aspect_ratio: $("memory-aspect-ratio").value || null,
+    megapixels: megapixelsInput ? Number(megapixelsInput) : null,
+    negative_prompt: $("memory-negative-prompt").value.trim(),
+    notes: $("memory-notes").value.trim(),
+  };
+  const resp = await apiFetch("/api/agent/memory", {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+  const result = await resp.json();
+  if (!resp.ok) throw new Error(result.detail || "保存个人记忆失败");
+  $("agent-memory-updated").textContent = "个人偏好已保存";
+}
+
+async function clearAgentMemory() {
+  if (!confirm("确认清除助手保存的全部个人生成偏好？")) return;
+  const resp = await apiFetch("/api/agent/memory", { method: "DELETE" });
+  const result = await resp.json();
+  if (!resp.ok) {
+    alert(result.detail || "清除个人记忆失败");
+    return;
+  }
+  await loadAgentMemory();
+}
+
+$("btn-agent-memory").addEventListener("click", async () => {
+  const panel = $("agent-memory-panel");
+  if (panel.style.display !== "none") {
+    panel.style.display = "none";
+    return;
+  }
+  panel.style.display = "block";
+  try {
+    await loadAgentMemory();
+  } catch (err) {
+    $("agent-memory-updated").textContent = "读取失败：" + err.message;
+  }
+});
+
+$("btn-save-agent-memory").addEventListener("click", async () => {
+  try {
+    await saveAgentMemory();
+  } catch (err) {
+    alert(err.message);
+  }
+});
+
+$("btn-clear-agent-memory").addEventListener("click", clearAgentMemory);
 
 $("btn-chat").addEventListener("click", sendChat);
 

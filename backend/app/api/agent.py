@@ -11,7 +11,13 @@ from sqlalchemy.orm import Session
 from ..config import settings
 from ..database import get_db
 from ..models import User
-from ..schemas import AgentConfirmationRequest, AgentGenerateRequest
+from ..schemas import (
+    AgentConfirmationRequest,
+    AgentGenerateRequest,
+    AgentMemoryOut,
+    AgentMemoryUpdate,
+)
+from ..services.agent_memory import clear_preferences, get_preferences, update_preferences
 from ..workers.celery_app import celery_app
 from ..workers.tasks import run_agent_pipeline, run_mcp_agent_task
 from .auth import get_current_user
@@ -86,3 +92,28 @@ def agent_file(filename: str, user: User = Depends(get_current_user)):
     if path.parent != directory or not path.is_file():
         raise HTTPException(404, "Agent 生成文件不存在")
     return FileResponse(path)
+
+
+@router.get("/agent/memory", response_model=AgentMemoryOut)
+def agent_memory(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """读取个人助手保存的 ComfyUI 偏好。"""
+    return get_preferences(db)
+
+
+@router.patch("/agent/memory", response_model=AgentMemoryOut)
+def update_agent_memory(
+    req: AgentMemoryUpdate,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """更新个人助手偏好；只修改请求体中明确提供的字段。"""
+    try:
+        return update_preferences(db, req.model_dump(exclude_unset=True))
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+
+
+@router.delete("/agent/memory", response_model=AgentMemoryOut)
+def clear_agent_memory(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """清除个人助手全部偏好记忆。"""
+    return clear_preferences(db)
