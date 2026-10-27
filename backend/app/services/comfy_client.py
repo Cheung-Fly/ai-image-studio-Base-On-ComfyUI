@@ -20,7 +20,7 @@ class ComfyClient:
     # ---------- 基础请求 ----------
     def _get(self, path: str) -> dict[str, Any]:
         try:
-            resp = httpx.get(f"{self.base_url}{path}", timeout=self.timeout)
+            resp = httpx.get(f"{self.base_url}{path}", timeout=self.timeout, trust_env=False)
         except httpx.HTTPError as exc:
             raise ComfyError(f"无法连接 ComfyUI（{self.base_url}）: {exc}") from exc
         if resp.status_code != 200:
@@ -29,7 +29,9 @@ class ComfyClient:
 
     def _post(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
         try:
-            resp = httpx.post(f"{self.base_url}{path}", json=payload, timeout=self.timeout)
+            resp = httpx.post(
+                f"{self.base_url}{path}", json=payload, timeout=self.timeout, trust_env=False
+            )
         except httpx.HTTPError as exc:
             raise ComfyError(f"无法连接 ComfyUI（{self.base_url}）: {exc}") from exc
         if resp.status_code != 200:
@@ -44,6 +46,54 @@ class ComfyClient:
         info = self._get("/object_info/CheckpointLoaderSimple")
         options = info["CheckpointLoaderSimple"]["input"]["required"]["ckpt_name"][0]
         return list(options)
+
+    # ---------- 控制类接口（MCP 工具使用） ----------
+    def _post_no_body(self, path: str, payload: dict[str, Any]) -> None:
+        """POST 后不解析响应体（/interrupt、/free、清队列等返回空 body）。"""
+        try:
+            resp = httpx.post(
+                f"{self.base_url}{path}", json=payload, timeout=self.timeout, trust_env=False
+            )
+        except httpx.HTTPError as exc:
+            raise ComfyError(f"无法连接 ComfyUI（{self.base_url}）: {exc}") from exc
+        if resp.status_code != 200:
+            raise ComfyError(f"ComfyUI POST {path} 返回 {resp.status_code}: {resp.text[:300]}")
+
+    def queue_info(self) -> dict[str, Any]:
+        """当前执行中 / 排队中的任务。"""
+        return self._get("/queue")
+
+    def history(self, prompt_id: str = "", max_items: int = 10) -> dict[str, Any]:
+        if prompt_id:
+            return self._get(f"/history/{prompt_id}")
+        return self._get(f"/history?max_items={int(max_items)}")
+
+    def interrupt(self) -> None:
+        self._post_no_body("/interrupt", {})
+
+    def clear_queue(self) -> None:
+        self._post_no_body("/queue", {"clear": True})
+
+    def delete_queued(self, prompt_ids: list[str]) -> None:
+        self._post_no_body("/queue", {"delete": prompt_ids})
+
+    def free_memory(self, unload_models: bool = True, free_memory: bool = True) -> None:
+        self._post_no_body("/free", {"unload_models": unload_models, "free_memory": free_memory})
+
+    def object_info(self, node_class: str) -> dict[str, Any]:
+        return self._get(f"/object_info/{node_class}")
+
+    def list_node_options(self, node_class: str, input_name: str) -> list[str]:
+        """读取某节点某个下拉输入的可选值（如 UNETLoader.unet_name、LoraLoader.lora_name）。"""
+        info = self.object_info(node_class)
+        try:
+            spec = info[node_class]["input"]
+            entry = (spec.get("required") or {}).get(input_name) or (
+                spec.get("optional") or {}
+            ).get(input_name)
+            return list(entry[0])
+        except (KeyError, TypeError, IndexError) as exc:
+            raise ComfyError(f"无法读取 {node_class}.{input_name} 的可选项") from exc
 
     def submit_prompt(self, workflow: dict[str, Any]) -> str:
         """提交工作流，返回 prompt_id。"""
@@ -137,7 +187,9 @@ class ComfyClient:
         if subfolder:
             params["subfolder"] = subfolder
         try:
-            resp = httpx.get(f"{self.base_url}/view", params=params, timeout=self.timeout)
+            resp = httpx.get(
+                f"{self.base_url}/view", params=params, timeout=self.timeout, trust_env=False
+            )
         except httpx.HTTPError as exc:
             raise ComfyError(f"下载图片失败: {exc}") from exc
         if resp.status_code != 200:

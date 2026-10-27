@@ -197,6 +197,8 @@ Invoke-RestMethod http://127.0.0.1:8000/api/images -Headers @{ Authorization = "
 | GET    | `/api/conversations/{provider}`     | 拉取指定 provider 对话历史                | 是   |
 | DELETE | `/api/conversations/{provider}`     | 清空指定 provider 对话历史                | 是   |
 | POST   | `/api/agent/generate`               | 一句话生图（多 Agent 流水线，返回任务 id）      | 是   |
+| POST   | `/api/agent/mcp`                    | MCP Agent 直连 ComfyUI 自主控制（返回任务 id）   | 是   |
+| GET    | `/api/agent/result/{task_id}`       | 查询 Agent 任务状态与结果                      | 是   |
 | GET    | `/api/rag/docs`                     | 列出知识库文档（固定 + 动态）                | 是   |
 | POST   | `/api/rag/docs`                     | 上传 md 加入知识库                       | 是   |
 | DELETE | `/api/rag/docs/{filename}`          | 删除知识库动态文档                        | 是   |
@@ -205,6 +207,37 @@ Invoke-RestMethod http://127.0.0.1:8000/api/images -Headers @{ Authorization = "
 | DELETE | `/api/custom-models/{id}`           | 删除自定义模型配置                        | 是   |
 
 Swagger：<http://127.0.0.1:8000/docs>
+
+## 版本迭代（V）
+
+- **V1**：ComfyUI 后端闭环（文生图、任务状态、图库下载）。
+- **V2**：登录鉴权 + 用户隔离。
+- **V3**：LLM 对话助手（OpenAI 兼容 / llama.cpp）+ 多模态看图 + RAG。
+- **V4**：多 Agent 固定流水线（提示词优化 → 生图 → 审图）。
+- **V5（当前）**：MCP Agent 直连 ComfyUI（查询状态/队列、生成、中断、清队列、释放显存）。
+
+### V5：MCP Agent 使用方式
+
+1. 提交自然语言指令（例如“先看下显存，再画一只太空柯基”）：
+
+```http
+POST /api/agent/mcp
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "request": "先看下 ComfyUI 状态，然后生成一张太空柯基，最后告诉我图片路径"
+}
+```
+
+2. 轮询任务结果：
+
+```http
+GET /api/agent/result/{task_id}
+Authorization: Bearer <token>
+```
+
+> 说明：MCP Server 进程由 Agent 任务内部自动拉起（stdio 传输），无需单独常驻守护。
 
 ## 参数说明（Krea 2 工作流）
 

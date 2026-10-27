@@ -179,3 +179,44 @@ def chat_with_config(
     if text is not None:
         return text
     raise LLMError(f"LLM 响应缺少内容字段: {data}")
+
+
+def chat_with_tools(
+    messages: list[dict[str, Any]],
+    tools: list[dict[str, Any]],
+    provider: str = "",
+) -> dict[str, Any]:
+    """OpenAI function calling：返回 assistant message（含 content 或 tool_calls）。
+
+    本地 llama.cpp 需以 --jinja 启动 llama-server 才支持 tools。
+    """
+    provider = provider or settings.default_llm_provider
+    if provider not in SUPPORTED_PROVIDERS:
+        raise LLMError(f"不支持的 provider: {provider}（可选: {sorted(SUPPORTED_PROVIDERS)}）")
+    cfg = _resolve(provider)
+    if not cfg["api_key"]:
+        raise LLMError(f"provider「{provider}」未配置 API Key，无法运行 MCP Agent")
+
+    payload: dict[str, Any] = {
+        "model": cfg["model"],
+        "messages": messages,
+        "tools": tools,
+        "tool_choice": "auto",
+    }
+    if provider == "llama":
+        payload["max_tokens"] = settings.llama_max_tokens
+    headers = {
+        "Authorization": f"Bearer {cfg['api_key']}",
+        "Content-Type": "application/json",
+    }
+    url = cfg["base_url"].rstrip("/") + "/chat/completions"
+    try:
+        resp = httpx.post(url, json=payload, headers=headers, timeout=300.0)
+    except httpx.HTTPError as exc:
+        raise LLMError(f"无法连接 LLM 服务（{url}）: {exc}") from exc
+    if resp.status_code != 200:
+        raise LLMError(f"LLM 返回 {resp.status_code}: {resp.text[:500]}")
+    try:
+        return resp.json()["choices"][0]["message"]
+    except (KeyError, IndexError, ValueError) as exc:
+        raise LLMError(f"LLM 响应格式异常: {resp.text[:300]}") from exc
