@@ -47,11 +47,11 @@
 </head>
 <body>
 <div class="wrap">
-  <h1>AI 生图工坊 · 多端上线路线图</h1>
-  <div class="sub">网页端 / 微信小程序 / 桌面软件 —— 三种壳共用同一套云端后端 API</div>
+  <h1>AI 生图工坊 · 可选多端接入路线图</h1>
+  <div class="sub">当前是本地运行的单实例个人助手；网页、小程序和桌面端是可选客户端方向，不是当前开发范围</div>
 
   <div class="key">
-    核心判断：<b>不要做三个项目</b>。三端只是前端形态不同，真正要先完成的是把 <b>FastAPI + Celery + Redis + ComfyUI(GPU) + LLM</b> 部署到云端并通过 <b>HTTPS 域名</b>对外开放；之后网页、小程序、桌面软件都向同一个 <code>https://你的域名/api/</code> 发请求。推荐顺序：<b>网页端 → 小程序 → 桌面端</b>。
+    当前定位：<b>个人使用、单实例部署</b>。FastAPI、Celery、Redis、SQLite、ComfyUI 和 LLM 组成一个私有助手；现有网页端已支持生图、对话、MCP 控制和偏好记忆。无需先部署公有云，也不建设多租户账号体系。将来如需手机或桌面访问，可在安全的私有网络/受保护的 HTTPS 入口下复用现有 API；新客户端只是可选扩展。
   </div>
 
   <h2>一、总体架构（上线后）</h2>
@@ -135,25 +135,25 @@
   <table>
     <tr><th style="width:22%">事项</th><th style="width:48%">具体操作</th><th style="width:30%">说明</th></tr>
     <tr><td>后端 + GPU 上云</td><td>云 GPU 服务器用 docker-compose 启动 api/worker/redis，ComfyUI 常驻；llama.cpp 可同机或独立</td><td><span class="tag t-must">必须</span> 不能跑在个人电脑</td></tr>
-    <tr><td>域名 + ICP 备案</td><td>买域名 → 国内服务器控制台提交 ICP 备案（个人可办，约 1~3 周）</td><td><span class="tag t-must">必须</span> 用境外服务器可免备案但访问慢，且小程序不支持</td></tr>
-    <tr><td>HTTPS</td><td>Nginx 反向代理 + Let's Encrypt 免费证书（或云厂商免费 SSL）</td><td><span class="tag t-must">必须</span> 小程序与现代浏览器强制</td></tr>
-    <tr><td>用户系统</td><td>注册/登录、JWT 鉴权、按用户限流与配额（每日生图张数）</td><td><span class="tag t-must">必须</span> 当前项目无登录，需新增 auth 模块</td></tr>
-    <tr><td>数据库与存储升级</td><td>SQLite → PostgreSQL；图片从本地磁盘 → 对象存储 OSS/COS + CDN</td><td><span class="tag t-must">必须</span> 多用户并发与弹性扩容</td></tr>
-    <tr><td>跨域 CORS</td><td>FastAPI 加 CORSMiddleware，只放行你的前端域名</td><td><span class="tag t-must">必须</span></td></tr>
+    <tr><td>域名 / ICP 备案</td><td>仅在选择公开互联网服务时，按部署地区和当前规定核验域名及备案要求</td><td><span class="tag t-opt">公开上线时核验</span> 本地或私有网络使用不需要先做公有域名部署</td></tr>
+    <tr><td>HTTPS</td><td>远程访问时配置 TLS；优先 VPN/私有网络，或采用认证、限源的 HTTPS 反向代理</td><td><span class="tag t-opt">远程访问时必须</span> 不要直接暴露 ComfyUI/Redis 端口</td></tr>
+    <tr><td>访问保护</td><td>项目已有登录/JWT；远程访问时使用 HTTPS、强口令和私有网络限制来源</td><td><span class="tag t-opt">按需</span> 现有认证保护个人实例，不等于多租户支持</td></tr>
+    <tr><td>数据库与存储升级</td><td>当前 SQLite + 本地媒体目录；只有并发、备份或容量需求出现时再评估 PostgreSQL / 对象存储</td><td><span class="tag t-opt">按需</span> 当前个人使用不要求云端扩容</td></tr>
+    <tr><td>跨域 CORS</td><td>只有前后端跨域部署时才配置，并仅放行确需访问的来源</td><td><span class="tag t-opt">按部署形态配置</span></td></tr>
     <tr><td>安全与可观测</td><td>内部服务（ComfyUI/llama-server）只监听内网、密钥用环境变量、日志与错误监控</td><td><span class="tag t-must">必须</span></td></tr>
   </table>
 
-  <h2>三、三个端分别要做什么</h2>
+  <h2>三、可选客户端形态（当前只维护网页端）</h2>
   <div class="cols">
     <div class="col c1">
       <h3>① 网页端</h3>
       <div class="en">最先做，求职演示足够</div>
       <ul>
-        <li>现有 index.html 完善为正式前端（或用 Vue/React 重写）</li>
+        <li>当前网页端由单文件 HTML/CSS/JavaScript 实现，已覆盖主要助手功能</li>
         <li>静态文件交给 Nginx 或对象存储静态网站托管</li>
-        <li>API 地址改为 https://域名/api</li>
-        <li>加登录页、生成进度轮询、画廊页</li>
-        <li>部署最简单，迭代最快，<b>建议作为求职作品主形态</b></li>
+        <li>本地使用默认连接当前后端；远程访问时才配置受保护的 HTTPS API 地址</li>
+        <li>登录、生成进度、图库、对话/RAG、MCP 控制和个人记忆已存在</li>
+        <li>Vue/React 迁移属于可选维护工作，不是当前功能前置条件</li>
       </ul>
     </div>
     <div class="col c2">
@@ -164,7 +164,7 @@
         <li>管理后台配置 request/downloadFile <b>合法域名</b>（须 HTTPS+已备案）</li>
         <li>登录走微信授权 code2session</li>
         <li><b>学习演示</b>：用「体验版」+ 添加体验成员（最多30人），可免正式审核跑通</li>
-        <li><b>正式发布</b>：AIGC 类目对个人主体限制多，通常需企业主体 + 生成式 AI 备案</li>
+        <li><b>正式发布</b>：须按届时小程序平台规则、服务范围和现行法规核验主体资质及备案要求</li>
       </ul>
     </div>
     <div class="col c3">
@@ -172,7 +172,7 @@
       <div class="en">推荐 Tauri，轻量</div>
       <ul>
         <li>用 Tauri（包体约 10MB）或 Electron（生态成熟、约 100MB+）把前端包成 .exe</li>
-        <li>形态：客户端只做界面，<b>连云端 API</b>；不要把 13GB 的 ComfyUI/模型塞进安装包</li>
+        <li>形态：客户端只做界面，连接经保护的 API；不要把 ComfyUI 或模型塞进安装包</li>
         <li>用 NSIS 做安装程序，配代码签名证书（否则 SmartScreen 拦截）</li>
         <li>可加自动更新；通过官网/GitHub Releases 分发</li>
       </ul>
@@ -181,12 +181,11 @@
 
   <h2>四、建议的演进时间线</h2>
   <div class="tl">
-    <div class="ms now"><b>M0 · 本地全链路跑通（当前）</b><span>本机 FastAPI + Celery + Redis + ComfyUI，冒烟测试通过、真实出图</span></div>
-    <div class="ms now"><b>M1 · 云端 LLM 接入（进行中）</b><span>llama.cpp 部署 P4 + SSH 隧道 + /api/optimize-prompt 提示词扩写</span></div>
-    <div class="ms"><b>M2 · 后端整体上云</b><span>GPU 服务器跑 ComfyUI+后端，先用 IP:端口 让公网访问 Swagger 验证</span></div>
-    <div class="ms"><b>M3 · 网页端正式上线</b><span>域名备案、Nginx+HTTPS、用户登录、对象存储、PostgreSQL</span></div>
-    <div class="ms"><b>M4 · 小程序</b><span>先出体验版用于求职演示；有企业主体后再走正式审核与备案</span></div>
-    <div class="ms"><b>M5 · 桌面版</b><span>Tauri 打包前端连云端 API，签名后发布安装包</span></div>
+    <div class="ms now"><b>当前 · 私有单实例助手</b><span>本地 FastAPI + Celery + Redis + SQLite + ComfyUI；支持生图/视频、RAG、MCP 控制和个人偏好记忆。</span></div>
+    <div class="ms now"><b>V9 · 流式对话（开发中）</b><span>通过 SSE 逐段显示回复；保留原 JSON 接口，兼容内置与自定义 LLM。</span></div>
+    <div class="ms"><b>后续 · 可靠性维护</b><span>优先完善备份、日志、错误提示和自动化回归测试，仍保持个人实例范围。</span></div>
+    <div class="ms"><b>可选 · 私有远程访问</b><span>确有跨设备需求时配置 VPN/私有网络或经过认证的 HTTPS 反向代理；不开放 ComfyUI、Redis 等内部服务端口。</span></div>
+    <div class="ms"><b>可选 · 其他客户端</b><span>只有明确需要时再评估移动端或桌面壳，共用现有 API；不作为当前发布计划。</span></div>
   </div>
 
   <h2>五、合规红线（面向国内公众用户）</h2>
@@ -196,7 +195,7 @@
       <li>完成 <b>ICP 备案</b>（域名）与 <b>生成式人工智能服务 / 深度合成算法备案</b>（通常要求企业主体）；</li>
       <li>接入<b>内容安全审核</b>：提示词文本审核 + 生成图片审核（云厂商均有内容安全 API）；</li>
       <li>对 AI 生成图片添加<b>显著标识/隐式水印</b>（《人工智能生成合成内容标识办法》要求）；</li>
-      <li><b>求职/学习阶段不受影响</b>：本地运行、网页演示给面试官、小程序体验版加白名单成员，都不需要正式备案。</li>
+      <li>是否需要备案取决于实际服务对象、部署地区和当前法规；本页是部署规划，不构成法律意见。公开上线前应查阅主管部门最新官方要求并咨询专业人士。</li>
     </ul>
   </div>
 </div>

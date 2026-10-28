@@ -195,7 +195,8 @@ Invoke-RestMethod http://127.0.0.1:8000/api/images -Headers @{ Authorization = "
 | GET    | `/api/tasks/{id}`                   | 任务详情（含产物图片）                       | 是   |
 | GET    | `/api/images`                       | 图库列表                              | 是   |
 | GET    | `/api/images/{id}/file`             | 下载图片                              | 是   |
-| POST   | `/api/chat`                         | LLM 对话（openai / llama / custom，支持多模态看图 + RAG） | 是   |
+| POST   | `/api/chat`                         | LLM 对话（兼容 JSON 请求，支持多模态看图 + RAG） | 是   |
+| POST   | `/api/chat/stream`                  | SSE 流式对话（openai / llama / custom）      | 是   |
 | GET    | `/api/conversations/{provider}`     | 拉取指定 provider 对话历史                | 是   |
 | DELETE | `/api/conversations/{provider}`     | 清空指定 provider 对话历史                | 是   |
 | POST   | `/api/agent/generate`               | 一句话生图（多 Agent 流水线，返回任务 id）      | 是   |
@@ -223,7 +224,8 @@ Swagger：<http://127.0.0.1:8000/docs>
 - **V5**：MCP Agent 直连 ComfyUI（查询状态/队列、生成、中断、清队列、释放显存）。
 - **V6**：对话助手加入 ComfyUI 控制模式，显示 MCP 工具执行进度，并在会话中预览生成图片/视频。
 - **V7**：增强 ComfyUI 管理（查看工作流/节点/输入素材、按 ID 删除排队任务），中断、清队列、删除素材及释放显存前需在界面确认。
-- **V8（当前）**：为个人助手增加可查看/编辑/清除的持久偏好记忆，并让 MCP Agent 在生成时使用这些默认偏好。
+- **V8**：为个人助手增加可查看/编辑/清除的持久偏好记忆，并让 MCP Agent 在生成时使用这些默认偏好。
+- **V9（当前）**：对话助手通过 SSE 逐段显示回复，同时兼容 RAG、多模态看图、自定义模型及旧版 JSON 对话接口。
 
 ### V5–V8：MCP Agent 使用方式
 

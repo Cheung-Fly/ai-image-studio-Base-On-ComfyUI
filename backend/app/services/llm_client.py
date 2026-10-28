@@ -5,8 +5,10 @@
 - provider="llama"：走本地 llama.cpp server（需显式 max_tokens、兼容 choices[0].text）。
 - 未配置对应 provider 的 api_key 时，chat() 返回占位回复（保证前端链路可先跑通）。
 
-后续接入 RAG / 提示词优化时，可在 chat() 前追加检索增强逻辑，无需改动前端。
+RAG / 提示词增强可复用 chat() 或 stream_chat() 的 provider 调用能力。
 """
+import json
+from collections.abc import Iterator
 from typing import Any
 
 import httpx
@@ -179,6 +181,135 @@ def chat_with_config(
     if text is not None:
         return text
     raise LLMError(f"LLM 响应缺少内容字段: {data}")
+
+
+def _choice_content(choice: dict[str, Any]) -> str:
+    message = choice.get("message") or {}
+    delta = choice.get("delta") or {}
+    content = message.get("content")
+    if content is None:
+        content = delta.get("content")
+    if content is None:
+        content = choice.get("text")
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return "".join(
+            item["text"]
+            for item in content
+            if isinstance(item, dict) and isinstance(item.get("text"), str)
+        )
+    return ""
+
+
+def _stream_completion(
+    url: str,
+    payload: dict[str, Any],
+    api_key: str,
+) -> Iterator[str]:
+    """读取 OpenAI 兼容 SSE 响应；也接受忽略 stream 参数的非流式服务。"""
+    stream_payload = {**payload, "stream": True}
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+    try:
+        with httpx.stream(
+            "POST",
+            url,
+            json=stream_payload,
+            headers=headers,
+            timeout=300.0,
+        ) as resp:
+            if resp.status_code != 200:
+                body = resp.read().decode("utf-8", errors="replace")
+                raise LLMError(f"LLM 返回 {resp.status_code}: {body[:500]}")
+
+            content_type = resp.headers.get("content-type", "").lower()
+            if "text/event-stream" not in content_type:
+                try:
+                    data = resp.json()
+                    choice = data["choices"][0]
+                except (KeyError, IndexError, ValueError, TypeError) as exc:
+                    raise LLMError(f"LLM 响应格式异常: {resp.text[:300]}") from exc
+                content = _choice_content(choice)
+                if content:
+                    yield content
+                return
+
+            for line in resp.iter_lines():
+                if not line.startswith("data:"):
+                    continue
+                data = line[5:].strip()
+                if not data:
+                    continue
+                if data == "[DONE]":
+                    break
+                try:
+                    chunk = json.loads(data)
+                    choices = chunk.get("choices") or []
+                    choice = choices[0] if choices else {}
+                except (json.JSONDecodeError, TypeError, AttributeError) as exc:
+                    raise LLMError("LLM 流式响应格式异常") from exc
+                content = _choice_content(choice)
+                if content:
+                    yield content
+    except httpx.HTTPError as exc:
+        raise LLMError(f"无法连接 LLM 服务（{url}）: {exc}") from exc
+
+
+def stream_chat(
+    message: str,
+    history: list[dict[str, str]] | None = None,
+    provider: str = "",
+    image_base64: str | None = None,
+) -> Iterator[str]:
+    """以文本片段形式调用内置 provider。"""
+    provider = provider or settings.default_llm_provider
+    if provider not in SUPPORTED_PROVIDERS:
+        raise LLMError(f"不支持的 provider: {provider}（可选: {sorted(SUPPORTED_PROVIDERS)}）")
+
+    cfg = _resolve(provider)
+    if not cfg["api_key"]:
+        yield (
+            f"[LLM 占位回复] 当前 provider「{provider}」尚未配置 API Key，"
+            f"已收到你的消息：{message!r}。配置后即可调用真实模型。"
+        )
+        return
+
+    payload: dict[str, Any] = {
+        "model": cfg["model"],
+        "messages": _build_messages(message, history, image_base64=image_base64),
+    }
+    if provider == "llama":
+        payload["max_tokens"] = settings.llama_max_tokens
+    yield from _stream_completion(
+        cfg["base_url"].rstrip("/") + "/chat/completions",
+        payload,
+        cfg["api_key"],
+    )
+
+
+def stream_chat_with_config(
+    message: str,
+    base_url: str,
+    api_key: str,
+    model: str,
+    history: list[dict[str, str]] | None = None,
+    image_base64: str | None = None,
+) -> Iterator[str]:
+    """以流式方式调用运行时传入的自定义 OpenAI 兼容配置。"""
+    if not api_key:
+        raise LLMError("自定义模型未提供 API Key")
+    payload: dict[str, Any] = {
+        "model": model,
+        "messages": _build_messages(message, history, image_base64=image_base64),
+    }
+    yield from _stream_completion(
+        base_url.rstrip("/") + "/chat/completions",
+        payload,
+        api_key,
+    )
 
 
 def chat_with_tools(
