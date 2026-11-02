@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..database import get_db
-from ..models import CustomModelConfig, User
+from ..models import CustomModelConfig, RunningHubConfig, User
 from ..schemas import (
     AgentConfirmationRequest,
     AgentGenerateRequest,
@@ -57,6 +57,17 @@ def agent_mcp(
         if config is None:
             raise HTTPException(400, "自定义模型配置无效")
 
+    if req.generation_backend == "runninghub":
+        config = db.get(RunningHubConfig, 1)
+        if (
+            config is None
+            or not config.api_key_encrypted
+            or not config.workflow_id
+            or not config.prompt_node_id
+            or not config.prompt_field
+        ):
+            raise HTTPException(400, "请先在 Agent 的 RunningHub 设置中完成工作流配置")
+
     check_and_increment_chat_quota(user, db)
     result = run_mcp_agent_task.delay(
         req.request,
@@ -66,6 +77,7 @@ def agent_mcp(
         [message.model_dump() for message in req.history],
         req.use_rag,
         req.quality_review_enabled,
+        generation_backend=req.generation_backend,
     )
     return {"task_id": result.id, "request": req.request}
 

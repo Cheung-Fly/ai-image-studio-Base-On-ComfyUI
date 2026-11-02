@@ -40,8 +40,13 @@ history, not a roadmap; planned work belongs in `项目技术演进路线图.md`
   When enabled, the selected vision-capable model reviews generated images or
   five evenly sampled video frames; results below 8/10 receive up to two
   prompt-refinement retries. Review failures and exhausted retries are surfaced
-  rather than treated as passing. Custom workflow JSON is not rewritten or
-  automatically retried.
+  rather than treated as passing. Arbitrary ComfyUI workflow JSON is not
+  rewritten or automatically retried.
+- Added a selectable RunningHub generation backend for Agent automation.
+  Users can securely save an API Key, discover text inputs in a custom workflow,
+  map positive/negative prompt fields, and preview downloaded outputs in the
+  existing result gallery. Visual-review retries submit new remote tasks and
+  may incur additional RunningHub charges.
 - Added an anonymous local deployment self-check for database, Redis,
   Celery worker, ComfyUI, media storage, and default LLM configuration. The
   check does not call the LLM or expose service URLs or API keys.

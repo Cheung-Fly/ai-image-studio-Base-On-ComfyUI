@@ -146,6 +146,21 @@ class CustomModelConfig(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
+class RunningHubConfig(Base):
+    """单实例 RunningHub 工作流配置（API Key 加密存储）。"""
+
+    __tablename__ = "runninghub_config"
+
+    id = Column(Integer, primary_key=True, default=1)
+    workflow_id = Column(String(128), nullable=False)
+    prompt_node_id = Column(String(128), nullable=False)
+    prompt_field = Column(String(128), nullable=False)
+    negative_prompt_node_id = Column(String(128), nullable=True)
+    negative_prompt_field = Column(String(128), nullable=True)
+    api_key_encrypted = Column(Text, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class AgentMemory(Base):
     """单实例个人 ComfyUI 偏好记忆（固定 singleton id，不按账号拆分）。"""
 

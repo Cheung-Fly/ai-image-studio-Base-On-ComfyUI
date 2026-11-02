@@ -401,11 +401,11 @@ data: [DONE]
 }
 ```
 
-### 11.2 MCP Agent 控制 ComfyUI
+### 11.2 MCP Agent 控制生成后端
 
 `POST /api/agent/mcp`
 
-提交自然语言创作或控制任务，Agent 通过 MCP 直连 ComfyUI，可生成图片/视频、查询状态和队列、管理工作流等。中断、清理队列、删除素材、释放显存及清除偏好等有影响的操作需要用户确认。
+提交自然语言创作或控制任务，Agent 通过 MCP 调用所选生成后端：本地 ComfyUI 可生成图片/视频、查询状态和队列、管理工作流等；RunningHub 使用已配置的自定义工作流生成媒体。中断、清理队列、删除素材、释放显存及清除偏好等有影响的本地操作需要用户确认。
 
 **请求体：**
 
@@ -416,7 +416,8 @@ data: [DONE]
 | provider | string | 否 | `""`、`openai`、`llama` 或 `custom`；默认 `""` | 空值使用服务端默认 provider |
 | custom_config_id | integer | 条件必填 | `provider=custom` 时必须是当前用户的有效配置 ID | 选择自定义模型 |
 | use_rag | boolean | 否 | `false` | 将知识库检索结果作为 Agent 参考资料 |
-| quality_review_enabled | boolean | 否 | `false` | 开启内置图片/视频生成的视觉质量 Harness；当前所选模型需支持图片输入。低于 8/10 时最多自动优化重生成 2 次；视频评审均匀抽取最多 5 帧。任意自定义工作流暂不自动改写重试 |
+| generation_backend | string | 否 | `comfyui` 或 `runninghub`；默认 `comfyui` | 选择生成后端，与 LLM provider 分开 |
+| quality_review_enabled | boolean | 否 | `false` | 开启图片/视频生成的视觉质量 Harness；当前所选模型需支持图片输入。低于 8/10 时最多自动优化重生成 2 次；视频评审均匀抽取最多 5 帧。RunningHub 重试会再次提交远程任务，可能产生费用 |
 
 **响应 `202`：**
 
@@ -426,6 +427,27 @@ data: [DONE]
   "request": "先看下状态，再生成一张赛博风格城市夜景"
 }
 ```
+
+### 11.2.1 RunningHub 工作流配置
+
+- `GET /api/runninghub/config`：读取工作流 ID 和提示词节点映射，不返回 API Key 明文。
+- `PUT /api/runninghub/config`：保存单个 RunningHub 工作流配置；首次保存必须提供 `api_key`，后续可省略或传空字符串以保留已保存的密钥。
+- `POST /api/runninghub/workflow-nodes`：读取给定工作流的文本输入，用于选择正向和可选的负向提示词映射。首次配置时请求需包含 `api_key`。
+
+保存请求示例：
+
+```json
+{
+  "api_key": "用户的 RunningHub API Key",
+  "workflow_id": "workflow-id",
+  "prompt_node_id": "6",
+  "prompt_field": "text",
+  "negative_prompt_node_id": "7",
+  "negative_prompt_field": "text"
+}
+```
+
+API Key 使用应用配置的加密密钥存储，读取接口不会返回密钥。RunningHub 成功输出会下载到 MCP Agent 媒体目录，并可通过 `GET /api/agent/files` 和 `GET /api/agent/files/{filename}` 访问。输出下载只允许 HTTPS 及受信任的 RunningHub 文件域名。
 
 ### 11.3 查询 Agent 任务结果
 
@@ -450,7 +472,7 @@ data: [DONE]
 
 任务执行期间，`state` 可为 `STARTED` 或 `PROGRESS`；`PROGRESS` 时 `progress.current_tool` 和 `progress.running` 表示正在执行的工具，`progress.steps` 包含已完成的 MCP 工具调用记录。完成后 `result` 返回最终回答和全部调用步骤。`result` 内输出文件包含 `filename`、`kind` 和本机路径。
 
-开启 Harness 后，内置图片/视频生成工具结果还包含 `quality_review`，其中 `status` 为 `passed`、`retry_limit`、`retry_failed` 或 `error`，`attempts` 列出每轮评分和问题；只有达到 8/10 才标记为通过。模型不支持视觉输入或审查失败时会明确显示为未完成，不会默认为通过。
+开启 Harness 后，支持的图片/视频生成工具结果还包含 `quality_review`，其中 `status` 为 `passed`、`retry_limit`、`retry_failed` 或 `error`，`attempts` 列出每轮评分和问题；只有达到 8/10 才标记为通过。模型不支持视觉输入或审查失败时会明确显示为未完成，不会默认为通过；RunningHub 重新生成会再次提交远程任务。
 
 ### 11.4 预览 MCP Agent 生成文件
 

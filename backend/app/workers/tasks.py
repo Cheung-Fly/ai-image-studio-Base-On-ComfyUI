@@ -180,8 +180,9 @@ def run_mcp_agent_task(
     history: list[dict[str, str]] | None = None,
     use_rag: bool = False,
     quality_review_enabled: bool = False,
+    generation_backend: str = "comfyui",
 ):
-    """MCP Agent 任务：LLM 经 MCP 协议自主控制 ComfyUI。"""
+    """MCP Agent 任务：LLM 经 MCP 协议控制本地 ComfyUI 或 RunningHub。"""
     import asyncio
     import time
     import uuid
@@ -276,6 +277,7 @@ def run_mcp_agent_task(
                     provider=provider,
                     custom_config=custom_config,
                 ),
+                generation_backend=generation_backend,
             )
         )
     except Exception as exc:

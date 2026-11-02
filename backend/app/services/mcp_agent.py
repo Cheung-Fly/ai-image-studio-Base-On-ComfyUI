@@ -43,9 +43,17 @@ SYSTEM_PROMPT = (
     "用户要求打开 ComfyUI 网页时，请提示其点击界面中的“打开 ComfyUI”入口，不要声称已打开。"
     "完成后用中文简要汇报结果和生成文件路径。不要编造工具结果。"
 )
+RUNNINGHUB_SYSTEM_PROMPT = (
+    "你是 RunningHub 创作 Agent，通过用户设置的 RunningHub 工作流生成图片或视频。"
+    "用户要求生成媒体时，先把描述整理为清晰、详细的提示词，再调用 runninghub_generate；"
+    "需要负向提示词时一并传入 negative_prompt。不要调用或声称操作本地 ComfyUI。"
+    "生成使用用户配置的 Workflow ID，工具会等待任务完成并下载输出；"
+    "完成后用中文简要汇报结果和生成文件。不要编造工具结果。"
+)
 REVIEWABLE_GENERATION_TOOLS = {
     "comfy_generate_image",
     "comfy_generate_video",
+    "runninghub_generate",
 }
 
 
@@ -236,10 +244,15 @@ def _quality_review_notes(steps: list[dict[str, Any]]) -> list[str]:
     return notes
 
 
-def _server_params() -> StdioServerParameters:
+def _server_params(generation_backend: str = "comfyui") -> StdioServerParameters:
     return StdioServerParameters(
         command=sys.executable,
-        args=["-m", "app.mcp_server"],
+        args=[
+            "-m",
+            "app.mcp_server.runninghub"
+            if generation_backend == "runninghub"
+            else "app.mcp_server",
+        ],
         cwd=str(BASE_DIR),
         env={**os.environ, "PYTHONIOENCODING": "utf-8"},
     )
@@ -268,14 +281,15 @@ def _system_prompt(
     memory: dict[str, Any] | None,
     knowledge_context: list[tuple[str, str]] | None = None,
     quality_review_enabled: bool = False,
+    generation_backend: str = "comfyui",
 ) -> str:
     saved = {
         key: value
         for key, value in (memory or {}).items()
         if key != "updated_at" and value not in (None, "")
     }
-    prompt = SYSTEM_PROMPT
-    if saved:
+    prompt = RUNNINGHUB_SYSTEM_PROMPT if generation_backend == "runninghub" else SYSTEM_PROMPT
+    if saved and generation_backend == "comfyui":
         prompt += (
             "\n用户保存的 ComfyUI 偏好（JSON 数据）："
             + json.dumps(saved, ensure_ascii=False)
@@ -292,8 +306,7 @@ def _system_prompt(
         prompt += (
             "\n视觉质量 Harness 已启用：图片/视频生成后会自动审查，"
             "未达到 8/10 时最多自动优化并重生成 2 次。"
-            "该自动重生成目前仅适用于内置 comfy_generate_image/comfy_generate_video 工具；"
-            "用户指定自定义工作流时，不要声称其经过了自动审查。"
+            "RunningHub 重新生成会再次提交远程任务，可能产生额外费用。"
             "请如实向用户汇报最终审查结果，不要把未通过或审查失败说成通过。"
         )
     return prompt
@@ -312,6 +325,7 @@ async def run_mcp_agent(
     knowledge_context: list[tuple[str, str]] | None = None,
     quality_review_enabled: bool = False,
     quality_reviewer: Callable[..., dict[str, Any]] | None = None,
+    generation_backend: str = "comfyui",
 ) -> dict[str, Any]:
     """运行 Agent，返回 {answer, steps:[{tool, arguments, result}]}。"""
     steps: list[dict[str, Any]] = []
@@ -319,7 +333,7 @@ async def run_mcp_agent(
     if stderr is None:
         raise RuntimeError("MCP stdio client requires an available original stderr stream")
     async with (
-        stdio_client(params or _server_params(), errlog=stderr) as (read, write),
+        stdio_client(params or _server_params(generation_backend), errlog=stderr) as (read, write),
         ClientSession(read, write) as session,
     ):
         await session.initialize()
@@ -327,7 +341,9 @@ async def run_mcp_agent(
         messages: list[dict[str, Any]] = [
             {
                 "role": "system",
-                "content": _system_prompt(memory, knowledge_context, quality_review_enabled),
+                "content": _system_prompt(
+                    memory, knowledge_context, quality_review_enabled, generation_backend
+                ),
             },
         ]
         messages.extend(

@@ -22,6 +22,7 @@ from .api import (
     me,
     model_presets,
     rag_docs,
+    runninghub,
     tasks,
     upload,
     video,
@@ -63,6 +64,7 @@ app.include_router(instance.router, prefix="/api")
 app.include_router(chat.router, prefix="/api")
 app.include_router(conversations.router, prefix="/api")
 app.include_router(custom_models.router, prefix="/api")
+app.include_router(runninghub.router, prefix="/api")
 app.include_router(workflows.router, prefix="/api")
 app.include_router(model_presets.router, prefix="/api")
 app.include_router(rag_docs.router, prefix="/api")

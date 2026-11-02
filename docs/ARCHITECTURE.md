@@ -103,11 +103,13 @@ SQLite stores task and media metadata.
 
 ### 4.2 MCP Agent control
 
-1. The authenticated client submits a natural-language request to
+1. The anonymous single-instance client submits a natural-language request to
    `POST /api/agent/mcp`.
 2. The API queues a Celery task and returns a task identifier.
-3. The worker starts `python -m app.mcp_server` over MCP stdio, discovers its
-   tools, and presents those tool schemas to the configured LLM.
+3. The worker starts the selected MCP server over stdio: `app.mcp_server` for
+   local ComfyUI or `app.mcp_server.runninghub` for the configured RunningHub
+   workflow. It discovers that server's tools and presents their schemas to
+   the configured LLM.
 4. The LLM selects a tool; the agent invokes it through MCP and returns its
    result to the LLM for the next decision or final response.
 5. Tools that require user confirmation pause the task until the client
@@ -125,10 +127,11 @@ generation is followed by a visual review using the selected LLM configuration.
 Images are reviewed directly; videos are sampled at up to five evenly spaced
 timestamps using the bundled `imageio-ffmpeg` executable. Scores of 8/10 or
 higher pass; lower scores trigger an evaluator-provided prompt revision and at
-most two additional generations. Review errors and exhausted retries are
+most two additional generations. RunningHub retries submit another remote task
+and may incur additional charges. Review errors and exhausted retries are
 returned explicitly and are never represented as a passing result. The option
 defaults to false, preserving the existing single-generation flow. Arbitrary
-custom workflow JSON is not rewritten or automatically retried.
+ComfyUI workflow JSON is not rewritten or automatically retried.
 
 ### 4.3 Chat, streaming, and retrieval
 
@@ -148,15 +151,15 @@ custom workflow JSON is not rewritten or automatically retried.
 
 - **Custom operation** opens the ComfyUI web interface at `COMFYUI_WEB_URL` by
   default. The user can save a browser-local override in the UI; it is scoped
-  by the signed-in username and does not change server configuration. The
+  to the local single-instance profile and does not change server configuration. The
   browser-facing URL is separate from `COMFYUI_BASE_URL`, which the backend
   and MCP tools use for API calls.
 - **Agent automation** submits every prompt to the MCP Agent. The selected
   built-in or custom LLM provider, recent conversation history, and optional
-  RAG setting are included in the request. Image/video generation and
-  ComfyUI-management tools run in the Celery worker. The Agent does not need
-  browser automation for ComfyUI control; opening the web UI is a user-clicked
-  frontend link.
+  RAG setting are included in the request; generation backend selection is
+  independent of the LLM provider. The worker runs either local ComfyUI tools
+  or the configured RunningHub workflow tool. The Agent does not need browser
+  automation for ComfyUI control; opening the web UI is a user-clicked link.
 - The Agent gallery combines the existing task-based media API with files
   produced by MCP tools. Recent Agent conversation history is stored in the
   browser's `localStorage`; legacy chat endpoints and direct generation APIs
@@ -168,7 +171,8 @@ custom workflow JSON is not rewritten or automatically retried.
 | Data | Current storage | Notes |
 |---|---|---|
 | User, task, image metadata, legacy chat conversations, and usage records | SQLite | Shared application database; schema/entities are in `backend/app/models.py`. |
-| Recent MCP Agent conversation | Browser `localStorage` | Stored per username in the browser; it is not synchronized to the backend. |
+| Recent MCP Agent conversation | Browser `localStorage` | Stored in the browser; it is not synchronized to the backend. |
+| RunningHub API key and workflow mapping | SQLite | API key is encrypted at rest; configuration responses omit the key. |
 | Generated image/video bytes | Local filesystem | The database stores metadata and relative file paths; API endpoints enforce access checks when serving files. |
 | Uploaded reference media | Configured ComfyUI input directory | The upload API returns the filename used by workflows. |
 | Dynamic RAG documents and index | Configured local data directories | Persisted according to the deployment's volume/configuration. |

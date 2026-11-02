@@ -206,6 +206,7 @@
   .chat-input-row textarea { flex: 1; min-height: 44px; margin-bottom: 0; resize: none; }
   .chat-input-row button { flex-shrink: 0; padding: 0 20px; }
   .chat-fill-hint { font-size: 12px; color: var(--muted); margin-top: 6px; }
+  .chat-backend-row { display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:8px; font-size:13px; }
 
   /* ---- 对话助手侧边栏布局 ---- */
   .chat-layout { display: flex; gap: 16px; min-height: 420px; }
@@ -357,10 +358,11 @@
           <div style="display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end;">
             <a id="open-comfyui-agent" class="primary-link" href="#" target="_blank" rel="noopener noreferrer" aria-disabled="true">打开 ComfyUI</a>
             <button id="btn-agent-memory" type="button" style="font-size:12px; padding:2px 10px;">个人记忆</button>
+            <button id="btn-runninghub-settings" type="button" style="font-size:12px; padding:2px 10px;">RunningHub 设置</button>
             <button id="btn-clear-chat" type="button" style="font-size:12px; padding:2px 10px;">清空会话</button>
           </div>
         </div>
-        <div class="hint" style="margin:0 0 12px;">描述你想要的图片或视频，Agent 会选择 ComfyUI 工作流、执行生成并展示结果。</div>
+        <div class="hint" style="margin:0 0 12px;">描述你想要的图片或视频，Agent 会通过所选生成后端执行并展示结果。</div>
         <div class="chat-layout">
           <div class="chat-sidebar">
             <div class="sidebar-title">模型</div>
@@ -385,16 +387,39 @@
           </div>
           <div class="chat-main">
             <div id="chat-box" class="chat-box">
-              <div class="chat-msg system">你好，我是 ComfyUI 创作 Agent。你可以描述想生成的图片或视频。</div>
+              <div class="chat-msg system">你好，我是创作 Agent。你可以描述想生成的图片或视频。</div>
+            </div>
+            <div class="chat-backend-row">
+              <label for="generation-backend">生成后端</label>
+              <select id="generation-backend" style="width:auto; margin:0;">
+                <option value="comfyui">本地 ComfyUI</option>
+                <option value="runninghub">RunningHub</option>
+              </select>
+              <span id="runninghub-backend-state" class="chat-fill-hint" style="margin:0;"></span>
             </div>
             <div class="chat-input-row">
               <textarea id="chat-input" placeholder="输入图片或视频创作需求，回车发送…"></textarea>
               <label class="rag-toggle" style="display:flex; align-items:center; gap:4px; white-space:nowrap; font-size:13px; color:var(--muted); cursor:pointer;" title="开启后回答基于项目文档知识库"><input type="checkbox" id="chat-rag-toggle"> 知识库</label>
-              <label class="rag-toggle" style="display:flex; align-items:center; gap:4px; white-space:nowrap; font-size:13px; color:var(--muted); cursor:pointer;" title="内置图片/视频生成后使用当前模型进行视觉审查；需支持图片输入，未达 8/10 最多自动优化重试 2 次，可能增加模型与 GPU 成本"><input type="checkbox" id="chat-quality-review-toggle"> 视觉审查</label>
+              <label class="rag-toggle" style="display:flex; align-items:center; gap:4px; white-space:nowrap; font-size:13px; color:var(--muted); cursor:pointer;" title="生成后使用当前模型进行视觉审查；需支持图片输入，未达 8/10 最多自动优化重试 2 次，RunningHub 重试会重新提交任务并可能产生费用"><input type="checkbox" id="chat-quality-review-toggle"> 视觉审查</label>
               <button id="btn-rag-manage" type="button" title="管理知识库文档" style="flex-shrink:0;">管理</button>
               <button id="btn-chat">执行</button>
             </div>
-            <div id="chat-mode-hint" class="chat-fill-hint">Agent 通过 MCP 调用 ComfyUI 工具；有影响的操作会先请求确认。</div>
+            <div id="chat-mode-hint" class="chat-fill-hint">Agent 通过 MCP 调用所选生成后端；有影响的本地操作会先请求确认。</div>
+            <div id="runninghub-panel" style="display:none; margin-top:8px; border:1px solid var(--border); border-radius:8px; padding:10px;">
+              <div style="font-weight:500; font-size:13px; margin-bottom:8px;">RunningHub 工作流配置</div>
+              <div class="hint" style="margin:0 0 8px;">API Key 加密保存在服务端，不会在读取配置时返回。配置单个工作流；更换工作流后可重新加载文本输入。</div>
+              <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:8px;">
+                <label style="font-size:12px;">API Key<input id="runninghub-api-key" type="password" autocomplete="new-password" placeholder="首次配置必填；留空保留已保存密钥"></label>
+                <label style="font-size:12px;">Workflow ID<input id="runninghub-workflow-id" placeholder="RunningHub 工作流 ID"></label>
+                <label style="font-size:12px;">正向提示词输入<select id="runninghub-prompt-field"><option value="">先加载工作流文本输入</option></select></label>
+                <label style="font-size:12px;">负向提示词输入（可选）<select id="runninghub-negative-field"><option value="">不映射</option></select></label>
+              </div>
+              <div style="display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin-top:8px;">
+                <button id="btn-runninghub-load-nodes" type="button">加载工作流文本输入</button>
+                <button id="btn-runninghub-save" type="button">保存 RunningHub 配置</button>
+                <span id="runninghub-config-status" class="chat-fill-hint" style="margin:0;"></span>
+              </div>
+            </div>
             <div id="agent-memory-panel" style="display:none; margin-top:8px; border:1px solid var(--border); border-radius:8px; padding:10px;">
               <div style="font-weight:500; font-size:13px; margin-bottom:8px;">个人 ComfyUI 偏好</div>
               <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:8px;">
@@ -473,6 +498,7 @@ let agentMessages = [];
 let currentCustomConfigId = null;
 let chatAgentBusy = false;
 let modelSelectionMade = false;
+let runningHubConfig = null;
 
 $("open-comfyui").addEventListener("click", (event) => {
   if (!comfyUIWebUrl) event.preventDefault();
@@ -735,6 +761,81 @@ function currentProvider() {
   return active ? active.dataset.provider : "openai";
 }
 
+function runningHubMappingValue(nodeId, fieldName) {
+  return JSON.stringify({ node_id: nodeId, field_name: fieldName });
+}
+
+function populateRunningHubFields(fields, config = runningHubConfig) {
+  const promptSelect = $("runninghub-prompt-field");
+  const negativeSelect = $("runninghub-negative-field");
+  promptSelect.replaceChildren(new Option("选择正向提示词输入", ""));
+  negativeSelect.replaceChildren(new Option("不映射", ""));
+  for (const field of fields) {
+    const value = runningHubMappingValue(field.node_id, field.field_name);
+    const label = field.node_id + " · " + field.node_title + " · " + field.field_name;
+    promptSelect.add(new Option(label, value));
+    negativeSelect.add(new Option(label, value));
+  }
+  if (config?.prompt_node_id && config?.prompt_field) {
+    promptSelect.value = runningHubMappingValue(config.prompt_node_id, config.prompt_field);
+  }
+  if (config?.negative_prompt_node_id && config?.negative_prompt_field) {
+    negativeSelect.value = runningHubMappingValue(
+      config.negative_prompt_node_id,
+      config.negative_prompt_field
+    );
+  }
+}
+
+async function loadRunningHubConfig() {
+  const response = await apiFetch("/api/runninghub/config");
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.detail || "读取 RunningHub 配置失败");
+  runningHubConfig = result;
+  $("runninghub-backend-state").textContent = result.configured
+    ? "工作流已配置"
+    : "尚未配置 RunningHub 工作流";
+  if (result.configured) $("runninghub-workflow-id").value = result.workflow_id || "";
+  return result;
+}
+
+async function fetchRunningHubNodes() {
+  const workflowId = $("runninghub-workflow-id").value.trim();
+  const apiKey = $("runninghub-api-key").value.trim();
+  if (!workflowId) throw new Error("请填写 Workflow ID");
+  const body = { workflow_id: workflowId };
+  if (apiKey) body.api_key = apiKey;
+  const response = await apiFetch("/api/runninghub/workflow-nodes", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.detail || "读取工作流输入失败");
+  populateRunningHubFields(
+    result.fields,
+    runningHubConfig?.workflow_id === workflowId ? runningHubConfig : null
+  );
+  $("runninghub-config-status").textContent =
+    "已发现 " + result.fields.length + " 个文本输入，请选择正向提示词映射。";
+}
+
+function readRunningHubMapping(value) {
+  if (!value) return null;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
+}
+
+function updateGenerationBackendHint() {
+  const backend = $("generation-backend").value;
+  const hint = $("chat-mode-hint");
+  hint.textContent = backend === "runninghub"
+    ? "Agent 将通过已配置的 RunningHub 工作流生成；视觉审查重试可能再次提交远程任务并产生费用。"
+    : "Agent 通过 MCP 调用本地 ComfyUI 工具；有影响的操作会先请求确认。";
+}
+
 function appendChatMsg(role, text) {
   const box = $("chat-box");
   const div = document.createElement("div");
@@ -897,9 +998,22 @@ async function sendChat() {
   if (!text) return;
 
   const provider = currentProvider();
+  const generationBackend = $("generation-backend").value;
   if (provider === "custom" && !currentCustomConfigId) {
     appendChatMsg("system", "请先选择一个有效的自定义模型配置。");
     return;
+  }
+  if (generationBackend === "runninghub") {
+    try {
+      const config = await loadRunningHubConfig();
+      if (!config.configured) {
+        appendChatMsg("system", "请先打开“RunningHub 设置”并完成 API Key 与工作流配置。");
+        return;
+      }
+    } catch (error) {
+      appendChatMsg("system", "读取 RunningHub 配置失败：" + error.message);
+      return;
+    }
   }
   const history = agentHistory.slice(-20);
   input.value = "";
@@ -913,7 +1027,7 @@ async function sendChat() {
   chatAgentBusy = true;
 
   try {
-    const answer = await sendMcpAgent(text, provider, history);
+    const answer = await sendMcpAgent(text, provider, history, generationBackend);
     agentHistory.push({ role: "assistant", content: answer });
     agentHistory = agentHistory.slice(-20);
     agentMessages = agentHistory.map((message) => ({ role: message.role, text: message.content }));
@@ -1059,12 +1173,13 @@ async function showAgentFiles(assistantMsg, steps) {
   $("chat-box").scrollTop = $("chat-box").scrollHeight;
 }
 
-async function sendMcpAgent(text, provider, history) {
+async function sendMcpAgent(text, provider, history, generationBackend) {
   const btn = $("btn-chat");
   const request = {
     request: text,
     history,
     provider,
+    generation_backend: generationBackend,
     use_rag: $("chat-rag-toggle").checked,
     quality_review_enabled: $("chat-quality-review-toggle").checked,
   };
@@ -1079,7 +1194,12 @@ async function sendMcpAgent(text, provider, history) {
   }
 
   btn.textContent = "执行中…";
-  const progressMsg = appendChatMsg("assistant", "Agent 已接收，正在连接 ComfyUI…");
+  const progressMsg = appendChatMsg(
+    "assistant",
+    generationBackend === "runninghub"
+      ? "Agent 已接收，正在连接 RunningHub…"
+      : "Agent 已接收，正在连接 ComfyUI…"
+  );
   const deadline = Date.now() + 20 * 60 * 1000;
   let progressKey = "";
   const handledConfirmations = new Set();
@@ -1243,6 +1363,95 @@ $("btn-save-agent-memory").addEventListener("click", async () => {
 });
 
 $("btn-clear-agent-memory").addEventListener("click", clearAgentMemory);
+
+const savedGenerationBackend = localStorage.getItem("generation_backend:" + LOCAL_PROFILE_ID);
+$("generation-backend").value =
+  savedGenerationBackend === "runninghub" ? "runninghub" : "comfyui";
+updateGenerationBackendHint();
+loadRunningHubConfig().catch((error) => {
+  $("runninghub-backend-state").textContent = "配置状态不可读：" + error.message;
+});
+
+$("generation-backend").addEventListener("change", () => {
+  localStorage.setItem(
+    "generation_backend:" + LOCAL_PROFILE_ID,
+    $("generation-backend").value
+  );
+  updateGenerationBackendHint();
+});
+
+$("btn-runninghub-settings").addEventListener("click", async () => {
+  const panel = $("runninghub-panel");
+  if (panel.style.display !== "none") {
+    panel.style.display = "none";
+    return;
+  }
+  panel.style.display = "block";
+  $("runninghub-config-status").textContent = "正在读取配置…";
+  try {
+    const config = await loadRunningHubConfig();
+    $("runninghub-workflow-id").value = config.workflow_id || "";
+    if (config.configured) await fetchRunningHubNodes();
+    else $("runninghub-config-status").textContent = "尚未配置 API Key 和工作流。";
+  } catch (error) {
+    $("runninghub-config-status").textContent = "读取失败：" + error.message;
+  }
+});
+
+$("btn-runninghub-load-nodes").addEventListener("click", async () => {
+  const button = $("btn-runninghub-load-nodes");
+  button.disabled = true;
+  $("runninghub-config-status").textContent = "正在读取工作流文本输入…";
+  try {
+    await fetchRunningHubNodes();
+  } catch (error) {
+    $("runninghub-config-status").textContent = "加载失败：" + error.message;
+  } finally {
+    button.disabled = false;
+  }
+});
+
+$("runninghub-workflow-id").addEventListener("change", () => {
+  $("runninghub-prompt-field").value = "";
+  $("runninghub-negative-field").value = "";
+});
+
+$("btn-runninghub-save").addEventListener("click", async () => {
+  const promptMapping = readRunningHubMapping($("runninghub-prompt-field").value);
+  const negativeMapping = readRunningHubMapping($("runninghub-negative-field").value);
+  if (!promptMapping) {
+    $("runninghub-config-status").textContent = "请先加载工作流并选择正向提示词输入。";
+    return;
+  }
+  const body = {
+    workflow_id: $("runninghub-workflow-id").value.trim(),
+    prompt_node_id: promptMapping.node_id,
+    prompt_field: promptMapping.field_name,
+    negative_prompt_node_id: negativeMapping?.node_id || null,
+    negative_prompt_field: negativeMapping?.field_name || null,
+  };
+  const apiKey = $("runninghub-api-key").value.trim();
+  if (apiKey) body.api_key = apiKey;
+  const button = $("btn-runninghub-save");
+  button.disabled = true;
+  $("runninghub-config-status").textContent = "正在加密保存配置…";
+  try {
+    const response = await apiFetch("/api/runninghub/config", {
+      method: "PUT",
+      body: JSON.stringify(body),
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.detail || "保存 RunningHub 配置失败");
+    $("runninghub-api-key").value = "";
+    runningHubConfig = null;
+    await loadRunningHubConfig();
+    $("runninghub-config-status").textContent = "RunningHub 配置已保存。";
+  } catch (error) {
+    $("runninghub-config-status").textContent = "保存失败：" + error.message;
+  } finally {
+    button.disabled = false;
+  }
+});
 
 $("btn-chat").addEventListener("click", sendChat);
 

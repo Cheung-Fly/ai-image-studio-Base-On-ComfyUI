@@ -12,15 +12,15 @@
 | ---- | -------------------------------------------------- |
 | 后端   | FastAPI + SQLAlchemy 2 + Pydantic v2               |
 | 任务队列 | Celery 5 + Redis（broker / result backend）          |
-| 生成引擎 | ComfyUI（API 模式，`http://127.0.0.1:8188`）            |
+| 生成引擎 | 本地 ComfyUI（API 模式）+ 可选 RunningHub Workflow API |
 | 存储   | SQLite（数据）+ 本地文件（图片）                               |
 | 前端   | 原生 HTML / CSS / JS 单页（`frontend/index.html`，无构建步骤） |
-| 访问模式 | 单实例匿名访问；自定义模型 API Key 加密存储                    |
+| 访问模式 | 单实例匿名访问；模型与 RunningHub API Key 加密存储                    |
 
 ## 功能一览
 
 1. **ComfyUI 自由操作**：打开原生节点和工作流界面；网页地址默认使用 `COMFYUI_WEB_URL`，也可按浏览器保存覆盖地址，并自检本地生成依赖。
-2. **Agent 自动化**：始终由 MCP Agent 执行对话，可按请求生成图片或视频、查询 ComfyUI 状态/工作流/队列并执行管理操作；有影响的操作需要用户确认。可选开启视觉质量 Harness，内置生成工具会直接评审图像、均匀抽取视频 5 帧；低于 8/10 时最多自动优化并重生成 2 次。自定义工作流暂不自动改写重试。
+2. **Agent 自动化**：始终由 MCP Agent 执行对话；生成后端可切换为本地 ComfyUI 或 RunningHub 自定义工作流，LLM 提供方与生成后端分别选择。本地后端可查询 ComfyUI 状态/工作流/队列并执行管理操作；有影响的本地操作需要用户确认。可选开启视觉质量 Harness，支持的生成结果会被审查，低于 8/10 时最多自动优化并重生成 2 次；RunningHub 重试会再次提交远程任务并可能产生费用。
 3. **模型选择**：支持配置的 OpenAI 兼容服务、llama.cpp 和用户自定义 OpenAI 兼容模型；自定义 API Key 加密存储。
 4. **创作助手能力**：可选启用项目文档 RAG、管理知识文档、编辑生成偏好；最近 20 条 Agent 对话历史保存在当前浏览器。
 5. **创作结果库**：合并展示原任务 API 与 MCP Agent 生成的图片/视频，可点击预览；后端生图、视频和聊天 API 仍保留供外部集成使用。
@@ -194,6 +194,9 @@ Invoke-RestMethod http://127.0.0.1:8000/api/images
 | GET    | `/api/agent/result/{task_id}`       | 查询 Agent 任务状态与结果                      |
 | GET    | `/api/agent/files`                  | 列出 MCP Agent 生成的媒体                    |
 | GET    | `/api/agent/files/{filename}`       | 读取 MCP Agent 生成的媒体文件用于预览           |
+| GET    | `/api/runninghub/config`            | 读取 RunningHub 工作流配置（不含 API Key）       |
+| PUT    | `/api/runninghub/config`            | 保存 RunningHub 配置（API Key 加密存储）          |
+| POST   | `/api/runninghub/workflow-nodes`    | 发现工作流可映射的文本输入                      |
 | GET    | `/api/agent/memory`                 | 查看个人助手保存的 ComfyUI 偏好                 |
 | PATCH  | `/api/agent/memory`                 | 更新个人助手偏好                               |
 | DELETE | `/api/agent/memory`                 | 清除个人助手全部偏好记忆                         |
@@ -218,10 +221,13 @@ Swagger：<http://127.0.0.1:8000/docs>
 - **V8**：为个人助手增加可查看/编辑/清除的持久偏好记忆，并让 MCP Agent 在生成时使用这些默认偏好。
 - **V9**：为通用聊天 API 增加 SSE 流式响应，同时保留 JSON 对话接口。
 - **未发布**：前端拆分为“自定义操作 / Agent 自动化”；Agent 支持模型选择、历史上下文、可选 RAG 和对话式视频生成。
+- **V11（开发中）**：Agent 可切换本地 ComfyUI 或 RunningHub；支持加密保存 API Key、发现并映射自定义工作流文本节点、下载远程输出到结果库。
 
 ### MCP Agent 使用方式
 
 在“Agent 自动化”区选择模型并输入自然语言指令（例如“先看下状态，再画一只太空柯基”或“生成一段黄昏海边的短视频”）。在“自定义操作”区可直接打开 ComfyUI 网页。也可以直接调用 Agent API：
+
+生成后端与 LLM 模型相互独立。在 Agent 区选择 **RunningHub** 后，先打开 **RunningHub 设置**，填写 API Key 和 Workflow ID，加载工作流文本输入并选择正向（以及可选的负向）提示词节点后保存。API Key 只会加密保存在服务端，读取配置时不会返回明文。
 
 1. 提交自然语言指令：
 
