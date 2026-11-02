@@ -315,8 +315,11 @@ async def run_mcp_agent(
 ) -> dict[str, Any]:
     """运行 Agent，返回 {answer, steps:[{tool, arguments, result}]}。"""
     steps: list[dict[str, Any]] = []
+    stderr = sys.__stderr__
+    if stderr is None:
+        raise RuntimeError("MCP stdio client requires an available original stderr stream")
     async with (
-        stdio_client(params or _server_params()) as (read, write),
+        stdio_client(params or _server_params(), errlog=stderr) as (read, write),
         ClientSession(read, write) as session,
     ):
         await session.initialize()
