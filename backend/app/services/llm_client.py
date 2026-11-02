@@ -24,7 +24,7 @@ class LLMError(Exception):
 def _build_messages(
     message: str,
     history: list[dict[str, str]] | None = None,
-    image_base64: str | None = None,
+    image_base64: str | list[str] | None = None,
 ) -> list[dict[str, Any]]:
     """把前端传来的 history + 当前消息拼成 messages 列表。
 
@@ -38,11 +38,15 @@ def _build_messages(
         if role in ("user", "assistant") and content:
             messages.append({"role": role, "content": content})
     if image_base64:
+        image_urls = image_base64 if isinstance(image_base64, list) else [image_base64]
         messages.append(
             {
                 "role": "user",
                 "content": [
-                    {"type": "image_url", "image_url": {"url": image_base64}},
+                    *(
+                        {"type": "image_url", "image_url": {"url": image_url}}
+                        for image_url in image_urls
+                    ),
                     {"type": "text", "text": message},
                 ],
             }
@@ -73,7 +77,7 @@ def chat(
     message: str,
     history: list[dict[str, str]] | None = None,
     provider: str = "",
-    image_base64: str | None = None,
+    image_base64: str | list[str] | None = None,
 ) -> str:
     """调用指定 provider 的 LLM，返回回复文本。"""
     provider = provider or settings.default_llm_provider
@@ -142,7 +146,7 @@ def chat_with_config(
     api_key: str,
     model: str,
     history: list[dict[str, str]] | None = None,
-    image_base64: str | None = None,
+    image_base64: str | list[str] | None = None,
 ) -> str:
     """用运行时传入的自定义配置调用 OpenAI 兼容 LLM（用于用户自带模型）。
 
@@ -262,7 +266,7 @@ def stream_chat(
     message: str,
     history: list[dict[str, str]] | None = None,
     provider: str = "",
-    image_base64: str | None = None,
+    image_base64: str | list[str] | None = None,
 ) -> Iterator[str]:
     """以文本片段形式调用内置 provider。"""
     provider = provider or settings.default_llm_provider
@@ -296,7 +300,7 @@ def stream_chat_with_config(
     api_key: str,
     model: str,
     history: list[dict[str, str]] | None = None,
-    image_base64: str | None = None,
+    image_base64: str | list[str] | None = None,
 ) -> Iterator[str]:
     """以流式方式调用运行时传入的自定义 OpenAI 兼容配置。"""
     if not api_key:
@@ -316,15 +320,21 @@ def chat_with_tools(
     messages: list[dict[str, Any]],
     tools: list[dict[str, Any]],
     provider: str = "",
+    custom_config: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """OpenAI function calling：返回 assistant message（含 content 或 tool_calls）。
 
     本地 llama.cpp 需以 --jinja 启动 llama-server 才支持 tools。
     """
     provider = provider or settings.default_llm_provider
-    if provider not in SUPPORTED_PROVIDERS:
+    if provider == "custom":
+        if not custom_config:
+            raise LLMError("自定义模型配置无效")
+        cfg = custom_config
+    elif provider not in SUPPORTED_PROVIDERS:
         raise LLMError(f"不支持的 provider: {provider}（可选: {sorted(SUPPORTED_PROVIDERS)}）")
-    cfg = _resolve(provider)
+    else:
+        cfg = _resolve(provider)
     if not cfg["api_key"]:
         raise LLMError(f"provider「{provider}」未配置 API Key，无法运行 MCP Agent")
 

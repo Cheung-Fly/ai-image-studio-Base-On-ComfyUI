@@ -18,12 +18,41 @@ history, not a roadmap; planned work belongs in `项目技术演进路线图.md`
 
 ## Unreleased
 
+### Changed
+
+- The unauthenticated `/health` endpoint now reports API liveness only and no
+  longer returns the internal ComfyUI API address; anonymous diagnostics
+  provides the dependency checks.
+- Removed the login/register UI, JWT endpoints, and bearer authentication for
+  the single-instance edition. Business APIs are anonymous and must remain
+  restricted to loopback or a trusted network.
+- Reorganized the browser UI into **Custom operation** (open the configured
+  ComfyUI web interface) and **Agent automation** (chat-driven image/video
+  generation and ComfyUI control). Removed the duplicate in-app generation
+  forms and ordinary chat mode; the underlying generation and chat APIs remain
+  available for integrations.
+- Agent automation now uses the selected built-in or custom LLM, sends recent
+  browser-stored conversation history, and can optionally use RAG context.
+
 ### Added
 
+- Added an optional visual quality Harness for MCP image/video generation.
+  When enabled, the selected vision-capable model reviews generated images or
+  five evenly sampled video frames; results below 8/10 receive up to two
+  prompt-refinement retries. Review failures and exhausted retries are surfaced
+  rather than treated as passing. Custom workflow JSON is not rewritten or
+  automatically retried.
+- Added an anonymous local deployment self-check for database, Redis,
+  Celery worker, ComfyUI, media storage, and default LLM configuration. The
+  check does not call the LLM or expose service URLs or API keys.
 - V9 adds `POST /api/chat/stream` for server-sent event (SSE) chat output while
   retaining the JSON chat endpoint. Streaming supports configured LLM providers,
   RAG, and image input. This work is in [PR #4](https://github.com/Cheung-Fly/ai-image-studio-Base-On-ComfyUI/pull/4)
   and is not yet a release.
+- Added conversational video generation through the ComfyUI MCP Agent and a
+  configurable browser-facing ComfyUI URL. Users can save a browser-local,
+  override and open the ComfyUI page from either UI section; Agent API control
+  remains connected through the backend URL and does not require browser automation.
 - Added architecture documentation and an engineering change/release record.
 
 ## v8.0.0

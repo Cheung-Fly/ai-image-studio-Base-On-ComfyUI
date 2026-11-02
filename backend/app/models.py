@@ -16,7 +16,7 @@ class TaskStatus(str, enum.Enum):
 
 
 class User(Base):
-    """用户账号（公网多人使用时启用鉴权）。"""
+    """单实例内部资料；当前应用不提供登录或注册。"""
 
     __tablename__ = "users"
 

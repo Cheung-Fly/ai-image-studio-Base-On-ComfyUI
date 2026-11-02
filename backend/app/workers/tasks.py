@@ -160,7 +160,7 @@ def run_generation(self, task_id: int):
 
 @celery_app.task(name="app.workers.tasks.run_agent_pipeline", bind=True)
 def run_agent_pipeline(self, user_request: str, user_id: int):
-    """多 Agent 编排流水线任务：一句话生图（提示词优化 → 生图 → 审图）。"""
+    """兼容旧版固定流水线：提示词优化、生图、审图。"""
     from ..services.agents import run_pipeline
 
     try:
@@ -171,25 +171,64 @@ def run_agent_pipeline(self, user_request: str, user_id: int):
 
 
 @celery_app.task(name="app.workers.tasks.run_mcp_agent", bind=True)
-def run_mcp_agent_task(self, user_request: str, provider: str = ""):
+def run_mcp_agent_task(
+    self,
+    user_request: str,
+    provider: str = "",
+    user_id: int | None = None,
+    custom_config_id: int | None = None,
+    history: list[dict[str, str]] | None = None,
+    use_rag: bool = False,
+    quality_review_enabled: bool = False,
+):
     """MCP Agent 任务：LLM 经 MCP 协议自主控制 ComfyUI。"""
     import asyncio
     import time
     import uuid
+    from functools import partial
 
     from redis import Redis
 
     from ..config import settings
     from ..database import SessionLocal
     from ..services.agent_memory import get_preferences
+    from ..services.llm_client import chat_with_tools
     from ..services.mcp_agent import run_mcp_agent
+    from ..services.quality_review import review_generated_media
 
     try:
         db = SessionLocal()
         try:
             memory = get_preferences(db)
+            custom_config = None
+            if provider == "custom":
+                from ..models import CustomModelConfig
+                from ..security import decrypt_secret
+
+                config = (
+                    db.query(CustomModelConfig)
+                    .filter(
+                        CustomModelConfig.id == custom_config_id,
+                        CustomModelConfig.user_id == user_id,
+                    )
+                    .first()
+                )
+                if config is None:
+                    return {"status": "failed", "error": "自定义模型配置无效"}
+                custom_config = {
+                    "base_url": config.base_url,
+                    "api_key": decrypt_secret(config.api_key_encrypted),
+                    "model": config.model,
+                }
         finally:
             db.close()
+
+        knowledge_context = None
+        if use_rag:
+            from ..services import rag
+
+            rag.ensure_index()
+            knowledge_context = rag.retrieve(user_request)
 
         def report_progress(progress):
             self.update_state(state="PROGRESS", meta=progress)
@@ -225,9 +264,18 @@ def run_mcp_agent_task(self, user_request: str, provider: str = ""):
             run_mcp_agent(
                 user_request,
                 provider,
+                llm=partial(chat_with_tools, custom_config=custom_config),
                 on_progress=report_progress,
                 confirm_action=confirm_action,
                 memory=memory,
+                history=history,
+                knowledge_context=knowledge_context,
+                quality_review_enabled=quality_review_enabled,
+                quality_reviewer=partial(
+                    review_generated_media,
+                    provider=provider,
+                    custom_config=custom_config,
+                ),
             )
         )
     except Exception as exc:

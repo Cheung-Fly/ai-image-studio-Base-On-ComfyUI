@@ -2,11 +2,12 @@
 
 ## 1. Product and system boundaries
 
-AI Image Studio is a private, single-instance assistant for an individual
-ComfyUI installation. Authentication protects the instance and its API; it
-does not make the application a multi-tenant SaaS product. The backend
-currently stores account-owned application data, while ComfyUI preferences are
-instance-level.
+AI Image Studio is an open-source, local-first creative workbench targeting
+professional AIGC teams using ComfyUI. The current implementation is a
+private, single-instance assistant: authentication protects the instance and
+its API, but does not provide team collaboration or multi-tenant SaaS. The
+backend currently stores account-owned application data, while ComfyUI
+preferences are instance-level.
 
 The application coordinates existing services rather than implementing an
 image or video inference engine:
@@ -26,7 +27,8 @@ image or video inference engine:
 ```mermaid
 flowchart LR
     User[User] --> Browser[Browser UI<br/>frontend/index.html]
-    Browser -->|HTTP / JSON / SSE| API[FastAPI API]
+    Browser -->|HTTP / JSON| API[FastAPI API]
+    Browser -->|Open configured web URL| ComfyWeb[ComfyUI web UI]
     API --> DB[(SQLite)]
     API --> Redis[(Redis)]
     Redis --> Worker[Celery worker]
@@ -57,8 +59,9 @@ build step.
 | Background execution | Execute generation and agent tasks; persist task state and media records | `backend/app/workers/` |
 | LLM integration | Call configured OpenAI-compatible or local providers | `backend/app/services/llm_client.py` |
 | MCP agent | Discover tools from the MCP server, expose them to the LLM, execute approved calls | `backend/app/services/mcp_agent.py`, `backend/app/mcp_server/` |
+| Quality review | Review generated images/video frames and run bounded prompt-refinement retries | `backend/app/services/quality_review.py`, `backend/app/services/mcp_agent.py` |
 | Retrieval | Index fixed project documents and dynamic knowledge-base documents for RAG | `backend/app/services/rag.py` |
-| Browser UI | Login, image/video generation, chat, task/gallery views, and agent interaction | `frontend/index.html` |
+| Browser UI | Login, open ComfyUI for manual work, agent automation, and the result gallery | `frontend/index.html` |
 
 `backend/app/api/` owns HTTP concerns and delegates application work to
 services or Celery tasks. The worker owns long-running generation and agent
@@ -117,6 +120,16 @@ The agent is bounded by a maximum tool-call step count. Tool errors are
 returned to the agent loop as errors; the assistant must not report a
 successful action unless the tool result confirms it.
 
+When `quality_review_enabled` is true, successful built-in image/video
+generation is followed by a visual review using the selected LLM configuration.
+Images are reviewed directly; videos are sampled at up to five evenly spaced
+timestamps using the bundled `imageio-ffmpeg` executable. Scores of 8/10 or
+higher pass; lower scores trigger an evaluator-provided prompt revision and at
+most two additional generations. Review errors and exhausted retries are
+returned explicitly and are never represented as a passing result. The option
+defaults to false, preserving the existing single-generation flow. Arbitrary
+custom workflow JSON is not rewritten or automatically retried.
+
 ### 4.3 Chat, streaming, and retrieval
 
 - `POST /api/chat` returns a JSON response; `POST /api/chat/stream` returns
@@ -131,11 +144,31 @@ successful action unless the tool result confirms it.
   vector index is a retrieval aid, not the source of truth for application
   records.
 
+### 4.4 Browser interaction model
+
+- **Custom operation** opens the ComfyUI web interface at `COMFYUI_WEB_URL` by
+  default. The user can save a browser-local override in the UI; it is scoped
+  by the signed-in username and does not change server configuration. The
+  browser-facing URL is separate from `COMFYUI_BASE_URL`, which the backend
+  and MCP tools use for API calls.
+- **Agent automation** submits every prompt to the MCP Agent. The selected
+  built-in or custom LLM provider, recent conversation history, and optional
+  RAG setting are included in the request. Image/video generation and
+  ComfyUI-management tools run in the Celery worker. The Agent does not need
+  browser automation for ComfyUI control; opening the web UI is a user-clicked
+  frontend link.
+- The Agent gallery combines the existing task-based media API with files
+  produced by MCP tools. Recent Agent conversation history is stored in the
+  browser's `localStorage`; legacy chat endpoints and direct generation APIs
+  remain available to API clients, but their forms are not duplicated in the
+  current UI.
+
 ## 5. Data and storage boundaries
 
 | Data | Current storage | Notes |
 |---|---|---|
-| User, task, image metadata, conversations, and usage records | SQLite | Shared application database; schema/entities are in `backend/app/models.py`. |
+| User, task, image metadata, legacy chat conversations, and usage records | SQLite | Shared application database; schema/entities are in `backend/app/models.py`. |
+| Recent MCP Agent conversation | Browser `localStorage` | Stored per username in the browser; it is not synchronized to the backend. |
 | Generated image/video bytes | Local filesystem | The database stores metadata and relative file paths; API endpoints enforce access checks when serving files. |
 | Uploaded reference media | Configured ComfyUI input directory | The upload API returns the filename used by workflows. |
 | Dynamic RAG documents and index | Configured local data directories | Persisted according to the deployment's volume/configuration. |
@@ -192,7 +225,8 @@ Use the following change lifecycle for code and documentation:
 
 The CI workflow is defined in `.github/workflows/ci.yml`. It currently compiles
 the backend, imports key API routes, runs Ruff on the listed backend areas,
-and runs the MCP Agent, preference-memory, and streamed-chat tests.
+and runs the MCP Agent, preference-memory, streamed-chat, and quality-review
+Harness tests.
 
 ## 8. Operational constraints and non-goals
 
@@ -208,10 +242,34 @@ and runs the MCP Agent, preference-memory, and streamed-chat tests.
 - The Vue/Vite migration and broader multi-client deployment are optional
   roadmap items, not current runtime components.
 
-## 9. Related documentation
+## 9. Commercialization target (proposed, not implemented)
+
+The target users are professional AIGC creation teams: artists, technical
+artists, workflow authors, and production operators who need ComfyUI's control
+and extensibility but want less friction in routine operations. Keep direct
+access to native workflows and custom nodes; convenience features should
+accelerate expert work, not hide or constrain it.
+
+The MIT-licensed open-source value is inspectable execution, local control,
+portable ComfyUI workflows, vendor-neutral model/provider adapters, and a
+welcoming contribution path for workflow tooling and integrations. Keep the
+backend a modular monolith while validating demand. The near-term boundaries
+should make generation tasks, versioned workflows, projects, media assets,
+execution backends, and usage records independently testable. Local
+SQLite/files remain appropriate for the current single-instance edition.
+PostgreSQL, object storage, team RBAC, billing, and managed GPU workers belong
+to later phases, and only after professional teams validate those needs.
+
+The proposed product phases, market evidence, architecture target, and go/no-go
+gates are documented in
+[Commercialization research and architecture roadmap](商业化市场调研与架构路线图.md).
+These are recommendations, not completed product capabilities.
+
+## 10. Related documentation
 
 - [API interface reference](API接口文档.md)
 - [Technology evolution roadmap](项目技术演进路线图.md)
+- [Commercialization research and architecture roadmap](商业化市场调研与架构路线图.md)
 - [End-to-end flow explanation](全流程原理讲解.html)
 - [Contribution guide](../CONTRIBUTING.md)
 - [Change history](CHANGES.md)

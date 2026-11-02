@@ -17,7 +17,13 @@ from ..config import settings
 from ..database import SessionLocal, init_db
 from ..services.agent_memory import clear_preferences, get_preferences, update_preferences
 from ..services.comfy_client import ComfyClient, ComfyError
-from ..services.workflow import WorkflowError, build_workflow, list_workflows, load_template
+from ..services.video_workflow import build_video_workflow
+from ..services.workflow import (
+    WorkflowError,
+    build_workflow,
+    list_workflows,
+    load_template,
+)
 
 mcp = FastMCP("comfyui")
 
@@ -278,6 +284,51 @@ def comfy_generate_image(
             refine_steps=refine_steps,
         )
         return _ok(seed=seed, **_run_and_save(wf))
+    except (ComfyError, WorkflowError, OSError) as exc:
+        return _err(exc)
+
+
+@mcp.tool()
+def comfy_generate_video(
+    prompt: str,
+    duration: float = 4.0,
+    aspect_ratio: str = "16:9 (Widescreen)",
+    megapixels: float = 1.0,
+    seed: int = -1,
+    steps: int = 20,
+) -> str:
+    """使用内置 MiniMax H3 工作流生成视频并保存到本地；支持纯文生视频。"""
+    if not prompt.strip():
+        return _err(ValueError("prompt 不能为空"))
+    if not 2.0 <= duration <= 15.0:
+        return _err(ValueError("duration 必须在 2 到 15 秒之间"))
+    if aspect_ratio not in {
+        "1:1 (Square)",
+        "2:3 (Portrait Photo)",
+        "3:2 (Photo)",
+        "3:4 (Portrait Standard)",
+        "4:3 (Standard)",
+        "9:16 (Portrait Widescreen)",
+        "16:9 (Widescreen)",
+        "21:9 (Ultrawide)",
+    }:
+        return _err(ValueError("aspect_ratio 不受支持"))
+    if not 0.1 <= megapixels <= 16.0:
+        return _err(ValueError("megapixels 必须在 0.1 到 16 之间"))
+    if not 1 <= steps <= 100:
+        return _err(ValueError("steps 必须在 1 到 100 之间"))
+    if seed < 0:
+        seed = random.randint(0, (1 << 53) - 1)
+    try:
+        workflow = build_video_workflow(
+            prompt=prompt,
+            duration=duration,
+            aspect_ratio=aspect_ratio,
+            megapixels=megapixels,
+            seed=seed,
+            steps=steps,
+        )
+        return _ok(seed=seed, **_run_and_save(workflow))
     except (ComfyError, WorkflowError, OSError) as exc:
         return _err(exc)
 

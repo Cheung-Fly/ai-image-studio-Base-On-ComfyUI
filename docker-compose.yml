@@ -4,11 +4,12 @@ services:
     container_name: aistudio-redis
     restart: unless-stopped
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     volumes:
       - redis-data:/data
 
   api:
+    image: ai-image-studio:latest
     build:
       context: .
       dockerfile: backend/Dockerfile
@@ -17,39 +18,56 @@ services:
     depends_on:
       - redis
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       - REDIS_URL=redis://redis:6379/0
-      - COMFYUI_BASE_URL=http://host.docker.internal:8188
+      - COMFYUI_BASE_URL=${COMFYUI_BASE_URL:-http://host.docker.internal:8188}
+      - COMFYUI_WEB_URL=${COMFYUI_WEB_URL:-http://127.0.0.1:8188}
+      - COMFYUI_INPUT_DIR=${COMFYUI_INPUT_DIR:-}
       - DATABASE_URL=sqlite:////data/aistudio.db
       - IMAGE_STORAGE_DIR=/data/images
       - WORKFLOW_DIR=/workflows
       - COMFYUI_LORAS_DIR=/comfyui/loras
-      - LLAMA_BASE_URL=http://host.docker.internal:8080/v1
-      - LLAMA_API_KEY=not-needed
-      - DEFAULT_LLM_PROVIDER=llama
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-https://api.openai.com/v1}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o-mini}
+      - LLAMA_BASE_URL=${LLAMA_BASE_URL:-http://host.docker.internal:8080/v1}
+      - LLAMA_API_KEY=${LLAMA_API_KEY:-not-needed}
+      - DEFAULT_LLM_PROVIDER=${DEFAULT_LLM_PROVIDER:-openai}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-change-me-in-production-encryption-key}
     volumes:
       - ./data:/data
       - ./backend/app:/app/app
-      - "D:/AI_MOVIE/ComfyUI_windows_portable/ComfyUI/models/loras:/comfyui/loras"
+      - ./frontend:/frontend:ro
+      - type: bind
+        source: ${COMFYUI_LORAS_HOST_DIR:-./data/loras}
+        target: /comfyui/loras
+        read_only: true
 
   worker:
-    build:
-      context: .
-      dockerfile: backend/Dockerfile
+    image: ai-image-studio:latest
     container_name: aistudio-worker
     restart: unless-stopped
     depends_on:
       - redis
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       - REDIS_URL=redis://redis:6379/0
-      - COMFYUI_BASE_URL=http://host.docker.internal:8188
+      - COMFYUI_BASE_URL=${COMFYUI_BASE_URL:-http://host.docker.internal:8188}
+      - COMFYUI_INPUT_DIR=${COMFYUI_INPUT_DIR:-}
       - DATABASE_URL=sqlite:////data/aistudio.db
       - IMAGE_STORAGE_DIR=/data/images
       - WORKFLOW_DIR=/workflows
-      - LLAMA_BASE_URL=http://host.docker.internal:8080/v1
-      - LLAMA_API_KEY=not-needed
-      - DEFAULT_LLM_PROVIDER=llama
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-https://api.openai.com/v1}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o-mini}
+      - LLAMA_BASE_URL=${LLAMA_BASE_URL:-http://host.docker.internal:8080/v1}
+      - LLAMA_API_KEY=${LLAMA_API_KEY:-not-needed}
+      - DEFAULT_LLM_PROVIDER=${DEFAULT_LLM_PROVIDER:-openai}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-change-me-in-production-encryption-key}
     volumes:
       - ./data:/data
       - ./backend/app:/app/app

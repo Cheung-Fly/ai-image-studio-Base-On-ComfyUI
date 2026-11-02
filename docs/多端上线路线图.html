@@ -51,7 +51,7 @@
   <div class="sub">当前是本地运行的单实例个人助手；网页、小程序和桌面端是可选客户端方向，不是当前开发范围</div>
 
   <div class="key">
-    当前定位：<b>个人使用、单实例部署</b>。FastAPI、Celery、Redis、SQLite、ComfyUI 和 LLM 组成一个私有助手；现有网页端已支持生图、对话、MCP 控制和偏好记忆。无需先部署公有云，也不建设多租户账号体系。将来如需手机或桌面访问，可在安全的私有网络/受保护的 HTTPS 入口下复用现有 API；新客户端只是可选扩展。
+    当前定位：<b>个人使用、单实例部署</b>。网页分为“自定义操作”（打开 ComfyUI 网页）和“Agent 自动化”（MCP 对话生成图片/视频、控制 ComfyUI），并提供创作结果库与个人偏好记忆。无需先部署公有云，也不建设多租户账号体系。将来如需手机或桌面访问，可在安全的私有网络/受保护的 HTTPS 入口下复用现有 API；新客户端只是可选扩展。
   </div>
 
   <h2>一、总体架构（上线后）</h2>
@@ -182,7 +182,7 @@
   <h2>四、建议的演进时间线</h2>
   <div class="tl">
     <div class="ms now"><b>当前 · 私有单实例助手</b><span>本地 FastAPI + Celery + Redis + SQLite + ComfyUI；支持生图/视频、RAG、MCP 控制和个人偏好记忆。</span></div>
-    <div class="ms now"><b>V9 · 流式对话（开发中）</b><span>通过 SSE 逐段显示回复；保留原 JSON 接口，兼容内置与自定义 LLM。</span></div>
+    <div class="ms now"><b>V9 / V10 · Agent 与前端调整（开发中）</b><span>V9 为通用聊天 API 增加 SSE；V10 统一网页为自定义操作和 Agent 自动化，Agent 支持模型选择、历史上下文、可选 RAG 和视频生成。</span></div>
     <div class="ms"><b>后续 · 可靠性维护</b><span>优先完善备份、日志、错误提示和自动化回归测试，仍保持个人实例范围。</span></div>
     <div class="ms"><b>可选 · 私有远程访问</b><span>确有跨设备需求时配置 VPN/私有网络或经过认证的 HTTPS 反向代理；不开放 ComfyUI、Redis 等内部服务端口。</span></div>
     <div class="ms"><b>可选 · 其他客户端</b><span>只有明确需要时再评估移动端或桌面壳，共用现有 API；不作为当前发布计划。</span></div>

@@ -8,7 +8,7 @@
 运行（backend/ 目录下）：
     pip install httpx
     python tests/smoke_test.py
-预期输出：SMOKE TEST PASSED（19/19）
+预期输出：SMOKE TEST PASSED（21/21）
 """
 import base64
 import json
@@ -138,19 +138,16 @@ def check(name: str, ok: bool, detail: str = ""):
 
 
 with TestClient(app) as client:
-    # 0. 注册拿 token（所有业务接口均需鉴权）
-    r = client.post(
-        "/api/auth/register",
-        json={"username": "smoke_user", "password": "smoke_pass_123"},
-    )
-    reg = r.json()
-    check("注册返回 token", r.status_code == 201 and reg.get("access_token"))
-    auth_headers = {"Authorization": "Bearer " + reg.get("access_token", "")}
+    # 0. 所有单实例业务接口均匿名访问，认证接口已移除
+    r = client.get("/api/instance")
+    check("无需登录读取实例配置", r.status_code == 200 and "comfyui_web_url" in r.json())
+    r = client.post("/api/auth/login", json={"username": "demo", "password": "password123"})
+    check("登录接口已移除", r.status_code == 404)
 
     # 1. 健康检查
     r = client.get("/health")
     body = r.json()
-    check("health 返回 ok 且含 comfyui 地址", r.status_code == 200 and body["status"] == "ok" and "comfyui_base_url" in body)
+    check("health 返回 ok", r.status_code == 200 and body["status"] == "ok")
 
     # 2. 提交任务（eager 同步完成）
     r = client.post(
@@ -163,7 +160,6 @@ with TestClient(app) as client:
             "seed": 42,
             "workflow": "",
         },
-        headers=auth_headers,
     )
     task = r.json()
     check("提交任务返回 202 与 task_id", r.status_code == 202 and task["id"] > 0)
@@ -173,32 +169,32 @@ with TestClient(app) as client:
 
     # 3. 任务详情含图片
     tid = task["id"]
-    r = client.get(f"/api/tasks/{tid}", headers=auth_headers)
+    r = client.get(f"/api/tasks/{tid}")
     detail = r.json()
     if r.status_code != 200 or len(detail.get("images", [])) != 1:
         print(f"    [诊断] 详情 status={detail.get('status')} error={detail.get('error')} images={len(detail.get('images', []))}")
     check("任务详情包含 1 张产物图片", r.status_code == 200 and len(detail.get("images", [])) == 1)
 
     # 4. 图库列表
-    r = client.get("/api/images", headers=auth_headers)
+    r = client.get("/api/images")
     images = r.json()
     check("图库列表非空", r.status_code == 200 and len(images) >= 1)
 
     # 5. 下载图片
     img_id = images[0]["id"]
-    r = client.get(f"/api/images/{img_id}/file", headers=auth_headers)
+    r = client.get(f"/api/images/{img_id}/file")
     check("下载图片返回 200 且为合法 PNG", r.status_code == 200 and r.content[:8] == b"\x89PNG\r\n\x1a\n" and len(r.content) > 0)
 
     # 6. 状态过滤
-    r = client.get("/api/tasks", params={"status": "completed"}, headers=auth_headers)
+    r = client.get("/api/tasks", params={"status": "completed"})
     check("按 status=completed 过滤生效", r.status_code == 200 and all(t["status"] == "completed" for t in r.json()))
 
     # 7. 不存在任务返回 404
-    r = client.get("/api/tasks/999999", headers=auth_headers)
+    r = client.get("/api/tasks/999999")
     check("不存在任务返回 404", r.status_code == 404)
 
     # 7.5 工作流列表接口
-    r = client.get("/api/workflows", headers=auth_headers)
+    r = client.get("/api/workflows")
     wf_list = r.json()
     check("工作流列表接口返回非空", r.status_code == 200 and len(wf_list) >= 1 and all("file" in w and "is_default" in w for w in wf_list))
 
@@ -236,15 +232,15 @@ with TestClient(app) as client:
     )
 
     # 10. 个人资料接口
-    r = client.get("/api/me", headers=auth_headers)
+    r = client.get("/api/me")
     me_data = r.json()
     check(
         "个人资料接口返回统计",
-        r.status_code == 200 and me_data.get("username") == "smoke_user" and me_data.get("image_count", 0) >= 1,
+        r.status_code == 200 and me_data.get("username") == "local" and me_data.get("image_count", 0) >= 1,
     )
 
     # 11. 模型预设列表接口
-    r = client.get("/api/model-presets", headers=auth_headers)
+    r = client.get("/api/model-presets")
     presets = r.json()
     check(
         "模型预设列表接口返回非空",
@@ -316,10 +312,10 @@ with TestClient(app) as client:
 
 print()
 if FAILED == 0:
-    print(f"SMOKE TEST PASSED（{PASSED}/19）")
+    print(f"SMOKE TEST PASSED（{PASSED}/21）")
     sys.exit(0)
 else:
-    print(f"SMOKE TEST FAILED（{PASSED}/19）")
+    print(f"SMOKE TEST FAILED（{PASSED}/21）")
     for reason in _REASONS:
         print(f"  - {reason}")
     sys.exit(1)

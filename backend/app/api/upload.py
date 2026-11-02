@@ -35,7 +35,7 @@ async def upload_asset(
     file: UploadFile = File(...),
     user: User = Depends(get_current_user),
 ):
-    """上传素材，返回文件名（供工作流引用）。需登录。"""
+    """上传素材，返回文件名（供工作流引用）。"""
     if not file.filename:
         raise HTTPException(400, "缺少文件名")
     media_type = _detect_type(file.filename)

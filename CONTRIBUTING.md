@@ -1,6 +1,6 @@
 # 贡献指南
 
-感谢你愿意为 AI Image Studio 提交改进。本项目面向个人使用场景，欢迎围绕 ComfyUI 控制、Agent 助手、工作流、前端体验、文档和可靠性提交贡献。
+感谢你愿意为 AI Image Studio 提交改进。本项目目标用户是专业 AIGC 创作团队；当前代码仍为单实例版本，不代表已具备团队级权限和企业生产保障。欢迎围绕 ComfyUI 控制、工作流互操作、Agent 助手、创作团队日常操作、文档和可靠性提交贡献。
 
 ## 开发环境
 
@@ -18,10 +18,11 @@ python -m compileall -q app
 python -m tests.test_mcp_agent
 python -m tests.test_agent_memory
 python -m tests.test_chat_stream
-ruff check app/api/agent.py app/api/chat.py app/mcp_server app/services/comfy_client.py app/services/llm_client.py app/services/mcp_agent.py app/services/agent_memory.py app/workers/tasks.py app/schemas.py app/models.py tests/test_mcp_agent.py tests/test_agent_memory.py tests/test_chat_stream.py
+python -m pytest -q tests/test_quality_review.py
+ruff check app/api/agent.py app/api/chat.py app/mcp_server app/services/comfy_client.py app/services/llm_client.py app/services/mcp_agent.py app/services/quality_review.py app/services/agent_memory.py app/workers/tasks.py app/schemas.py app/models.py tests/test_mcp_agent.py tests/test_agent_memory.py tests/test_chat_stream.py tests/test_quality_review.py
 ```
 
-以上命令与当前 CI 的后端检查保持一致。MCP Agent、偏好记忆和流式聊天测试不要求真实 GPU 或 ComfyUI；这些外部服务需要真实联调时再单独启动。CI 定义见 `.github/workflows/ci.yml`。
+以上命令与当前 CI 的后端检查保持一致。MCP Agent、偏好记忆、流式聊天和视觉审查测试不要求真实 GPU、LLM 或 ComfyUI；这些外部服务需要真实联调时再单独启动。CI 定义见 `.github/workflows/ci.yml`。
 
 ## 变更建议
 

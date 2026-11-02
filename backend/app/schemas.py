@@ -119,28 +119,6 @@ class ChatResponse(BaseModel):
     reply: str
 
 
-class RegisterRequest(BaseModel):
-    """注册请求。"""
-
-    username: str = Field(..., min_length=3, max_length=64, pattern=r"^[a-zA-Z0-9_]+$")
-    password: str = Field(..., min_length=8, max_length=128)
-
-
-class LoginRequest(BaseModel):
-    """登录请求。"""
-
-    username: str = Field(..., min_length=1, max_length=64)
-    password: str = Field(..., min_length=1, max_length=128)
-
-
-class TokenResponse(BaseModel):
-    """登录/注册成功返回 token。"""
-
-    access_token: str
-    token_type: str = "bearer"
-    username: str
-
-
 class MessageOut(BaseModel):
     """单条消息（历史拉取用）。"""
 
@@ -198,9 +176,20 @@ class CustomModelIn(BaseModel):
 
 
 class AgentGenerateRequest(BaseModel):
-    """一句话生图请求（多 Agent 流水线）。"""
+    """对话式 ComfyUI Agent 请求。"""
 
     request: str = Field(..., min_length=1, max_length=2000, description="用户的自然语言描述")
+    history: list[ChatMessage] = Field([], max_length=20, description="最近对话上下文")
+    provider: str = Field(
+        "",
+        pattern="^(|openai|llama|custom)$",
+        description="LLM provider；空值使用服务端默认 provider",
+    )
+    custom_config_id: int | None = Field(None, description="自定义模型配置 ID")
+    use_rag: bool = Field(False, description="是否将知识库检索结果作为 Agent 参考资料")
+    quality_review_enabled: bool = Field(
+        False, description="是否在生成后运行视觉质量审查 Harness"
+    )
 
 
 class AgentConfirmationRequest(BaseModel):

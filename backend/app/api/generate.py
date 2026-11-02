@@ -19,7 +19,7 @@ def generate(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """提交一个文生图任务，立即返回 task_id；实际生成由 Celery worker 异步执行（需登录）。"""
+    """提交一个文生图任务，立即返回 task_id；实际生成由 Celery worker 异步执行。"""
     task = GenerationTask(
         user_id=user.id,
         prompt=req.prompt,

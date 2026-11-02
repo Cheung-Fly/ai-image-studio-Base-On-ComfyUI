@@ -12,7 +12,7 @@ router = APIRouter(tags=["me"])
 
 @router.get("/me", response_model=UserProfileOut)
 def get_me(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    """返回当前用户资料 + 资产统计（需登录）。"""
+    """返回当前单实例资料 + 资产统计。"""
     task_count = db.query(GenerationTask).filter(GenerationTask.user_id == user.id).count()
     image_count = (
         db.query(ImageAsset)

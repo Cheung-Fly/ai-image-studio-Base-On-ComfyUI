@@ -53,76 +53,6 @@
     font-weight: 700;
   }
 
-  /* ---- 登录页粒子背景 ---- */
-  #auth-particles {
-    position: fixed;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    z-index: 0;
-    pointer-events: none;
-    display: block;
-  }
-  #auth-particles.hidden { display: none !important; }
-  .auth-card {
-    position: relative;
-    z-index: 1;
-    background: rgba(255, 255, 255, 0.78);
-    backdrop-filter: blur(16px) saturate(1.2);
-    -webkit-backdrop-filter: blur(16px) saturate(1.2);
-    box-shadow:
-      0 0 0 1px rgba(124, 92, 255, 0.06),
-      0 20px 50px rgba(124, 92, 255, 0.14);
-  }
-  .auth-card::before {
-    content: "";
-    position: absolute;
-    inset: -1px;
-    border-radius: inherit;
-    padding: 1px;
-    background: linear-gradient(140deg, var(--accent), transparent 40%, transparent 60%, rgba(79, 110, 242, 0.5));
-    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-    -webkit-mask-composite: xor;
-    mask-composite: exclude;
-    pointer-events: none;
-  }
-  .auth-tabs {
-    display: flex;
-    gap: 8px;
-    margin-bottom: 18px;
-    border-bottom: 1px solid var(--border);
-    padding-bottom: 10px;
-  }
-  .auth-tabs button {
-    background: transparent;
-    color: var(--muted);
-    padding: 6px 14px;
-    font-size: 14px;
-    font-weight: 500;
-    border-radius: 6px;
-    transition: all .15s;
-  }
-  .auth-tabs button:hover { color: var(--text); background: var(--accent-soft); }
-  .auth-tabs button.active {
-    color: var(--accent);
-    background: var(--accent-soft);
-    font-weight: 600;
-  }
-  #btn-auth {
-    width: 100%;
-    background: linear-gradient(120deg, var(--accent), var(--primary));
-    box-shadow: 0 6px 20px rgba(124, 92, 255, 0.28);
-    font-weight: 600;
-    letter-spacing: 0.04em;
-    transition: transform .15s, box-shadow .15s, filter .15s;
-  }
-  #btn-auth:hover {
-    background: linear-gradient(120deg, var(--accent), var(--primary-hover));
-    transform: translateY(-1px);
-    box-shadow: 0 10px 26px rgba(124, 92, 255, 0.36);
-  }
-  #btn-auth:active { transform: translateY(0); }
-
   .card {
     background: var(--card);
     border: 1px solid var(--border);
@@ -289,6 +219,7 @@
     gap: 6px;
   }
   .chat-sidebar .sidebar-title { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+  #custom-model-list { display: flex; flex-direction: column; gap: 2px; }
   .chat-model-item {
     display: flex;
     align-items: center;
@@ -312,55 +243,21 @@
   .chat-main .chat-box { flex: 1; }
   @media (max-width: 600px) {
     .chat-layout { flex-direction: column; }
-    .chat-sidebar { width: 100%; flex-direction: row; border-right: none; border-bottom: 1px solid var(--border); padding-right: 0; padding-bottom: 12px; }
+    .chat-sidebar {
+      width: 100%;
+      flex-direction: row;
+      flex-wrap: wrap;
+      align-items: center;
+      border-right: none;
+      border-bottom: 1px solid var(--border);
+      padding-right: 0;
+      padding-bottom: 12px;
+    }
+    .chat-sidebar .sidebar-title { width: 100%; margin-bottom: 0; }
+    #custom-model-list { flex-direction: row; flex-wrap: wrap; gap: 6px; }
   }
 
-  /* ---- 登录 / 用户 ---- */
-  .auth-card { max-width: 400px; }
-  .auth-error { color: var(--danger); font-size: 13px; margin-top: -6px; margin-bottom: 10px; min-height: 18px; }
-  .topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
-  .topbar .user-info { font-size: 14px; color: var(--muted); }
-  .topbar .user-info b { color: var(--text); }
-  .btn-link { background: none; color: var(--primary); padding: 4px 8px; font-size: 13px; }
-  .btn-link:hover { background: #eef0f5; }
   .hidden { display: none !important; }
-
-  /* ---- 生图工作流侧边栏 ---- */
-  .gen-layout { display: flex; gap: 16px; }
-  .wf-sidebar {
-    width: 180px;
-    flex-shrink: 0;
-    border-right: 1px solid var(--border);
-    padding-right: 16px;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
-  .wf-sidebar .wf-title { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
-  .wf-item {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 10px 12px;
-    border-radius: 8px;
-    cursor: pointer;
-    border: 1px solid transparent;
-    font-size: 13px;
-    color: var(--text);
-    transition: all .12s;
-    word-break: break-all;
-    line-height: 1.35;
-  }
-  .wf-item:hover { background: #eef0f5; }
-  .wf-item.active { background: #eef2ff; border-color: var(--primary); color: var(--primary); font-weight: 500; }
-  .wf-item .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex-shrink: 0; }
-  .wf-item.active .dot { background: var(--primary); }
-  .wf-empty { font-size: 12px; color: var(--muted); padding: 6px 4px; }
-  .gen-main { flex: 1; min-width: 0; }
-  @media (max-width: 600px) {
-    .gen-layout { flex-direction: column; }
-    .wf-sidebar { width: 100%; flex-direction: row; flex-wrap: wrap; border-right: none; border-bottom: 1px solid var(--border); padding-right: 0; padding-bottom: 12px; }
-  }
 
   /* ---- 顶部导航 ---- */
   .navbar {
@@ -405,70 +302,7 @@
   .nav-tab.active::after { transform: scaleX(1); }
   .view { display: none; }
   .view.active { display: block; }
-  .nav-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
-
-  /* ---- 个人主页 ---- */
-  .profile-card { display: flex; align-items: center; gap: 16px; padding: 20px; }
-  .profile-avatar {
-    width: 64px; height: 64px; border-radius: 50%;
-    background: var(--primary); color: #fff;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 28px; font-weight: 600; flex-shrink: 0;
-  }
-  .profile-info { flex: 1; }
-  .profile-name { font-size: 18px; font-weight: 600; }
-  .profile-meta { font-size: 13px; color: var(--muted); margin-top: 4px; }
-  .profile-stats { display: flex; gap: 24px; margin-top: 12px; }
-  .stat-item { text-align: center; }
-  .stat-num { font-size: 22px; font-weight: 600; color: var(--primary); }
-  .stat-label { font-size: 12px; color: var(--muted); }
-
-  /* ---- 视频生成占位 ---- */
-  .placeholder-card {
-    border: 1px dashed var(--border);
-    border-radius: var(--radius);
-    padding: 40px 20px;
-    text-align: center;
-    color: var(--muted);
-  }
-  .placeholder-card .ph-title { font-size: 16px; font-weight: 600; color: var(--text); margin-bottom: 8px; }
-  .placeholder-card .ph-desc { font-size: 13px; }
-  .badge { display: inline-block; font-size: 11px; color: #ba7517; background: #fdf3e2; padding: 2px 8px; border-radius: 10px; margin-left: 8px; }
-
-  /* ---- 视频生成素材槽 ---- */
-  .asset-slots { display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px; }
-  .asset-slot { border: 1px solid var(--border); border-radius: 10px; padding: 14px; background: #fafbfc; }
-  .asset-slot.disabled { opacity: 0.5; pointer-events: none; }
-  .asset-slot .slot-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
-  .asset-slot .slot-title { font-size: 14px; font-weight: 600; }
-  .asset-slot .slot-hint { font-size: 12px; color: var(--muted); }
-  .asset-slot .slot-locked { font-size: 12px; color: var(--muted); }
-  .slot-files { display: flex; flex-wrap: wrap; gap: 8px; }
-  .slot-file {
-    display: flex; align-items: center; gap: 6px;
-    background: #eef2ff; border: 1px solid #cdd8ff;
-    padding: 4px 10px; border-radius: 16px; font-size: 13px;
-  }
-  .slot-file .rm { cursor: pointer; color: var(--muted); font-weight: 600; }
-  .slot-file .rm:hover { color: var(--danger); }
-  .btn-upload {
-    background: #fff; color: var(--primary); border: 1px dashed var(--primary);
-    padding: 8px 14px; border-radius: 8px; font-size: 13px; cursor: pointer;
-  }
-  .btn-upload:hover { background: #eef2ff; }
-  input[type="file"].file-input { display: none; }
-
-  /* ---- LoRA 列表 ---- */
-  .lora-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
-  .lora-row {
-    display: flex; align-items: center; gap: 8px;
-    background: #fafbfc; border: 1px solid var(--border);
-    border-radius: 8px; padding: 8px;
-  }
-  .lora-row select { flex: 1; margin-bottom: 0; }
-  .lora-row input[type="number"] { width: 90px; margin-bottom: 0; }
-  .lora-row .rm { cursor: pointer; color: var(--muted); font-weight: 600; padding: 0 6px; }
-  .lora-row .rm:hover { color: var(--danger); }
+  a[aria-disabled="true"] { opacity: .55; pointer-events: none; }
 
   /* ---- 无障碍：减弱动效 ---- */
   @media (prefers-reduced-motion: reduce) {
@@ -476,240 +310,57 @@
       transition: none !important;
       animation: none !important;
     }
-    #auth-particles { display: none !important; }
   }
 </style>
 </head>
 <body>
-<canvas id="auth-particles" class="hidden"></canvas>
 <div class="container">
   <h1>AI 生图工坊</h1>
-  <div class="subtitle">基于 ComfyUI · 输入提示词，点击生成</div>
+  <div class="subtitle">自定义操作 · Agent 对话自动生成图片与视频</div>
 
-  <!-- 登录 / 注册 -->
-  <div id="auth-card" class="card auth-card">
-    <div class="auth-tabs">
-      <button id="tab-login" class="active">登录</button>
-      <button id="tab-register">注册</button>
-    </div>
-    <label for="auth-username">用户名</label>
-    <input id="auth-username" placeholder="3-64 位字母/数字/下划线" autocomplete="username">
-    <label for="auth-password">密码</label>
-    <input id="auth-password" type="password" placeholder="至少 8 位" autocomplete="current-password">
-    <div id="auth-error" class="auth-error"></div>
-    <button id="btn-auth">登录</button>
-  </div>
-
-  <!-- 已登录后的主体 -->
-  <div id="app-main" class="hidden">
+  <div id="app-main">
     <div class="navbar">
-      <button class="nav-tab active" data-view="view-home">生图</button>
-      <button class="nav-tab" data-view="view-video">视频生成</button>
-      <button class="nav-tab" data-view="view-chat">对话助手</button>
-      <button class="nav-tab" data-view="view-profile">个人主页</button>
-      <div class="nav-right">
-        <span class="user-info" style="font-size:13px;">已登录：<b id="current-user"></b></span>
-        <button id="btn-logout" class="btn-link">退出登录</button>
+      <button class="nav-tab active" data-view="view-custom">自定义操作</button>
+      <button class="nav-tab" data-view="view-agent">Agent 自动化</button>
+    </div>
+
+    <div id="view-custom" class="view active">
+      <div class="card">
+        <div class="section-title">直接使用 ComfyUI</div>
+        <p>在 ComfyUI 网页中自行编辑节点、选择模型和工作流，并直接执行操作。</p>
+        <div style="display:flex; align-items:center; gap:12px; margin-top:16px; flex-wrap:wrap;">
+          <a id="open-comfyui" class="primary-link" href="#" target="_blank" rel="noopener noreferrer" aria-disabled="true">打开 ComfyUI 工作台</a>
+          <span id="comfyui-link-status" class="hint">正在读取 ComfyUI 网页地址…</span>
+        </div>
+        <label for="comfyui-web-url" style="display:block; margin-top:16px;">ComfyUI 网页地址</label>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <input id="comfyui-web-url" type="url" placeholder="http://127.0.0.1:8188" style="flex:1; min-width:220px; margin-bottom:0;">
+          <button id="btn-save-comfyui-url" type="button">保存地址</button>
+          <button id="btn-reset-comfyui-url" type="button">恢复默认</button>
+        </div>
+        <div class="hint">默认地址来自后端 COMFYUI_WEB_URL；保存的地址只作用于当前浏览器。远程访问时，请填写浏览器可访问的 HTTP/HTTPS 地址。Agent 的 API 连接仍由后端 COMFYUI_BASE_URL 配置。</div>
+        <div style="border-top:1px solid var(--border); margin-top:18px; padding-top:14px;">
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap;">
+            <strong>本地部署自检</strong>
+            <button id="btn-instance-diagnostics" type="button">检查服务状态</button>
+          </div>
+          <div class="hint">检查数据库、Redis、Worker、ComfyUI 和媒体目录；不会调用 LLM 或显示 API Key。</div>
+          <div id="instance-diagnostics" aria-live="polite" style="margin-top:10px;"></div>
+        </div>
       </div>
     </div>
 
-    <!-- 视图 1：生图主页 -->
-    <div id="view-home" class="view active">
-      <div class="card">
-        <div class="section-title">生成图片</div>
-        <div class="gen-layout">
-          <div class="wf-sidebar">
-            <div class="wf-title">工作流</div>
-            <div id="wf-list">
-              <div class="wf-empty">加载中…</div>
-            </div>
-          </div>
-          <div class="gen-main">
-            <label for="prompt">正向提示词（prompt）</label>
-            <textarea id="prompt" placeholder="例如：a cute corgi astronaut floating in space, digital art, highly detailed">a cute corgi astronaut floating in space, digital art, highly detailed</textarea>
-
-            <label for="negative">负向提示词（negative prompt）</label>
-            <textarea id="negative" placeholder="例如：blurry, low quality, watermark">blurry, low quality, watermark</textarea>
-
-            <div class="grid-2">
-              <div>
-                <label for="model_preset">模型组合</label>
-                <select id="model_preset">
-                  <option value="">默认（工作流内置模型）</option>
-                </select>
-              </div>
-              <div>
-                <label for="aspect_ratio">宽高比</label>
-                <select id="aspect_ratio">
-                  <option value="1:1 (Square)">1:1 方形</option>
-                  <option value="2:3 (Portrait Photo)">2:3 竖版照片</option>
-                  <option value="3:2 (Photo)">3:2 横版照片</option>
-                  <option value="3:4 (Portrait Standard)">3:4 竖版标准</option>
-                  <option value="4:3 (Standard)">4:3 标准</option>
-                  <option value="9:16 (Portrait Widescreen)">9:16 竖版宽屏</option>
-                  <option value="16:9 (Widescreen)">16:9 宽屏</option>
-                  <option value="21:9 (Ultrawide)">21:9 超宽屏</option>
-                </select>
-              </div>
-            </div>
-
-            <div class="grid-2">
-              <div>
-                <label for="megapixels">百万像素（megapixels）</label>
-                <select id="megapixels">
-                  <option value="0.5">0.5 MP（约 720×720）</option>
-                  <option value="1.0" selected>1.0 MP（约 1024×1024）</option>
-                  <option value="1.5">1.5 MP</option>
-                  <option value="2.0">2.0 MP</option>
-                  <option value="4.0">4.0 MP</option>
-                  <option value="8.0">8.0 MP</option>
-                </select>
-              </div>
-              <div>
-                <label for="seed">种子 seed（-1 随机）</label>
-                <input id="seed" type="number" value="-1" min="-1">
-              </div>
-            </div>
-
-            <div class="grid-2">
-              <div>
-                <label for="img-steps">主生成步数（阶段一）</label>
-                <input id="img-steps" type="number" value="8" min="1" max="100" step="1">
-                <div class="hint">从空 latent 生成低清图的主采样步数。</div>
-              </div>
-              <div>
-                <label for="img-refine-steps">放大精修步数（阶段二）</label>
-                <input id="img-refine-steps" type="number" value="4" min="1" max="100" step="1">
-                <div class="hint">放大后 denoise 精修的采样步数。</div>
-              </div>
-            </div>
-
-            <label style="margin-top:4px;">LoRA（可选，可叠加）</label>
-            <div id="img-lora-list" class="lora-list"></div>
-            <button class="btn-upload" id="btn-add-img-lora" type="button">+ 添加 LoRA</button>
-            <div class="hint">不添加则直连原模型；可叠加多个（最多 5 个），串联在模型预设之后。</div>
-
-            <button id="btn-generate">生成图片</button>
-            <div id="status" class="status"></div>
-            <img id="result" class="result-img" alt="" style="display:none;">
-          </div>
-        </div>
-      </div>
-
-      <div class="card">
-        <div class="section-title">图库</div>
-        <div id="gallery" class="gallery"></div>
-        <div class="hint">点击图片可查看大图；图库在页面加载时自动刷新。</div>
-      </div>
-    </div>
-
-    <!-- 视图 2：视频生成 -->
-    <div id="view-video" class="view">
-      <div class="card">
-        <div class="section-title">视频生成（MiniMax H3）</div>
-
-        <label for="v-prompt">提示词（prompt）</label>
-        <textarea id="v-prompt" placeholder="描述画面与运镜；可用 [image 1]、[video 1]、[audio 1] 引用下方素材"></textarea>
-
-        <div class="grid-2">
-          <div>
-            <label for="v-duration">时长（秒）</label>
-            <input id="v-duration" type="number" value="4" min="2" max="15" step="1">
-          </div>
-          <div>
-            <label for="v-aspect">分辨率选择器（宽高比）</label>
-            <select id="v-aspect">
-              <option value="16:9 (Widescreen)" selected>16:9 宽屏</option>
-              <option value="1:1 (Square)">1:1 方形</option>
-              <option value="4:3 (Standard)">4:3 标准</option>
-              <option value="3:2 (Photo)">3:2 横版照片</option>
-              <option value="21:9 (Ultrawide)">21:9 超宽屏</option>
-              <option value="9:16 (Portrait Widescreen)">9:16 竖版宽屏</option>
-              <option value="3:4 (Portrait Standard)">3:4 竖版标准</option>
-              <option value="2:3 (Portrait Photo)">2:3 竖版照片</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="grid-2">
-          <div>
-            <label for="v-megapixels">百万像素（megapixels）</label>
-            <select id="v-megapixels">
-              <option value="0.5">0.5 MP</option>
-              <option value="1.0" selected>1.0 MP</option>
-              <option value="1.5">1.5 MP</option>
-              <option value="2.0">2.0 MP</option>
-            </select>
-          </div>
-          <div>
-            <label for="v-seed">种子 seed（-1 随机）</label>
-            <input id="v-seed" type="number" value="-1" min="-1">
-          </div>
-        </div>
-
-        <div class="grid-2">
-          <div>
-            <label for="v-steps">基本调度器步数（steps）</label>
-            <input id="v-steps" type="number" value="20" min="1" max="100" step="1">
-            <div class="hint" id="v-steps-hint">采样步数，始终生效。</div>
-          </div>
-          <div>
-            <label>LoRA（可选，可叠加）</label>
-            <div id="lora-list" class="lora-list"></div>
-            <button class="btn-upload" id="btn-add-lora" type="button">+ 添加 LoRA</button>
-            <div class="hint">不添加则直连原模型；可叠加多个（最多 5 个），按顺序串联。</div>
-          </div>
-        </div>
-
-        <div class="section-title" style="margin-top:4px;">参考素材（可选）</div>
-        <div class="asset-slots">
-          <div class="asset-slot" id="slot-image">
-            <div class="slot-head">
-              <span class="slot-title">图片</span>
-              <span class="slot-hint">参考图，最多 9 张（可选）</span>
-            </div>
-            <div class="slot-files" id="slot-image-files"></div>
-            <button class="btn-upload" id="btn-upload-image">上传图片</button>
-            <input type="file" class="file-input" id="file-image" accept="image/*" multiple>
-          </div>
-
-          <div class="asset-slot" id="slot-video">
-            <div class="slot-head">
-              <span class="slot-title">视频</span>
-              <span class="slot-hint">参考视频，最多 3 个（可选）</span>
-            </div>
-            <div class="slot-files" id="slot-video-files"></div>
-            <button class="btn-upload" id="btn-upload-video">上传视频</button>
-            <input type="file" class="file-input" id="file-video" accept="video/*" multiple>
-          </div>
-
-          <div class="asset-slot" id="slot-audio">
-            <div class="slot-head">
-              <span class="slot-title">音频</span>
-              <span class="slot-hint">参考音频，最多 3 个（可选）</span>
-            </div>
-            <div class="slot-files" id="slot-audio-files"></div>
-            <button class="btn-upload" id="btn-upload-audio">上传音频</button>
-            <input type="file" class="file-input" id="file-audio" accept="audio/*" multiple>
-          </div>
-        </div>
-
-        <button id="btn-generate-video">生成视频</button>
-        <div id="v-status" class="status"></div>
-        <video id="v-result" class="result-img" controls style="display:none;"></video>
-      </div>
-    </div>
-
-    <!-- 视图：对话助手 -->
-    <div id="view-chat" class="view">
+    <div id="view-agent" class="view">
       <div class="card">
         <div class="section-title" style="display:flex; justify-content:space-between; align-items:center;">
-          <span>AI 对话助手</span>
-          <div style="display:flex; gap:6px;">
+          <span>Agent 自动化</span>
+          <div style="display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end;">
+            <a id="open-comfyui-agent" class="primary-link" href="#" target="_blank" rel="noopener noreferrer" aria-disabled="true">打开 ComfyUI</a>
             <button id="btn-agent-memory" type="button" style="font-size:12px; padding:2px 10px;">个人记忆</button>
-            <button id="btn-clear-chat" type="button" style="font-size:12px; padding:2px 10px;">清空对话</button>
+            <button id="btn-clear-chat" type="button" style="font-size:12px; padding:2px 10px;">清空会话</button>
           </div>
         </div>
+        <div class="hint" style="margin:0 0 12px;">描述你想要的图片或视频，Agent 会选择 ComfyUI 工作流、执行生成并展示结果。</div>
         <div class="chat-layout">
           <div class="chat-sidebar">
             <div class="sidebar-title">模型</div>
@@ -720,7 +371,7 @@
               <span class="dot"></span> llama.cpp
             </div>
             <div id="custom-model-list"></div>
-            <button id="btn-add-custom-model" type="button" class="chat-model-item" style="color:var(--muted); border:none; width:100%; text-align:left;">+ 自定义模型</button>
+            <button id="btn-add-custom-model" type="button" class="chat-model-item" style="color:var(--muted); border:none; text-align:left;">+ 自定义模型</button>
             <div id="custom-model-form" style="display:none; margin-top:6px; padding:8px; border-top:1px solid var(--border);">
               <input id="cm-name" placeholder="名称（可选）">
               <input id="cm-base-url" placeholder="Base URL，如 https://api.deepseek.com/v1">
@@ -734,22 +385,16 @@
           </div>
           <div class="chat-main">
             <div id="chat-box" class="chat-box">
-              <div class="chat-msg system">你好，我是对话助手。当前服务：OpenAI。</div>
+              <div class="chat-msg system">你好，我是 ComfyUI 创作 Agent。你可以描述想生成的图片或视频。</div>
             </div>
-              <div class="chat-input-row">
-              <textarea id="chat-input" placeholder="输入消息，回车发送…"></textarea>
+            <div class="chat-input-row">
+              <textarea id="chat-input" placeholder="输入图片或视频创作需求，回车发送…"></textarea>
               <label class="rag-toggle" style="display:flex; align-items:center; gap:4px; white-space:nowrap; font-size:13px; color:var(--muted); cursor:pointer;" title="开启后回答基于项目文档知识库"><input type="checkbox" id="chat-rag-toggle"> 知识库</label>
+              <label class="rag-toggle" style="display:flex; align-items:center; gap:4px; white-space:nowrap; font-size:13px; color:var(--muted); cursor:pointer;" title="内置图片/视频生成后使用当前模型进行视觉审查；需支持图片输入，未达 8/10 最多自动优化重试 2 次，可能增加模型与 GPU 成本"><input type="checkbox" id="chat-quality-review-toggle"> 视觉审查</label>
               <button id="btn-rag-manage" type="button" title="管理知识库文档" style="flex-shrink:0;">管理</button>
-              <button id="btn-chat-image" type="button" title="上传图片让模型看图">传图</button>
-              <label style="display:flex; align-items:center; gap:4px; white-space:nowrap; font-size:13px; color:var(--muted); cursor:pointer;" title="切换为通过 MCP 工具直接控制 ComfyUI"><input type="checkbox" id="chat-mcp-toggle"> 控制 ComfyUI</label>
-              <input type="file" id="chat-image-input" accept="image/*" style="display:none">
-              <button id="btn-chat">发送</button>
-              </div>
-            <div id="chat-image-preview" style="display:none; margin-top:6px; align-items:center; gap:8px;">
-              <img id="chat-image-preview-img" style="max-width:120px; max-height:120px; border-radius:6px; border:1px solid var(--border);">
-              <button id="btn-chat-image-clear" type="button" style="padding:4px 10px;">移除</button>
+              <button id="btn-chat">执行</button>
             </div>
-            <div id="chat-mode-hint" class="chat-fill-hint">左侧切换模型，各模型对话上下文独立保留。</div>
+            <div id="chat-mode-hint" class="chat-fill-hint">Agent 通过 MCP 调用 ComfyUI 工具；有影响的操作会先请求确认。</div>
             <div id="agent-memory-panel" style="display:none; margin-top:8px; border:1px solid var(--border); border-radius:8px; padding:10px;">
               <div style="font-weight:500; font-size:13px; margin-bottom:8px;">个人 ComfyUI 偏好</div>
               <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:8px;">
@@ -788,31 +433,11 @@
           </div>
         </div>
       </div>
-    </div>
 
-    <!-- 视图 3：个人主页 -->
-    <div id="view-profile" class="view">
-      <div class="card profile-card">
-        <div class="profile-avatar" id="profile-avatar">U</div>
-        <div class="profile-info">
-          <div class="profile-name" id="profile-name">-</div>
-          <div class="profile-meta" id="profile-meta">注册时间：-</div>
-          <div class="profile-stats">
-            <div class="stat-item">
-              <div class="stat-num" id="profile-tasks">0</div>
-              <div class="stat-label">生成任务</div>
-            </div>
-            <div class="stat-item">
-              <div class="stat-num" id="profile-images">0</div>
-              <div class="stat-label">资产图片</div>
-            </div>
-          </div>
-        </div>
-      </div>
       <div class="card">
-        <div class="section-title">我的资产</div>
-        <div id="profile-gallery" class="gallery"></div>
-        <div class="hint">你生成过的图片和视频都会在这里，点击可放大预览。</div>
+        <div class="section-title">创作结果</div>
+        <div id="gallery" class="gallery"></div>
+        <div class="hint">Agent 最近生成的图片和视频会保存在这里，点击可预览。</div>
       </div>
     </div>
   </div>
@@ -828,263 +453,48 @@ const API = "http://127.0.0.1:8000";
 
 const $ = (id) => document.getElementById(id);
 
-// ---- 登录页粒子背景（浅色漂浮光点 + 鼠标轻微排斥 + 邻近连线）----
-(function () {
-  const canvas = $("auth-particles");
-  const ctx = canvas.getContext("2d");
-  let particles = [];
-  let rafId = null;
-  let running = false;
-  let w = 0, h = 0;
-  const mouse = { x: -9999, y: -9999 };
-
-  // 主题色系（浅色背景上的淡蓝紫光点）
-  const COLORS = ["79,110,242", "127,119,221", "133,183,235", "159,169,224"];
-
-  function resize() {
-    const dpr = window.devicePixelRatio || 1;
-    w = window.innerWidth;
-    h = window.innerHeight;
-    canvas.width = w * dpr;
-    canvas.height = h * dpr;
-    canvas.style.width = w + "px";
-    canvas.style.height = h + "px";
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    // 按面积自适应粒子数量（约每 14000px² 一个）
-    const target = Math.min(90, Math.max(30, Math.round((w * h) / 14000)));
-    particles = [];
-    for (let i = 0; i < target; i++) {
-      particles.push({
-        x: Math.random() * w,
-        y: Math.random() * h,
-        vx: (Math.random() - 0.5) * 0.35,
-        vy: (Math.random() - 0.5) * 0.35,
-        r: Math.random() * 1.8 + 0.6,
-        c: COLORS[(Math.random() * COLORS.length) | 0],
-        a: Math.random() * 0.45 + 0.2,
-      });
+// ---- 单实例本地资料 ----
+const LOCAL_PROFILE_ID = "local";
+const previousUsername = localStorage.getItem("auth_username") || "";
+if (previousUsername && previousUsername !== LOCAL_PROFILE_ID) {
+  for (const prefix of ["comfyui_web_url:", "agent_history:"]) {
+    const previousValue = localStorage.getItem(prefix + previousUsername);
+    const localKey = prefix + LOCAL_PROFILE_ID;
+    if (previousValue && !localStorage.getItem(localKey)) {
+      localStorage.setItem(localKey, previousValue);
     }
   }
+}
+localStorage.removeItem("auth_token");
+localStorage.removeItem("auth_username");
+let comfyUIWebUrl = "";
+let agentHistory = [];
+let agentMessages = [];
+let currentCustomConfigId = null;
+let chatAgentBusy = false;
+let modelSelectionMade = false;
 
-  function step() {
-    ctx.clearRect(0, 0, w, h);
-    for (let i = 0; i < particles.length; i++) {
-      const p = particles[i];
-      p.x += p.vx;
-      p.y += p.vy;
+$("open-comfyui").addEventListener("click", (event) => {
+  if (!comfyUIWebUrl) event.preventDefault();
+});
 
-      // 鼠标排斥：靠近时轻微推开
-      const dx = p.x - mouse.x;
-      const dy = p.y - mouse.y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      const repelR = 110;
-      if (dist < repelR && dist > 0.01) {
-        const f = (repelR - dist) / repelR * 0.6;
-        p.x += (dx / dist) * f;
-        p.y += (dy / dist) * f;
-      }
-
-      // 边界回弹
-      if (p.x < 0 || p.x > w) p.vx *= -1;
-      if (p.y < 0 || p.y > h) p.vy *= -1;
-      p.x = Math.max(0, Math.min(w, p.x));
-      p.y = Math.max(0, Math.min(h, p.y));
-
-      // 邻近连线
-      for (let j = i + 1; j < particles.length; j++) {
-        const q = particles[j];
-        const ldx = p.x - q.x;
-        const ldy = p.y - q.y;
-        const d2 = ldx * ldx + ldy * ldy;
-        if (d2 < 110 * 110) {
-          const op = (1 - Math.sqrt(d2) / 110) * 0.18;
-          ctx.strokeStyle = "rgba(79,110,242," + op.toFixed(3) + ")";
-          ctx.lineWidth = 0.5;
-          ctx.beginPath();
-          ctx.moveTo(p.x, p.y);
-          ctx.lineTo(q.x, q.y);
-          ctx.stroke();
-        }
-      }
-
-      ctx.beginPath();
-      ctx.fillStyle = "rgba(" + p.c + "," + p.a.toFixed(3) + ")";
-      ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    rafId = requestAnimationFrame(step);
-  }
-
-  function start() {
-    if (running) return;
-    running = true;
-    resize();
-    window.addEventListener("resize", resize);
-    window.addEventListener("mousemove", onMove);
-    rafId = requestAnimationFrame(step);
-  }
-
-  function stop() {
-    if (!running) return;
-    running = false;
-    cancelAnimationFrame(rafId);
-    window.removeEventListener("resize", resize);
-    window.removeEventListener("mousemove", onMove);
-    ctx.clearRect(0, 0, w, h);
-  }
-
-  function onMove(e) {
-    mouse.x = e.clientX;
-    mouse.y = e.clientY;
-  }
-
-  // 暴露给外部：登录态切换时调用
-  window.updateParticles = function (show) {
-    if (show) {
-      canvas.classList.remove("hidden");
-      start();
-    } else {
-      canvas.classList.add("hidden");
-      stop();
-    }
-  };
-})();
-
-// ---- 认证状态管理 ----
-let authToken = localStorage.getItem("auth_token") || "";
-let authUsername = localStorage.getItem("auth_username") || "";
-let availableLoras = [];        // /api/loras 返回的文件名列表
-let loraItems = [];             // 视频区已添加的 LoRA 项 [{name, strength}]
-let imgLoraItems = [];          // 生图区已添加的 LoRA 项 [{name, strength}]
-
-// 统一请求封装：自动带 Authorization 头；401 时清除登录态
+// 单实例 API 不需要认证头。
 async function apiFetch(path, options = {}) {
   const headers = { "Content-Type": "application/json", ...(options.headers || {}) };
-  if (authToken) headers["Authorization"] = "Bearer " + authToken;
-  const resp = await fetch(API + path, { ...options, headers });
-  if (resp.status === 401) {
-    clearAuth();
-    return resp;
-  }
-  return resp;
+  return fetch(API + path, { ...options, headers });
 }
 
-function clearAuth() {
-  authToken = "";
-  authUsername = "";
-  localStorage.removeItem("auth_token");
-  localStorage.removeItem("auth_username");
-  $("app-main").classList.add("hidden");
-  $("auth-card").classList.remove("hidden");
-  $("current-user").textContent = "";
-  window.updateParticles(true);
-}
-
-function applyAuth(token, username) {
-  authToken = token;
-  authUsername = username;
-  localStorage.setItem("auth_token", token);
-  localStorage.setItem("auth_username", username);
-  $("auth-card").classList.add("hidden");
-  $("app-main").classList.remove("hidden");
-  $("current-user").textContent = username;
-  $("auth-username").value = "";
-  $("auth-password").value = "";
-  $("auth-error").textContent = "";
-  window.updateParticles(false);
-  loadGallery();
-  loadAllConversations();
-  loadCustomModels();
-  loadWorkflows();
-  loadModelPresets();
-  loadLoras();
-}
-
-// 登录/注册 切换
-let authMode = "login"; // login | register
-function setAuthMode(mode) {
-  authMode = mode;
-  $("tab-login").classList.toggle("active", mode === "login");
-  $("tab-register").classList.toggle("active", mode === "register");
-  $("btn-auth").textContent = mode === "login" ? "登录" : "注册";
-  $("auth-error").textContent = "";
-}
-
-async function submitAuth() {
-  const username = $("auth-username").value.trim();
-  const password = $("auth-password").value;
-  const errEl = $("auth-error");
-  errEl.textContent = "";
-  if (!username || !password) {
-    errEl.textContent = "请填写用户名和密码";
-    return;
-  }
-  const btn = $("btn-auth");
-  btn.disabled = true;
-  try {
-    const path = authMode === "login" ? "/api/auth/login" : "/api/auth/register";
-    const resp = await fetch(API + path, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username, password }),
-    });
-    const data = await resp.json();
-    if (!resp.ok || !data.access_token) {
-      errEl.textContent = data.detail || "操作失败";
-      return;
-    }
-    applyAuth(data.access_token, data.username);
-  } catch (err) {
-    errEl.textContent = "请求出错：" + err.message;
-  } finally {
-    btn.disabled = false;
-  }
-}
-
-// 页面加载时：有 token 则直接进入已登录态
-if (authToken) {
-  $("auth-card").classList.add("hidden");
-  $("app-main").classList.remove("hidden");
-  $("current-user").textContent = authUsername;
-  window.updateParticles(false);
-  loadGallery();
-  loadAllConversations();
-  loadCustomModels();
-  loadWorkflows();
-  loadModelPresets();
-  loadLoras();
-} else {
-  $("app-main").classList.add("hidden");
-  $("auth-card").classList.remove("hidden");
-  window.updateParticles(true);
-}
-
-$("tab-login").addEventListener("click", () => setAuthMode("login"));
-$("tab-register").addEventListener("click", () => setAuthMode("register"));
-$("btn-auth").addEventListener("click", submitAuth);
-$("auth-password").addEventListener("keydown", (e) => {
-  if (e.key === "Enter") submitAuth();
-});
-$("btn-logout").addEventListener("click", clearAuth);
+loadGallery();
+loadCustomModels();
+loadComfyUIConfig();
+loadAgentConversation();
 
 // 导航 Tab 切换
 document.querySelectorAll(".nav-tab").forEach((tab) => {
   tab.addEventListener("click", () => switchView(tab.dataset.view));
 });
-// 用户名点击进入个人主页
-$("current-user").addEventListener("click", () => switchView("view-profile"));
-$("current-user").style.cursor = "pointer";
-
-function setStatus(text, cls) {
-  const el = $("status");
-  el.textContent = text;
-  el.className = "status " + (cls || "");
-}
-
-// 带 token 加载图片（<img> 标签无法带 Authorization 头，需用 fetch 拿 blob）
-async function loadAuthedImage(url) {
-  const headers = authToken ? { Authorization: "Bearer " + authToken } : {};
-  const resp = await fetch(url, { headers });
+async function loadMediaObjectUrl(url) {
+  const resp = await fetch(url);
   if (!resp.ok) throw new Error("媒体加载失败 " + resp.status);
   const blob = await resp.blob();
   return URL.createObjectURL(blob);
@@ -1127,73 +537,6 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") closeLightbox();
 });
 
-// ---- 工作流选择 ----
-let workflows = [];           // [{file, is_default}]
-let selectedWorkflow = "";    // 当前选中的工作流文件名（"" = 默认）
-
-function currentWorkflow() {
-  return selectedWorkflow;
-}
-
-function renderWorkflows() {
-  const list = $("wf-list");
-  list.innerHTML = "";
-  if (!workflows.length) {
-    list.innerHTML = '<div class="wf-empty">暂无可用工作流</div>';
-    return;
-  }
-  workflows.forEach((wf) => {
-    const item = document.createElement("div");
-    item.className = "wf-item" + (wf.file === selectedWorkflow ? " active" : "");
-    item.innerHTML = '<span class="dot"></span><span>' + wf.file + (wf.is_default ? ' <span style="color:var(--muted);font-size:11px;">(默认)</span>' : '') + '</span>';
-    item.onclick = () => selectWorkflow(wf.file);
-    list.appendChild(item);
-  });
-}
-
-function selectWorkflow(file) {
-  selectedWorkflow = file;
-  renderWorkflows();
-}
-
-async function loadWorkflows() {
-  try {
-    const resp = await apiFetch("/api/workflows");
-    if (!resp.ok) {
-      $("wf-list").innerHTML = '<div class="wf-empty">工作流加载失败</div>';
-      return;
-    }
-    workflows = await resp.json();
-    // 默认选中 is_default 的工作流；无默认时选中第一个
-    const def = workflows.find((w) => w.is_default) || workflows[0];
-    if (selectedWorkflow === "" || !workflows.some((w) => w.file === selectedWorkflow)) {
-      selectedWorkflow = def ? def.file : "";
-    }
-    renderWorkflows();
-  } catch (err) {
-    $("wf-list").innerHTML = '<div class="wf-empty">工作流加载失败：' + err.message + '</div>';
-  }
-}
-
-// ---- 模型组合预设 ----
-async function loadModelPresets() {
-  try {
-    const resp = await apiFetch("/api/model-presets");
-    if (!resp.ok) return;
-    const presets = await resp.json();
-    const sel = $("model_preset");
-    // 保留第一项「默认」，追加各预设
-    presets.forEach((p) => {
-      const opt = document.createElement("option");
-      opt.value = p.name;
-      opt.textContent = p.display_name;
-      sel.appendChild(opt);
-    });
-  } catch (err) {
-    // 加载失败不阻塞生图（保持只有「默认」选项）
-  }
-}
-
 // ---- 视图切换 ----
 function switchView(viewId) {
   document.querySelectorAll(".view").forEach((v) => v.classList.remove("active"));
@@ -1202,187 +545,191 @@ function switchView(viewId) {
   if (view) view.classList.add("active");
   const tab = document.querySelector('.nav-tab[data-view="' + viewId + '"]');
   if (tab) tab.classList.add("active");
-  if (viewId === "view-profile") loadProfile();
+  if (viewId === "view-agent") loadGallery();
 }
 
-// ---- 个人主页 ----
-async function loadProfile() {
+async function loadComfyUIConfig() {
+  const savedUrlKey = "comfyui_web_url:" + LOCAL_PROFILE_ID;
+  const savedUrl = localStorage.getItem(savedUrlKey);
   try {
-    const resp = await apiFetch("/api/me");
-    if (!resp.ok) return;
+    const resp = await apiFetch("/api/instance");
     const data = await resp.json();
-    $("profile-name").textContent = data.username || "-";
-    const uname = (data.username || "U").charAt(0).toUpperCase();
-    $("profile-avatar").textContent = uname;
-    $("profile-meta").textContent = "注册时间：" + (data.created_at ? new Date(data.created_at).toLocaleString() : "-");
-    $("profile-tasks").textContent = data.task_count ?? 0;
-    $("profile-images").textContent = data.image_count ?? 0;
-  } catch (err) {
-    // 忽略
-  }
-  // 加载资产图库
-  try {
-    const resp = await apiFetch("/api/images");
-    const images = await resp.json();
-    const gallery = $("profile-gallery");
-    gallery.innerHTML = "";
-    if (!images.length) {
-      gallery.innerHTML = '<div class="hint">暂无资产</div>';
-      return;
+    if (!resp.ok) throw new Error(data.detail || "读取 ComfyUI 地址失败");
+    if (!modelSelectionMade && ["openai", "llama"].includes(data.default_llm_provider)) {
+      switchProvider(data.default_llm_provider, false);
     }
-    for (const img of images) {
-      const item = document.createElement("div");
-      item.className = "gallery-item";
-      const isVideo = img.media_type === "video";
+    const defaultUrl = normalizeComfyUIWebUrl(data.comfyui_web_url);
+    if (savedUrl) {
       try {
-        const url = await loadAuthedImage(API + img.file_url);
-        if (isVideo) {
-          item.innerHTML =
-            '<video src="' + url + '" preload="metadata" muted></video>' +
-            '<div class="type-badge">视频</div>' +
-            '<div class="video-play">▶</div>' +
-            '<div class="meta">任务 #' + img.task_id + '</div>';
-        } else {
-          item.innerHTML =
-            '<img src="' + url + '" loading="lazy">' +
-            '<div class="meta">任务 #' + img.task_id + '</div>';
-        }
-        item.onclick = () => openLightbox(url, isVideo ? "video" : "image");
-      } catch (e) {
-        item.innerHTML = '<div class="meta" style="padding:16px;">加载失败</div>';
+        setComfyUIWebUrl(normalizeComfyUIWebUrl(savedUrl), "当前浏览器已保存：");
+        return;
+      } catch {
+        localStorage.removeItem(savedUrlKey);
+        setComfyUIWebUrl(defaultUrl, "已忽略无效的浏览器地址，服务端默认地址：");
+        return;
       }
-      gallery.appendChild(item);
     }
+    setComfyUIWebUrl(defaultUrl, "服务端默认地址：");
   } catch (err) {
-    $("profile-gallery").innerHTML = '<div class="hint">资产加载失败：' + err.message + '</div>';
+    if (savedUrl) {
+      try {
+        setComfyUIWebUrl(normalizeComfyUIWebUrl(savedUrl), "当前浏览器已保存（服务端配置不可读）：");
+        return;
+      } catch (savedUrlError) {
+        $("comfyui-link-status").textContent = "已保存的 ComfyUI 地址无效：" + savedUrlError.message;
+      }
+    } else {
+      $("comfyui-link-status").textContent = "ComfyUI 地址不可用：" + err.message;
+    }
+    disableComfyUIWebLinks();
   }
 }
 
-async function generate() {
-  const btn = $("btn-generate");
-  const payload = {
-    prompt: $("prompt").value.trim(),
-    negative_prompt: $("negative").value.trim(),
-    aspect_ratio: $("aspect_ratio").value,
-    megapixels: parseFloat($("megapixels").value) || 1.0,
-    seed: parseInt($("seed").value) || -1,
-    workflow: currentWorkflow(),
-    model_preset: $("model_preset").value,
-    steps: parseInt($("img-steps").value) || 8,
-    refine_steps: parseInt($("img-refine-steps").value) || 4,
-    loras: collectImgLoras(),
-  };
+function normalizeComfyUIWebUrl(value) {
+  const url = new URL(String(value || "").trim());
+  if (!["http:", "https:"].includes(url.protocol) || !url.hostname || url.username || url.password) {
+    throw new Error("请输入不含凭据的 HTTP/HTTPS 地址");
+  }
+  return url;
+}
 
-  if (!payload.prompt) { setStatus("请先填写正向提示词", "failed"); return; }
+function setComfyUIWebUrl(url, label) {
+  comfyUIWebUrl = url.href;
+  ["open-comfyui", "open-comfyui-agent"].forEach((id) => {
+    $(id).href = comfyUIWebUrl;
+    $(id).setAttribute("aria-disabled", "false");
+  });
+  $("comfyui-web-url").value = comfyUIWebUrl;
+  $("comfyui-link-status").textContent = label + url.origin;
+}
 
-  btn.disabled = true;
-  setStatus("正在提交任务…", "processing");
+function disableComfyUIWebLinks() {
+  comfyUIWebUrl = "";
+  ["open-comfyui", "open-comfyui-agent"].forEach((id) => {
+    $(id).href = "#";
+    $(id).setAttribute("aria-disabled", "true");
+  });
+}
 
+$("btn-save-comfyui-url").addEventListener("click", () => {
   try {
-    const resp = await apiFetch("/api/generate", {
-      method: "POST",
-      body: JSON.stringify(payload),
-    });
-    const task = await resp.json();
-    if (!resp.ok || !task.id) {
-      setStatus("提交失败：" + (task.detail || JSON.stringify(task)), "failed");
-      btn.disabled = false;
-      return;
-    }
-    setStatus("任务 #" + task.id + " 已提交，等待出图…", "pending");
-    pollTask(task.id);
+    const url = normalizeComfyUIWebUrl($("comfyui-web-url").value);
+    localStorage.setItem("comfyui_web_url:" + LOCAL_PROFILE_ID, url.href);
+    setComfyUIWebUrl(url, "当前浏览器已保存：");
   } catch (err) {
-    setStatus("请求出错：" + err.message, "failed");
-    btn.disabled = false;
+    $("comfyui-link-status").textContent = "地址无效或保存失败：" + err.message;
   }
-}
+});
 
-async function pollTask(taskId) {
-  const timer = setInterval(async () => {
-    try {
-      const resp = await apiFetch("/api/tasks/" + taskId);
-      const task = await resp.json();
-      if (task.status === "completed") {
-        clearInterval(timer);
-        const img = task.images && task.images[0];
-        if (img) {
-          try {
-            $("result").src = await loadAuthedImage(API + img.file_url);
-            $("result").style.display = "block";
-            setStatus("出图完成 ✓", "completed");
-          } catch (e) {
-            setStatus("出图完成但加载图片失败：" + e.message, "failed");
-          }
-        } else {
-          setStatus("任务完成但没有图片", "failed");
-        }
-        $("btn-generate").disabled = false;
-        loadGallery();
-      } else if (task.status === "failed") {
-        clearInterval(timer);
-        setStatus("出图失败：" + (task.error || "未知错误"), "failed");
-        $("btn-generate").disabled = false;
-      } else {
-        setStatus("任务 #" + taskId + " 状态：" + task.status + "…", "processing");
-      }
-    } catch (err) {
-      clearInterval(timer);
-      setStatus("查询任务出错：" + err.message, "failed");
-      $("btn-generate").disabled = false;
-    }
-  }, 2000);
+$("btn-reset-comfyui-url").addEventListener("click", () => {
+  localStorage.removeItem("comfyui_web_url:" + LOCAL_PROFILE_ID);
+  loadComfyUIConfig();
+});
+
+$("btn-instance-diagnostics").addEventListener("click", loadInstanceDiagnostics);
+
+async function loadInstanceDiagnostics() {
+  const panel = $("instance-diagnostics");
+  const button = $("btn-instance-diagnostics");
+  button.disabled = true;
+  panel.textContent = "正在检查本地服务…";
+  try {
+    const response = await apiFetch("/api/instance/diagnostics");
+    if (!response.ok) throw new Error("检查失败（HTTP " + response.status + "）");
+    const result = await response.json();
+    const summary = document.createElement("p");
+    summary.textContent = result.status === "ready" ? "本地生成环境已就绪。" : "环境未完全就绪，请处理以下异常项。";
+    panel.replaceChildren(summary);
+    result.checks.forEach((check) => {
+      const row = document.createElement("div");
+      row.style.marginTop = "6px";
+      const status = document.createElement("strong");
+      status.textContent = "[" + check.status + "] " + check.label + "：";
+      const message = document.createElement("span");
+      message.textContent = check.message;
+      row.append(status, message);
+      panel.append(row);
+    });
+  } catch (error) {
+    panel.textContent = "无法完成自检：" + error.message;
+  } finally {
+    button.disabled = false;
+  }
 }
 
 async function loadGallery() {
+  const gallery = $("gallery");
+  gallery.replaceChildren();
   try {
-    const resp = await apiFetch("/api/images");
-    const images = await resp.json();
-    const gallery = $("gallery");
-    gallery.innerHTML = "";
-    if (!images.length) {
-      gallery.innerHTML = '<div class="hint">暂无图片</div>';
+    const [imageResponse, agentResponse] = await Promise.all([
+      apiFetch("/api/images"),
+      apiFetch("/api/agent/files"),
+    ]);
+    const images = imageResponse.ok ? await imageResponse.json() : [];
+    const agentFiles = agentResponse.ok ? await agentResponse.json() : [];
+    if (!imageResponse.ok && !agentResponse.ok) {
+      throw new Error("读取结果库失败");
+    }
+    const entries = [
+      ...images.map((image) => ({
+        kind: image.media_type,
+        url: API + image.file_url,
+        label: "任务 #" + image.task_id,
+      })),
+      ...agentFiles.map((file) => ({
+        kind: file.kind,
+        url: API + "/api/agent/files/" + encodeURIComponent(file.filename),
+        label: new Date(file.created_at * 1000).toLocaleString(),
+      })),
+    ];
+    if (!entries.length) {
+      const empty = document.createElement("div");
+      empty.className = "hint";
+      empty.textContent = imageResponse.ok && agentResponse.ok
+        ? "暂无生成结果"
+        : "暂无可显示的结果；部分结果来源读取失败。";
+      gallery.appendChild(empty);
       return;
     }
-    for (const img of images) {
+    if (!imageResponse.ok || !agentResponse.ok) {
+      const warning = document.createElement("div");
+      warning.className = "hint";
+      warning.textContent = "部分结果来源读取失败；当前仅显示已成功读取的结果。";
+      gallery.appendChild(warning);
+    }
+    for (const entry of entries) {
       const item = document.createElement("div");
       item.className = "gallery-item";
-      const isVideo = img.media_type === "video";
       try {
-        const url = await loadAuthedImage(API + img.file_url);
-        if (isVideo) {
+        const url = await loadMediaObjectUrl(entry.url);
+        if (entry.kind === "video") {
           item.innerHTML =
             '<video src="' + url + '" preload="metadata" muted></video>' +
             '<div class="type-badge">视频</div>' +
-            '<div class="video-play">▶</div>' +
-            '<div class="meta">任务 #' + img.task_id + '</div>';
+            '<div class="video-play">▶</div>';
         } else {
-          item.innerHTML =
-            '<img src="' + url + '" loading="lazy">' +
-            '<div class="meta">任务 #' + img.task_id + '</div>';
+          item.innerHTML = '<img src="' + url + '" loading="lazy">';
         }
-        item.onclick = () => openLightbox(url, isVideo ? "video" : "image");
-      } catch (e) {
-        item.innerHTML = '<div class="meta" style="padding:16px;">加载失败</div>';
+        const meta = document.createElement("div");
+        meta.className = "meta";
+        meta.textContent = entry.label;
+        item.appendChild(meta);
+        item.onclick = () => openLightbox(url, entry.kind === "video" ? "video" : "image");
+      } catch (err) {
+        item.textContent = "媒体加载失败：" + err.message;
       }
       gallery.appendChild(item);
     }
   } catch (err) {
-    $("gallery").innerHTML = '<div class="hint">图库加载失败：' + err.message + '</div>';
+    gallery.replaceChildren();
+    const error = document.createElement("div");
+    error.className = "hint";
+    error.textContent = "结果库加载失败：" + err.message;
+    gallery.appendChild(error);
   }
 }
 
-$("btn-generate").addEventListener("click", generate);
-loadGallery();
-
-// ---- 对话助手 ----
-// 每个 provider 独立保存上下文（多轮历史），互不串扰
-let chatHistories = { openai: [], llama: [], custom: [] };   // provider -> [{role, content}]
-let chatMessages = { openai: [], llama: [], custom: [] };    // provider -> [{role, text}] 界面显示用
-let chatImageBase64 = null;   // 当前待发送的图片 data URL（多模态看图）
-let currentCustomConfigId = null;   // 当前选中的自定义模型配置 ID
-let chatAgentBusy = false;
-
-
+// ---- Agent 自动化会话 ----
 function currentProvider() {
   const active = document.querySelector(".chat-model-item.active");
   return active ? active.dataset.provider : "openai";
@@ -1398,117 +745,44 @@ function appendChatMsg(role, text) {
   return div;
 }
 
-// 切换 provider 时重建聊天框，展示该 provider 自己的历史消息
 function renderChat() {
   const box = $("chat-box");
   box.innerHTML = "";
-  const provider = currentProvider();
-  const msgs = chatMessages[provider];
-  if (!msgs.length) {
-    box.innerHTML = '<div class="chat-msg system">你好，我是对话助手。当前服务：' + provider + '。</div>';
+  if (!agentMessages.length) {
+    box.innerHTML = '<div class="chat-msg system">你好，我是 ComfyUI 创作 Agent。你可以描述想生成的图片或视频。</div>';
     return;
   }
-  msgs.forEach((m) => appendChatMsg(m.role, m.text));
+  agentMessages.forEach((message) => appendChatMsg(message.role, message.text));
 }
 
-async function readChatStream(resp) {
-  const contentType = resp.headers.get("content-type") || "";
-  if (!contentType.includes("text/event-stream") || !resp.body) {
-    throw new Error("服务器未返回有效的流式响应");
-  }
-
-  const reader = resp.body.getReader();
-  const decoder = new TextDecoder();
-  const assistantNode = appendChatMsg("assistant", "正在生成…");
-  let buffer = "";
-  let reply = "";
-  let completed = false;
-
-  function consumeEvent(block) {
-    let eventName = "message";
-    const dataLines = [];
-    for (const line of block.split("\n")) {
-      if (line.startsWith("event:")) eventName = line.slice(6).trim();
-      else if (line.startsWith("data:")) dataLines.push(line.slice(5).trimStart());
-    }
-    if (!dataLines.length) return;
-    const data = dataLines.join("\n");
-    if (eventName === "error") {
-      let detail = "流式生成失败";
-      try {
-        detail = JSON.parse(data).detail || detail;
-      } catch {
-        detail = data || detail;
-      }
-      throw new Error(detail);
-    }
-    if (data === "[DONE]") {
-      completed = true;
-      return;
-    }
-    let payload;
-    try {
-      payload = JSON.parse(data);
-    } catch {
-      throw new Error("流式响应格式无效");
-    }
-    if (typeof payload.delta !== "string") {
-      throw new Error("流式响应缺少文本片段");
-    }
-    reply += payload.delta;
-    assistantNode.textContent = reply || "正在生成…";
-    $("chat-box").scrollTop = $("chat-box").scrollHeight;
-  }
-
+function loadAgentConversation() {
+  const key = "agent_history:" + LOCAL_PROFILE_ID;
   try {
-    while (true) {
-      const { value, done } = await reader.read();
-      buffer += done ? decoder.decode() : decoder.decode(value, { stream: true });
-      buffer = buffer.replace(/\r\n/g, "\n");
-      let separator;
-      while ((separator = buffer.indexOf("\n\n")) !== -1) {
-        const block = buffer.slice(0, separator);
-        buffer = buffer.slice(separator + 2);
-        consumeEvent(block);
-        if (completed) break;
-      }
-      if (completed || done) break;
-    }
-    if (!completed && buffer.trim()) consumeEvent(buffer);
-    if (!completed) throw new Error("流式响应意外结束");
-    if (!reply) throw new Error("助手未返回文本");
-    return reply;
-  } catch (err) {
-    if (!reply) assistantNode.remove();
-    throw err;
+    const stored = JSON.parse(localStorage.getItem(key) || "[]");
+    agentHistory = Array.isArray(stored)
+      ? stored.filter((message) =>
+        message && ["user", "assistant"].includes(message.role) && typeof message.content === "string"
+      ).slice(-20)
+      : [];
+  } catch {
+    agentHistory = [];
   }
-}
-
-// 登录后从后端拉取各 provider 的历史，填充上下文与界面
-async function loadAllConversations() {
-  for (const provider of ["openai", "llama"]) {
-    try {
-      const resp = await apiFetch("/api/conversations/" + provider);
-      if (!resp.ok) continue;
-      const data = await resp.json();
-      const msgs = data.messages || [];
-      chatHistories[provider] = msgs.map((m) => ({ role: m.role, content: m.content }));
-      chatMessages[provider] = msgs.map((m) => ({ role: m.role, text: m.content }));
-    } catch (err) {
-      // 拉取失败不阻塞，保留空历史
-    }
-  }
+  agentMessages = agentHistory.map((message) => ({ role: message.role, text: message.content }));
   renderChat();
 }
 
-// 侧边栏点击切换模型
-function switchProvider(provider) {
+function switchProvider(provider, userInitiated = true) {
   if (chatAgentBusy) return;
+  if (userInitiated) modelSelectionMade = true;
+  currentCustomConfigId = provider === "custom" ? currentCustomConfigId : null;
   document.querySelectorAll(".chat-model-item").forEach((item) => {
-    item.classList.toggle("active", item.dataset.provider === provider);
+    item.classList.toggle(
+      "active",
+      provider === "custom"
+        ? item.dataset.provider === "custom" && Number(item.dataset.customId) === currentCustomConfigId
+        : item.dataset.provider === provider
+    );
   });
-  currentCustomConfigId = null;   // 切回内置模型时清空自定义配置
-  renderChat();
 }
 
 // ---- 自定义模型 ----
@@ -1518,13 +792,18 @@ async function loadCustomModels() {
   try {
     const resp = await apiFetch("/api/custom-models");
     const data = await resp.json();
-    if (!Array.isArray(data)) return;
+    if (!resp.ok) throw new Error(data.detail || "读取自定义模型失败");
+    if (!Array.isArray(data)) throw new Error("自定义模型响应格式异常");
     data.forEach((cfg) => {
       const item = document.createElement("div");
       item.className = "chat-model-item";
       item.dataset.provider = "custom";
       item.dataset.customId = cfg.id;
       item.style.cssText = "display:flex; align-items:center;";
+      item.classList.toggle(
+        "active",
+        currentProvider() === "custom" && Number(cfg.id) === currentCustomConfigId
+      );
       const dot = document.createElement("span");
       dot.className = "dot";
       item.appendChild(dot);
@@ -1540,15 +819,18 @@ async function loadCustomModels() {
       item.appendChild(del);
       item.addEventListener("click", () => {
         if (chatAgentBusy) return;
+        modelSelectionMade = true;
         document.querySelectorAll(".chat-model-item").forEach((it) => it.classList.remove("active"));
         item.classList.add("active");
         currentCustomConfigId = cfg.id;
-        renderChat();
       });
       list.appendChild(item);
     });
   } catch (err) {
-    // 忽略
+    const error = document.createElement("div");
+    error.className = "chat-fill-hint";
+    error.textContent = "自定义模型加载失败：" + err.message;
+    list.appendChild(error);
   }
 }
 
@@ -1556,12 +838,17 @@ async function deleteCustomModel(id) {
   if (!confirm("确认删除该自定义模型？")) return;
   try {
     const resp = await apiFetch("/api/custom-models/" + id, { method: "DELETE" });
-    if (resp.ok) {
-      if (currentCustomConfigId === id) currentCustomConfigId = null;
-      loadCustomModels();
+    if (!resp.ok) {
+      const data = await resp.json();
+      throw new Error(data.detail || "删除自定义模型失败");
     }
+    if (currentCustomConfigId === id) {
+      currentCustomConfigId = null;
+      switchProvider("openai");
+    }
+    await loadCustomModels();
   } catch (err) {
-    // 忽略
+    alert("删除失败：" + err.message);
   }
 }
 
@@ -1610,56 +897,36 @@ async function sendChat() {
   if (!text) return;
 
   const provider = currentProvider();
-  const mcpMode = $("chat-mcp-toggle").checked;
-  const image = chatImageBase64;   // 取当前待发送的图片
+  if (provider === "custom" && !currentCustomConfigId) {
+    appendChatMsg("system", "请先选择一个有效的自定义模型配置。");
+    return;
+  }
+  const history = agentHistory.slice(-20);
   input.value = "";
+  agentHistory.push({ role: "user", content: text });
+  agentHistory = agentHistory.slice(-20);
+  localStorage.setItem("agent_history:" + LOCAL_PROFILE_ID, JSON.stringify(agentHistory));
   appendChatMsg("user", text);
   btn.disabled = true;
-  if (mcpMode) {
-    chatAgentBusy = true;
-    $("chat-mcp-toggle").disabled = true;
-  }
+  $("btn-clear-chat").disabled = true;
+  input.disabled = true;
+  chatAgentBusy = true;
 
   try {
-    if (mcpMode) {
-      chatMessages[provider].push({ role: "user", text });
-      await sendMcpAgent(text, provider);
-      return;
-    }
-
-    const body = { message: text, history: chatHistories[provider], provider };
-    if (provider === "custom" && currentCustomConfigId) {
-      body.custom_config_id = currentCustomConfigId;
-    }
-    if (image) body.image_base64 = image;
-    if ($("chat-rag-toggle").checked) body.use_rag = true;
-    const resp = await apiFetch("/api/chat/stream", {
-      method: "POST",
-      body: JSON.stringify(body),
-    });
-    if (!resp.ok) {
-      const data = await resp.json();
-      appendChatMsg("system", "请求失败：" + (data.detail || JSON.stringify(data)));
-    } else {
-      const reply = await readChatStream(resp);
-      chatHistories[provider].push({ role: "user", content: text });
-      chatHistories[provider].push({ role: "assistant", content: reply });
-      chatMessages[provider].push({ role: "user", text });
-      chatMessages[provider].push({ role: "assistant", text: reply });
-    }
+    const answer = await sendMcpAgent(text, provider, history);
+    agentHistory.push({ role: "assistant", content: answer });
+    agentHistory = agentHistory.slice(-20);
+    agentMessages = agentHistory.map((message) => ({ role: message.role, text: message.content }));
+    localStorage.setItem("agent_history:" + LOCAL_PROFILE_ID, JSON.stringify(agentHistory));
   } catch (err) {
-    appendChatMsg("system", "请求出错：" + err.message);
+    appendChatMsg("system", "Agent 执行失败：" + err.message);
   } finally {
     btn.disabled = false;
-    btn.textContent = "发送";
+    btn.textContent = "执行";
+    input.disabled = false;
+    $("btn-clear-chat").disabled = false;
     input.focus();
     chatAgentBusy = false;
-    $("chat-mcp-toggle").disabled = false;
-    if (chatImageBase64) {
-      chatImageBase64 = null;
-      $("chat-image-input").value = "";
-      $("chat-image-preview").style.display = "none";
-    }
   }
 }
 
@@ -1680,7 +947,9 @@ function agentProgressText(progress) {
     comfy_remember_preferences: "保存个人偏好",
     comfy_forget_preferences: "清除个人偏好",
     comfy_generate_image: "生成图片",
+    comfy_generate_video: "生成视频",
     comfy_run_workflow: "执行工作流",
+    harness_review: "视觉质量审查",
     comfy_queue: "查询队列",
     comfy_history: "查询生成历史",
     comfy_interrupt: "中断当前任务",
@@ -1695,7 +964,12 @@ function agentProgressText(progress) {
   const current = progress.current_tool
     ? (labels[progress.current_tool] || progress.current_tool)
     : "";
-  if (progress.running) completed.push("正在执行：" + current);
+  if (progress.running) {
+    const reviewAttempt = progress.review_attempt
+      ? "（第 " + progress.review_attempt + "/" + progress.max_review_attempts + " 轮）"
+      : "";
+    completed.push("正在执行：" + current + reviewAttempt);
+  }
   return completed.length ? "MCP 执行进度：\n" + completed.join("\n") : "MCP Agent 正在准备工具…";
 }
 
@@ -1715,56 +989,97 @@ function agentConfirmationText(confirmation) {
 
 async function showAgentFiles(assistantMsg, steps) {
   const files = [];
+  const reviews = [];
   (steps || []).forEach((step) => {
     try {
       const result = JSON.parse(step.result || "{}");
       if (result.ok && Array.isArray(result.files)) files.push(...result.files);
+      if (result.quality_review) reviews.push(result.quality_review);
     } catch (err) {
       // Ignore non-JSON tool output; the text remains available in the step log.
     }
+  });
+  reviews.forEach((review) => {
+    const attempts = Array.isArray(review.attempts) ? review.attempts : [];
+    const lastAttempt = attempts[attempts.length - 1];
+    const threshold = review.threshold ?? 8;
+    let text;
+    if (review.status === "passed") {
+      text = "视觉审查通过：" + (lastAttempt?.score ?? "—") + "/10（阈值 " + threshold + "/10，共 " + attempts.length + " 轮）";
+    } else if (review.status === "retry_limit") {
+      text = "视觉审查未通过：已达 " + (review.max_retries ?? 2) + " 次优化重试上限，最终 " + (lastAttempt?.score ?? "—") + "/10。";
+    } else {
+      text = "视觉审查未完成或重生成失败：" + (review.error || "结果未达到通过条件");
+    }
+    const notice = document.createElement("div");
+    notice.className = "chat-fill-hint";
+    notice.style.marginTop = "8px";
+    notice.textContent = text;
+    assistantMsg.appendChild(notice);
   });
   if (!files.length) return;
 
   const gallery = document.createElement("div");
   gallery.style.cssText = "display:flex; flex-wrap:wrap; gap:8px; margin-top:8px;";
+  let failedFiles = 0;
   for (const file of files) {
-    const resp = await apiFetch("/api/agent/files/" + encodeURIComponent(file.filename));
-    if (!resp.ok) continue;
-    const url = URL.createObjectURL(await resp.blob());
-    if (file.kind === "video") {
-      const video = document.createElement("video");
-      video.src = url;
-      video.controls = true;
-      video.style.cssText = "max-width:100%; max-height:320px; border-radius:8px;";
-      gallery.appendChild(video);
-    } else {
-      const img = document.createElement("img");
-      img.src = url;
-      img.alt = "MCP Agent 生成结果";
-      img.style.cssText = "max-width:100%; max-height:320px; border-radius:8px;";
-      gallery.appendChild(img);
+    try {
+      const resp = await apiFetch("/api/agent/files/" + encodeURIComponent(file.filename));
+      if (!resp.ok) {
+        failedFiles += 1;
+        continue;
+      }
+      const url = URL.createObjectURL(await resp.blob());
+      if (file.kind === "video") {
+        const video = document.createElement("video");
+        video.src = url;
+        video.controls = true;
+        video.style.cssText = "max-width:100%; max-height:320px; border-radius:8px;";
+        gallery.appendChild(video);
+      } else {
+        const img = document.createElement("img");
+        img.src = url;
+        img.alt = "MCP Agent 生成结果";
+        img.style.cssText = "max-width:100%; max-height:320px; border-radius:8px;";
+        gallery.appendChild(img);
+      }
+    } catch (err) {
+      failedFiles += 1;
     }
   }
   if (gallery.childElementCount) {
     assistantMsg.appendChild(gallery);
-    $("chat-box").scrollTop = $("chat-box").scrollHeight;
   }
+  if (failedFiles) {
+    const warning = document.createElement("div");
+    warning.className = "chat-fill-hint";
+    warning.textContent = "Agent 已完成，但 " + failedFiles + " 个结果文件无法预览。";
+    assistantMsg.appendChild(warning);
+  }
+  $("chat-box").scrollTop = $("chat-box").scrollHeight;
 }
 
-async function sendMcpAgent(text, provider) {
+async function sendMcpAgent(text, provider, history) {
   const btn = $("btn-chat");
+  const request = {
+    request: text,
+    history,
+    provider,
+    use_rag: $("chat-rag-toggle").checked,
+    quality_review_enabled: $("chat-quality-review-toggle").checked,
+  };
+  if (provider === "custom") request.custom_config_id = currentCustomConfigId;
   const resp = await apiFetch("/api/agent/mcp", {
     method: "POST",
-    body: JSON.stringify({ request: text }),
+    body: JSON.stringify(request),
   });
   const submitted = await resp.json();
   if (!resp.ok) {
-    appendChatMsg("system", "MCP Agent 提交失败：" + (submitted.detail || JSON.stringify(submitted)));
-    return;
+    throw new Error(submitted.detail || "Agent 提交失败");
   }
 
   btn.textContent = "执行中…";
-  const progressMsg = appendChatMsg("assistant", "MCP Agent 已接收，正在连接 ComfyUI…");
+  const progressMsg = appendChatMsg("assistant", "Agent 已接收，正在连接 ComfyUI…");
   const deadline = Date.now() + 20 * 60 * 1000;
   let progressKey = "";
   const handledConfirmations = new Set();
@@ -1809,21 +1124,23 @@ async function sendMcpAgent(text, provider) {
     if (status.state === "SUCCESS") {
       const result = status.result || {};
       if (result.status === "failed") {
-        progressMsg.textContent = "MCP Agent 执行失败：" + (result.error || "未知错误");
-        return;
+        progressMsg.textContent = "Agent 执行失败：" + (result.error || "未知错误");
+        throw new Error(result.error || "Agent 执行失败");
       }
-      const answer = result.answer || "MCP Agent 已完成。";
+      const answer = result.answer || "Agent 已完成。";
       progressMsg.textContent = answer;
-      chatMessages[provider].push({ role: "assistant", text: answer });
       await showAgentFiles(progressMsg, result.steps);
-      return;
+      loadGallery();
+      return answer;
     }
     if (status.state === "FAILURE" || status.state === "REVOKED") {
-      progressMsg.textContent = "MCP Agent 任务失败：" + (status.result || status.state);
-      return;
+      const error = status.result || status.state;
+      progressMsg.textContent = "Agent 任务失败：" + error;
+      throw new Error(String(error));
     }
   }
   progressMsg.textContent += "\n等待超时；任务可能仍在后台运行。";
+  throw new Error("等待 Agent 超时；后台任务可能仍在执行");
 }
 
 async function loadAgentMemoryOptions() {
@@ -1893,13 +1210,14 @@ async function saveAgentMemory() {
 
 async function clearAgentMemory() {
   if (!confirm("确认清除助手保存的全部个人生成偏好？")) return;
-  const resp = await apiFetch("/api/agent/memory", { method: "DELETE" });
-  const result = await resp.json();
-  if (!resp.ok) {
-    alert(result.detail || "清除个人记忆失败");
-    return;
+  try {
+    const resp = await apiFetch("/api/agent/memory", { method: "DELETE" });
+    const result = await resp.json();
+    if (!resp.ok) throw new Error(result.detail || "清除个人记忆失败");
+    await loadAgentMemory();
+  } catch (err) {
+    alert("清除个人记忆失败：" + err.message);
   }
-  await loadAgentMemory();
 }
 
 $("btn-agent-memory").addEventListener("click", async () => {
@@ -1928,55 +1246,16 @@ $("btn-clear-agent-memory").addEventListener("click", clearAgentMemory);
 
 $("btn-chat").addEventListener("click", sendChat);
 
-$("chat-mcp-toggle").addEventListener("change", (event) => {
-  const active = event.target.checked;
-  $("chat-rag-toggle").disabled = active;
-  $("btn-rag-manage").disabled = active;
-  $("btn-chat-image").disabled = active;
-  $("chat-mode-hint").textContent = active
-    ? "ComfyUI 控制模式：自然语言将交给 MCP Agent 执行，使用后端配置的默认 LLM。"
-    : "左侧切换模型，各模型对话上下文独立保留。";
-});
-
-// 清空对话：内置模型调后端清空 + 清前端；自定义模型仅清前端内存
 async function clearChat() {
-  const provider = currentProvider();
-  if (!confirm("确认清空当前对话记录？")) return;
-  if (provider === "openai" || provider === "llama") {
-    try {
-      await apiFetch("/api/conversations/" + provider, { method: "DELETE" });
-    } catch (err) {
-      // 后端清空失败不阻塞
-    }
-  }
-  chatHistories[provider] = [];
-  chatMessages[provider] = [];
+  if (chatAgentBusy) return;
+  if (!confirm("确认清空当前 Agent 会话？")) return;
+  agentHistory = [];
+  agentMessages = [];
+  localStorage.removeItem("agent_history:" + LOCAL_PROFILE_ID);
   renderChat();
 }
 
 $("btn-clear-chat").addEventListener("click", clearChat);
-// 传图按钮 → 触发隐藏的文件选择框
-$("btn-chat-image").addEventListener("click", () => $("chat-image-input").click());
-
-// 选中图片后 → 转 base64 + 显示预览
-$("chat-image-input").addEventListener("change", (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = () => {
-    chatImageBase64 = reader.result;
-    $("chat-image-preview-img").src = reader.result;
-    $("chat-image-preview").style.display = "flex";
-  };
-  reader.readAsDataURL(file);
-});
-
-// 移除图片
-$("btn-chat-image-clear").addEventListener("click", () => {
-  chatImageBase64 = null;
-  $("chat-image-input").value = "";
-  $("chat-image-preview").style.display = "none";
-});
 
 // ---- 知识库管理 ----
 $("btn-rag-manage").addEventListener("click", () => {
@@ -1995,6 +1274,7 @@ async function loadRagDocs() {
   try {
     const resp = await apiFetch("/api/rag/docs");
     const data = await resp.json();
+    if (!resp.ok) throw new Error(data.detail || "读取知识库失败");
     if (!Array.isArray(data) || data.length === 0) {
       list.innerHTML = '<div style="color:var(--muted)">暂无文档</div>';
       return;
@@ -2018,7 +1298,11 @@ async function loadRagDocs() {
       list.appendChild(row);
     });
   } catch (err) {
-    list.innerHTML = '<div style="color:#d93026">加载失败：' + err.message + '</div>';
+    list.replaceChildren();
+    const error = document.createElement("div");
+    error.style.color = "#d93026";
+    error.textContent = "加载失败：" + err.message;
+    list.appendChild(error);
   }
 }
 
@@ -2032,7 +1316,6 @@ $("rag-file-input").addEventListener("change", async (e) => {
   try {
     const resp = await fetch(API + "/api/rag/docs", {
       method: "POST",
-      headers: { Authorization: "Bearer " + authToken },
       body: fd,
     });
     const data = await resp.json();
@@ -2068,335 +1351,9 @@ $("chat-input").addEventListener("keydown", (e) => {
     sendChat();
   }
 });
-document.querySelectorAll(".chat-model-item").forEach((item) => {
+document.querySelectorAll(".chat-model-item[data-provider]").forEach((item) => {
   item.addEventListener("click", () => switchProvider(item.dataset.provider));
 });
-
-// ---- 视频生成 ----
-// 素材槽状态：{image: [filename], video: [filename], audio: [filename]}
-const assetFiles = { image: [], video: [], audio: [] };
-
-function updateAssetSlots() {
-  // 素材均可选：图片/视频/音频独立添加，无需强制顺序；接线顺序由后端按 图->视频->音频 处理
-  // 渲染已选文件名
-  renderSlotFiles("image");
-  renderSlotFiles("video");
-  renderSlotFiles("audio");
-}
-
-function renderSlotFiles(type) {
-  const container = $(`slot-${type}-files`);
-  container.innerHTML = "";
-  assetFiles[type].forEach((name, idx) => {
-    const chip = document.createElement("span");
-    chip.className = "slot-file";
-    chip.innerHTML = '<span>' + name + '</span><span class="rm" data-idx="' + idx + '">✕</span>';
-    chip.querySelector(".rm").onclick = () => {
-      assetFiles[type].splice(idx, 1);
-      updateAssetSlots();
-    };
-    container.appendChild(chip);
-  });
-}
-
-async function uploadAsset(file, type) {
-  const fd = new FormData();
-  fd.append("file", file);
-  const resp = await fetch(API + "/api/upload", {
-    method: "POST",
-    headers: authToken ? { Authorization: "Bearer " + authToken } : {},
-    body: fd,
-  });
-  const data = await resp.json();
-  if (!resp.ok) {
-    throw new Error(data.detail || "上传失败");
-  }
-  return data.filename;
-}
-
-function bindUpload(type) {
-  const input = $(`file-${type}`);
-  const btn = $(`btn-upload-${type}`);
-  btn.addEventListener("click", () => input.click());
-  input.addEventListener("change", async () => {
-    const files = Array.from(input.files || []);
-    if (!files.length) return;
-    btn.disabled = true;
-    btn.textContent = "上传中…";
-    try {
-      for (const f of files) {
-        // 限制数量
-        if (type === "image" && assetFiles.image.length >= 9) break;
-        if (type === "video" && assetFiles.video.length >= 3) break;
-        if (type === "audio" && assetFiles.audio.length >= 3) break;
-        const name = await uploadAsset(f, type);
-        assetFiles[type].push(name);
-      }
-      updateAssetSlots();
-    } catch (err) {
-      setVideoStatus("上传失败：" + err.message, "failed");
-    } finally {
-      btn.disabled = false;
-      btn.textContent = type === "image" ? "上传图片" : type === "video" ? "上传视频" : "上传音频";
-      input.value = "";
-    }
-  });
-}
-bindUpload("image");
-bindUpload("video");
-bindUpload("audio");
-
-function setVideoStatus(text, cls) {
-  const el = $("v-status");
-  el.textContent = text;
-  el.className = "status " + (cls || "");
-}
-
-async function generateVideo() {
-  const btn = $("btn-generate-video");
-  const payload = {
-    prompt: $("v-prompt").value.trim(),
-    duration: parseFloat($("v-duration").value) || 4.0,
-    aspect_ratio: $("v-aspect").value,
-    megapixels: parseFloat($("v-megapixels").value) || 1.0,
-    seed: parseInt($("v-seed").value) || -1,
-    steps: parseInt($("v-steps").value) || 20,
-    loras: collectLoras(),
-    ref_images: assetFiles.image,
-    ref_videos: assetFiles.video,
-    ref_audios: assetFiles.audio,
-  };
-
-  if (!payload.prompt) { setVideoStatus("请先填写提示词", "failed"); return; }
-
-  btn.disabled = true;
-  setVideoStatus("正在提交视频任务…", "processing");
-
-  try {
-    const resp = await apiFetch("/api/generate-video", {
-      method: "POST",
-      body: JSON.stringify(payload),
-    });
-    const task = await resp.json();
-    if (!resp.ok || !task.id) {
-      setVideoStatus("提交失败：" + (task.detail || JSON.stringify(task)), "failed");
-      btn.disabled = false;
-      return;
-    }
-    setVideoStatus("视频任务 #" + task.id + " 已提交，等待生成…", "pending");
-    pollVideoTask(task.id);
-  } catch (err) {
-    setVideoStatus("请求出错：" + err.message, "failed");
-    btn.disabled = false;
-  }
-}
-
-async function pollVideoTask(taskId) {
-  const timer = setInterval(async () => {
-    try {
-      const resp = await apiFetch("/api/tasks/" + taskId);
-      const task = await resp.json();
-      if (task.status === "completed") {
-        clearInterval(timer);
-        const media = task.images && task.images[0];
-        if (media) {
-          try {
-            const url = await loadAuthedImage(API + media.file_url);
-            const v = $("v-result");
-            v.src = url;
-            v.style.display = "block";
-            setVideoStatus("视频生成完成 ✓", "completed");
-          } catch (e) {
-            setVideoStatus("生成完成但加载视频失败：" + e.message, "failed");
-          }
-        } else {
-          setVideoStatus("任务完成但没有视频", "failed");
-        }
-        $("btn-generate-video").disabled = false;
-      } else if (task.status === "failed") {
-        clearInterval(timer);
-        setVideoStatus("视频生成失败：" + (task.error || "未知错误"), "failed");
-        $("btn-generate-video").disabled = false;
-      } else {
-        setVideoStatus("视频任务 #" + taskId + " 状态：" + task.status + "…", "processing");
-      }
-    } catch (err) {
-      clearInterval(timer);
-      setVideoStatus("查询任务出错：" + err.message, "failed");
-      $("btn-generate-video").disabled = false;
-    }
-  }, 3000);
-}
-
-// ---- LoRA 列表 ----
-const MAX_LORAS = 5;
-
-async function loadLoras() {
-  try {
-    const resp = await apiFetch("/api/loras");
-    if (resp.ok) {
-      availableLoras = await resp.json();
-    } else {
-      availableLoras = [];
-    }
-  } catch (err) {
-    availableLoras = [];
-  }
-  renderLoras();
-  renderImgLoras();
-}
-
-function renderLoras() {
-  const list = $("lora-list");
-  list.innerHTML = "";
-  loraItems.forEach((item, idx) => {
-    const row = document.createElement("div");
-    row.className = "lora-row";
-
-    const sel = document.createElement("select");
-    if (!availableLoras.length) {
-      const opt = document.createElement("option");
-      opt.value = "";
-      opt.textContent = "（无可用 LoRA，请先配置）";
-      sel.appendChild(opt);
-    }
-    availableLoras.forEach((name) => {
-      const opt = document.createElement("option");
-      opt.value = name;
-      opt.textContent = name;
-      if (name === item.name) opt.selected = true;
-      sel.appendChild(opt);
-    });
-    // 若当前 name 不在可选列表里，保留一个自定义选项
-    if (item.name && !availableLoras.includes(item.name)) {
-      const opt = document.createElement("option");
-      opt.value = item.name;
-      opt.textContent = item.name;
-      opt.selected = true;
-      sel.appendChild(opt);
-    }
-    sel.onchange = () => { loraItems[idx].name = sel.value; };
-
-    const strength = document.createElement("input");
-    strength.type = "number";
-    strength.step = "0.1";
-    strength.min = "-5";
-    strength.max = "5";
-    strength.value = item.strength;
-    strength.title = "强度";
-    strength.onchange = () => { loraItems[idx].strength = parseFloat(strength.value) || 0; };
-
-    const rm = document.createElement("span");
-    rm.className = "rm";
-    rm.textContent = "✕";
-    rm.title = "删除";
-    rm.onclick = () => {
-      loraItems.splice(idx, 1);
-      renderLoras();
-    };
-
-    row.appendChild(sel);
-    row.appendChild(strength);
-    row.appendChild(rm);
-    list.appendChild(row);
-  });
-}
-
-function addLora() {
-  if (loraItems.length >= MAX_LORAS) {
-    setVideoStatus("LoRA 最多 " + MAX_LORAS + " 个", "failed");
-    return;
-  }
-  // 默认选中第一个可用 lora；无可用则空
-  const defName = availableLoras.length ? availableLoras[0] : "";
-  loraItems.push({ name: defName, strength: 0.7 });
-  renderLoras();
-}
-
-function collectLoras() {
-  return loraItems
-    .filter((it) => it.name)
-    .map((it) => ({ name: it.name, strength: it.strength }));
-}
-
-$("btn-add-lora").addEventListener("click", addLora);
-
-// ---- 生图区 LoRA 列表（与视频区共用 availableLoras，独立已选列表）----
-function renderImgLoras() {
-  const list = $("img-lora-list");
-  list.innerHTML = "";
-  imgLoraItems.forEach((item, idx) => {
-    const row = document.createElement("div");
-    row.className = "lora-row";
-
-    const sel = document.createElement("select");
-    if (!availableLoras.length) {
-      const opt = document.createElement("option");
-      opt.value = "";
-      opt.textContent = "（无可用 LoRA，请先配置）";
-      sel.appendChild(opt);
-    }
-    availableLoras.forEach((name) => {
-      const opt = document.createElement("option");
-      opt.value = name;
-      opt.textContent = name;
-      if (name === item.name) opt.selected = true;
-      sel.appendChild(opt);
-    });
-    if (item.name && !availableLoras.includes(item.name)) {
-      const opt = document.createElement("option");
-      opt.value = item.name;
-      opt.textContent = item.name;
-      opt.selected = true;
-      sel.appendChild(opt);
-    }
-    sel.onchange = () => { imgLoraItems[idx].name = sel.value; };
-
-    const strength = document.createElement("input");
-    strength.type = "number";
-    strength.step = "0.1";
-    strength.min = "-5";
-    strength.max = "5";
-    strength.value = item.strength;
-    strength.title = "强度";
-    strength.onchange = () => { imgLoraItems[idx].strength = parseFloat(strength.value) || 0; };
-
-    const rm = document.createElement("span");
-    rm.className = "rm";
-    rm.textContent = "✕";
-    rm.title = "删除";
-    rm.onclick = () => {
-      imgLoraItems.splice(idx, 1);
-      renderImgLoras();
-    };
-
-    row.appendChild(sel);
-    row.appendChild(strength);
-    row.appendChild(rm);
-    list.appendChild(row);
-  });
-}
-
-function addImgLora() {
-  if (imgLoraItems.length >= MAX_LORAS) {
-    setStatus("LoRA 最多 " + MAX_LORAS + " 个", "failed");
-    return;
-  }
-  const defName = availableLoras.length ? availableLoras[0] : "";
-  imgLoraItems.push({ name: defName, strength: 0.7 });
-  renderImgLoras();
-}
-
-function collectImgLoras() {
-  return imgLoraItems
-    .filter((it) => it.name)
-    .map((it) => ({ name: it.name, strength: it.strength }));
-}
-
-$("btn-add-img-lora").addEventListener("click", addImgLora);
-
-$("btn-generate-video").addEventListener("click", generateVideo);
-updateAssetSlots();
 
 // 初始渲染
 renderChat();

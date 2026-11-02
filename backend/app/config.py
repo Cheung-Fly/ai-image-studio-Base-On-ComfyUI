@@ -12,6 +12,8 @@ class Settings(BaseSettings):
 
     # ComfyUI 服务地址（API 模式）
     comfyui_base_url: str = "http://127.0.0.1:8188"
+    # 浏览器打开的 ComfyUI 网页地址；与容器内部 API 地址分开配置
+    comfyui_web_url: str = "http://127.0.0.1:8188"
     # ComfyUI input 目录（素材上传落盘位置，供 LoadImage/LoadVideo/LoadAudio 读取）
     comfyui_input_dir: str = ""
     # ComfyUI loras 目录（列出可用 LoRA 文件，供前端下拉选择）
@@ -47,12 +49,8 @@ class Settings(BaseSettings):
     llama_max_tokens: int = 512
     # 默认使用的 provider：openai / llama
     default_llm_provider: str = "openai"
-    # JWT 签名密钥（生产环境务必通过环境变量覆盖为随机长字符串）
-    jwt_secret: str = "change-me-in-production-please"
     # API Key 加密密钥（用于加密存储用户自定义模型的 API Key，生产环境务必覆盖）
     encryption_key: str = "change-me-in-production-encryption-key"
-    # token 有效期（分钟）
-    jwt_expire_minutes: int = 60 * 24
     # 每用户每日 LLM 调用额度（-1 表示不限）
     daily_chat_quota: int = 100
     # CORS 允许来源（逗号分隔），生产环境收敛为具体前端域名
