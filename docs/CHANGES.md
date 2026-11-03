@@ -20,6 +20,13 @@ history, not a roadmap; planned work belongs in `项目技术演进路线图.md`
 
 ### Changed
 
+- Replaced the GitHub Pages project showcase with a 36-second silent animated
+  GIF embedded directly in the README. Removed the previous video and cover.
+
+## v10.0.0 - 2026-11-03
+
+### Changed
+
 - The unauthenticated `/health` endpoint now reports API liveness only and no
   longer returns the internal ComfyUI API address; anonymous diagnostics
   provides the dependency checks.
@@ -50,15 +57,19 @@ history, not a roadmap; planned work belongs in `项目技术演进路线图.md`
 - Added an anonymous local deployment self-check for database, Redis,
   Celery worker, ComfyUI, media storage, and default LLM configuration. The
   check does not call the LLM or expose service URLs or API keys.
-- V9 adds `POST /api/chat/stream` for server-sent event (SSE) chat output while
-  retaining the JSON chat endpoint. Streaming supports configured LLM providers,
-  RAG, and image input. This work is in [PR #4](https://github.com/Cheung-Fly/ai-image-studio-Base-On-ComfyUI/pull/4)
-  and is not yet a release.
 - Added conversational video generation through the ComfyUI MCP Agent and a
   configurable browser-facing ComfyUI URL. Users can save a browser-local,
   override and open the ComfyUI page from either UI section; Agent API control
   remains connected through the backend URL and does not require browser automation.
 - Added architecture documentation and an engineering change/release record.
+
+## v9.0.0 - 2026-10-28
+
+### Added
+
+- Added `POST /api/chat/stream` for server-sent event (SSE) chat output while
+  retaining the JSON chat endpoint. Streaming supports configured LLM providers,
+  RAG, and image input.
 
 ## v8.0.0
 
