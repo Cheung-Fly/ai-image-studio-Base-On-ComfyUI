@@ -1,0 +1,54 @@
+name: Deploy project showcase
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "docs/**"
+      - "showcase/ai-image-studio-explainer/cover.jpg"
+      - "showcase/ai-image-studio-explainer/renders/ai-image-studio-explainer.mp4"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Assemble the public site
+        env:
+          SITE_DIR: ${{ runner.temp }}/github-pages-site
+        run: |
+          mkdir -p "$SITE_DIR/assets"
+          cp docs/index.html docs/styles.css "$SITE_DIR/"
+          cp showcase/ai-image-studio-explainer/cover.jpg "$SITE_DIR/assets/cover.jpg"
+          cp showcase/ai-image-studio-explainer/renders/ai-image-studio-explainer.mp4 "$SITE_DIR/assets/ai-image-studio-explainer.mp4"
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: ${{ runner.temp }}/github-pages-site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
