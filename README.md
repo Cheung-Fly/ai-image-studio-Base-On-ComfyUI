@@ -6,6 +6,12 @@
 >
 > **产品目标：服务专业 AIGC 创作团队。** 当前运行模式为无需登录的单实例版本，不等同于已具备团队协作、多租户或企业级运维能力。
 
+## 项目演示视频
+
+[![AI Image Studio 项目讲解视频封面](showcase/ai-image-studio-explainer/cover.jpg)](showcase/ai-image-studio-explainer/renders/ai-image-studio-explainer.mp4)
+
+点击封面播放 36 秒项目讲解视频。
+
 ## 技术栈
 
 | 层    | 技术                                                 |
