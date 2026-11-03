@@ -1,7 +1,6 @@
 """Verify streamed LLM responses and the SSE chat endpoint."""
 
 import asyncio
-import sys
 from types import ModuleType
 from unittest.mock import Mock, patch
 
@@ -171,7 +170,7 @@ def test_sse_endpoint_streams_rag_prompt():
     persist_db = Mock()
 
     with (
-        patch.dict(sys.modules, {"app.services.rag": rag}),
+        patch("app.services.rag", rag, create=True),
         patch("app.api.chat.check_rate_limit"),
         patch("app.api.chat.check_and_increment_chat_quota"),
         patch("app.api.chat.llm_stream_chat", return_value=iter(["答案"])) as stream,

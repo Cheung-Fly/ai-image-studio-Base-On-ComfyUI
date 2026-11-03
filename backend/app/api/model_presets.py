@@ -12,5 +12,5 @@ router = APIRouter(tags=["model-presets"])
 
 @router.get("/model-presets", response_model=list[ModelPresetOut])
 def get_model_presets(user: User = Depends(get_current_user)):
-    """列出可用模型组合预设（需登录）。"""
+    """列出可用模型组合预设。"""
     return [ModelPresetOut(**p) for p in list_presets()]

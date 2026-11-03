@@ -4,12 +4,15 @@ WORKDIR /app
 
 # 先只拷依赖清单，利用 Docker 层缓存：依赖不变时不会重复装
 COPY backend/requirements.txt .
-RUN pip install --no-cache-dir -i https://mirrors.aliyun.com/pypi/simple/ -r requirements.txt
+# Azure deployment runs on CPU; avoid pulling the much larger CUDA runtime wheels.
+RUN pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch \
+    && pip install --no-cache-dir -r requirements.txt
 
 # 拷贝应用代码与运行时需要的静态文件
 COPY backend/app ./app
 COPY backend/model_presets.json ./model_presets.json
 COPY workflows /workflows
+COPY frontend /frontend
 
 # RAG 知识库固定文档（镜像内 /app/knowledge）
 COPY docs /app/knowledge/docs
@@ -20,7 +23,12 @@ ENV WORKFLOW_DIR=/workflows \
     IMAGE_STORAGE_DIR=/data/images \
     COMFYUI_BASE_URL=http://host.docker.internal:8188
 
-RUN mkdir -p /data/images
+RUN groupadd --gid 1000 app \
+    && useradd --uid 1000 --gid app --create-home --home-dir /home/app --shell /usr/sbin/nologin app \
+    && mkdir -p /data/images \
+    && chown -R app:app /data /home/app
+
+USER app:app
 
 EXPOSE 8000
 

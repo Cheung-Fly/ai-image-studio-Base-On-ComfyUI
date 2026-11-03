@@ -28,7 +28,7 @@ def chat_endpoint(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """对话：转发到 LLM，返回回复文本（需登录，受限流与额度控制，消息落库）。"""
+    """对话：转发到 LLM，返回回复文本（受限流与额度控制，消息落库）。"""
     check_rate_limit(user)
     check_and_increment_chat_quota(user, db)
 

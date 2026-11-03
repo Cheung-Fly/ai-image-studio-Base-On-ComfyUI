@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..database import get_db
-from ..models import User
+from ..models import CustomModelConfig, RunningHubConfig, User
 from ..schemas import (
     AgentConfirmationRequest,
     AgentGenerateRequest,
@@ -18,6 +18,7 @@ from ..schemas import (
     AgentMemoryUpdate,
 )
 from ..services.agent_memory import clear_preferences, get_preferences, update_preferences
+from ..throttle import check_and_increment_chat_quota, check_rate_limit
 from ..workers.celery_app import celery_app
 from ..workers.tasks import run_agent_pipeline, run_mcp_agent_task
 from .auth import get_current_user
@@ -29,9 +30,8 @@ router = APIRouter(tags=["agent"])
 def agent_generate(
     req: AgentGenerateRequest,
     user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
 ):
-    """提交一句话生图请求，返回 Celery 任务 ID（流水线异步执行）。"""
+    """兼容旧版固定流水线 API；前端创作流程使用 MCP Agent。"""
     result = run_agent_pipeline.delay(req.request, user.id)
     return {"task_id": result.id, "request": req.request}
 
@@ -40,9 +40,45 @@ def agent_generate(
 def agent_mcp(
     req: AgentGenerateRequest,
     user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
-    """自然语言控制 ComfyUI：Agent 通过 MCP 工具自主决策（查询/生图/中断/释放显存等）。"""
-    result = run_mcp_agent_task.delay(req.request, "")
+    """提交对话式 ComfyUI Agent 请求，支持图片/视频生成与有确认的控制操作。"""
+    check_rate_limit(user)
+
+    if req.provider == "custom":
+        config = (
+            db.query(CustomModelConfig)
+            .filter(
+                CustomModelConfig.id == req.custom_config_id,
+                CustomModelConfig.user_id == user.id,
+            )
+            .first()
+        )
+        if config is None:
+            raise HTTPException(400, "自定义模型配置无效")
+
+    if req.generation_backend == "runninghub":
+        config = db.get(RunningHubConfig, 1)
+        if (
+            config is None
+            or not config.api_key_encrypted
+            or not config.workflow_id
+            or not config.prompt_node_id
+            or not config.prompt_field
+        ):
+            raise HTTPException(400, "请先在 Agent 的 RunningHub 设置中完成工作流配置")
+
+    check_and_increment_chat_quota(user, db)
+    result = run_mcp_agent_task.delay(
+        req.request,
+        req.provider,
+        user.id,
+        req.custom_config_id,
+        [message.model_dump() for message in req.history],
+        req.use_rag,
+        req.quality_review_enabled,
+        generation_backend=req.generation_backend,
+    )
     return {"task_id": result.id, "request": req.request}
 
 
@@ -92,6 +128,31 @@ def agent_file(filename: str, user: User = Depends(get_current_user)):
     if path.parent != directory or not path.is_file():
         raise HTTPException(404, "Agent 生成文件不存在")
     return FileResponse(path)
+
+
+@router.get("/agent/files")
+def list_agent_files(user: User = Depends(get_current_user)):
+    """列出 Agent 已生成的媒体，用于恢复页面上的创作结果库。"""
+    directory = (settings.image_dir / "mcp").resolve()
+    if not directory.is_dir():
+        return []
+    supported = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".mp4", ".mov", ".webm", ".mkv"}
+    files = []
+    for path in directory.iterdir():
+        if path.is_file() and path.suffix.lower() in supported:
+            stat = path.stat()
+            files.append(
+                {
+                    "filename": path.name,
+                    "kind": (
+                        "video"
+                        if path.suffix.lower() in {".mp4", ".mov", ".webm", ".mkv"}
+                        else "image"
+                    ),
+                    "created_at": stat.st_mtime,
+                }
+            )
+    return sorted(files, key=lambda item: item["created_at"], reverse=True)
 
 
 @router.get("/agent/memory", response_model=AgentMemoryOut)

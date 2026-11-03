@@ -104,8 +104,8 @@
 <div class="wrap">
 
   <h1>AI 生图工坊 · 本地全流程原理讲解</h1>
-  <p class="sub">以 ComfyUI 生图主链路为例，解释进程职责和数据流。当前项目还包含生视频、AI 对话/RAG、MCP 控制、个人偏好记忆和 SSE 流式回复；本页不再把早期生图原型当作完整系统。</p>
-  <div class="note"><b>当前定位：</b>个人单实例助手。V8 已发布；V9 流式对话已在开发分支实现。项目保留登录以保护实例，不按多租户 SaaS 设计。</div>
+  <p class="sub">以 ComfyUI 生图与 Agent 自动化链路为例，解释进程职责和数据流。当前网页分为自定义操作和 Agent 自动化；后端还保留直接生成、通用聊天及 SSE API 供集成使用。</p>
+  <div class="note"><b>当前定位：</b>个人单实例助手，当前无需登录；API 仅应通过回环地址或可信网络访问。V8 已发布；V9 SSE API 和 V10 前端两区重构处于开发中，不按多租户 SaaS 设计。</div>
 
   <!-- ============ 1. 全景架构 ============ -->
   <h2>一、核心架构：生成任务与对话助手两条链路</h2>
@@ -116,7 +116,7 @@
         <div class="stack-label">调用方</div>
         <div class="node n-client">
           <b>当前网页助手 / Swagger / curl</b>
-          <small>提交生成任务、聊天或 ComfyUI 控制请求</small>
+          <small>网页打开 ComfyUI 或提交 MCP Agent 请求；API 客户端还可调用直接生成与聊天接口</small>
         </div>
       </div>
       <div class="arrowcol"><div class="ar">→</div><div>HTTP<br>JSON</div></div>
@@ -271,29 +271,29 @@
   </div>
 
   <!-- ============ 4. 对话与 MCP Agent ============ -->
-  <h2>四、AI 对话、SSE 与 MCP Agent 控制</h2>
+  <h2>四、Agent 自动化与兼容聊天 API</h2>
   <div class="card grid2">
     <div>
-      <h3 style="margin-top:0">普通对话</h3>
+      <h3 style="margin-top:0">通用聊天 API（非当前网页模式）</h3>
       <ol>
-        <li>网页把消息、provider、历史和可选图片提交到 <span class="mono">POST /api/chat/stream</span>。</li>
+        <li>API 客户端可把消息、provider、历史、可选图片提交到 <span class="mono">POST /api/chat/stream</span>；该入口不作为当前网页创作对话使用。</li>
         <li>FastAPI 校验登录、频率和每日额度；RAG 开启时先检索文档。</li>
         <li><span class="mono">llm_client.py</span> 调用 OpenAI 兼容接口，以 <span class="mono">stream:true</span> 读取分片。</li>
-        <li>后端把分片包装为 SSE <span class="mono">data: {"delta":"..."}</span>；前端用 <span class="mono">ReadableStream</span> 逐段更新回答。</li>
-        <li>生成完成后，内置 provider 的完整问答才落库；旧 <span class="mono">POST /api/chat</span> 仍返回普通 JSON。</li>
+        <li>后端把分片包装为 SSE <span class="mono">data: {"delta":"..."}</span>；旧 <span class="mono">POST /api/chat</span> 仍返回普通 JSON。</li>
       </ol>
     </div>
     <div>
       <h3 style="margin-top:0">ComfyUI MCP 控制</h3>
       <ol>
-        <li>网页将自然语言请求发往 <span class="mono">POST /api/agent/mcp</span>，由 Celery worker 异步执行。</li>
+        <li>Agent 区将自然语言请求、所选 provider、最近对话历史和可选 RAG 发往 <span class="mono">POST /api/agent/mcp</span>，由 Celery worker 异步执行。</li>
         <li>worker 启动 MCP Agent 和 stdio MCP Server；Agent 根据工具说明选择 ComfyUI 查询、生成或管理工具。</li>
-        <li>MCP Server 通过 ComfyUI HTTP API 执行实际操作，任务进度和工具步骤反馈给界面。</li>
+        <li>MCP Server 通过 ComfyUI HTTP API 执行实际操作，任务进度、生成的图片/视频和工具步骤反馈给界面。</li>
         <li>中断、删除、清队列、释放显存和清除记忆等操作须先由界面请求用户确认。</li>
         <li>保存的个人偏好作为生成默认值；当前请求中明确给出的参数优先。</li>
       </ol>
     </div>
   </div>
+  <div class="note"><b>自定义操作区：</b>浏览器打开 <span class="mono">COMFYUI_WEB_URL</span> 直达 ComfyUI 网页；它与后端使用的 <span class="mono">COMFYUI_BASE_URL</span>（API 地址）是两个独立配置。</div>
 
   <!-- ============ 5. 状态机 ============ -->
   <h2>五、任务状态机</h2>
@@ -388,7 +388,7 @@
   <h2>九、30 秒串讲（可以直接讲给面试官）</h2>
   <div class="card">
     <p style="margin:0">
-      "这是一个面向个人单实例使用的 ComfyUI 助手。生图/生视频请求由 <b>FastAPI</b> 校验后写入 <b>SQLite</b>，通过 <b>Celery + Redis</b> 异步派发给 worker；worker 注入参数化工作流，调用 ComfyUI 并保存媒体和任务状态。AI 对话走独立 LLM 路径，支持多模态、RAG、自定义模型和 SSE；MCP Agent 可用自然语言查看或控制 ComfyUI，危险操作需要用户确认。V8 加入了个人偏好记忆，V9 开发分支加入流式回复。"
+      "这是一个面向个人单实例使用的 ComfyUI 助手。网页提供自定义操作入口打开 ComfyUI，以及 Agent 自动化对话；MCP Agent 使用所选 LLM、最近浏览器会话和可选 RAG，通过 Celery + Redis 调用 ComfyUI 工具生成图片/视频或执行控制操作，危险操作需要用户确认。直接生成接口和 JSON/SSE 通用聊天 API 保留供集成使用。结果媒体落盘，任务与媒体元数据保存到 SQLite；偏好记忆按实例保存。"
     </p>
   </div>
 

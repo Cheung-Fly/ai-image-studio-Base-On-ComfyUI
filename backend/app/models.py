@@ -16,7 +16,7 @@ class TaskStatus(str, enum.Enum):
 
 
 class User(Base):
-    """用户账号（公网多人使用时启用鉴权）。"""
+    """单实例内部资料；当前应用不提供登录或注册。"""
 
     __tablename__ = "users"
 
@@ -144,6 +144,21 @@ class CustomModelConfig(Base):
     model = Column(String(128), nullable=False)                     # 模型名
     api_key_encrypted = Column(Text, nullable=False)                # 加密后的 API Key
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class RunningHubConfig(Base):
+    """单实例 RunningHub 工作流配置（API Key 加密存储）。"""
+
+    __tablename__ = "runninghub_config"
+
+    id = Column(Integer, primary_key=True, default=1)
+    workflow_id = Column(String(128), nullable=False)
+    prompt_node_id = Column(String(128), nullable=False)
+    prompt_field = Column(String(128), nullable=False)
+    negative_prompt_node_id = Column(String(128), nullable=True)
+    negative_prompt_field = Column(String(128), nullable=True)
+    api_key_encrypted = Column(Text, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 class AgentMemory(Base):

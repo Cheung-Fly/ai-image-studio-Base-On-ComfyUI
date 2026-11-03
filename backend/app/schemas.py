@@ -1,7 +1,7 @@
 """Pydantic 请求 / 响应模型。"""
 from datetime import datetime
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 # ResolutionSelector 节点支持的宽高比选项（与 ComfyUI 保持一致）
 ASPECT_RATIO_OPTIONS = {
@@ -119,28 +119,6 @@ class ChatResponse(BaseModel):
     reply: str
 
 
-class RegisterRequest(BaseModel):
-    """注册请求。"""
-
-    username: str = Field(..., min_length=3, max_length=64, pattern=r"^[a-zA-Z0-9_]+$")
-    password: str = Field(..., min_length=8, max_length=128)
-
-
-class LoginRequest(BaseModel):
-    """登录请求。"""
-
-    username: str = Field(..., min_length=1, max_length=64)
-    password: str = Field(..., min_length=1, max_length=128)
-
-
-class TokenResponse(BaseModel):
-    """登录/注册成功返回 token。"""
-
-    access_token: str
-    token_type: str = "bearer"
-    username: str
-
-
 class MessageOut(BaseModel):
     """单条消息（历史拉取用）。"""
 
@@ -197,10 +175,64 @@ class CustomModelIn(BaseModel):
     api_key: str = Field(..., min_length=1, max_length=512, description="API Key")
 
 
+class RunningHubConfigIn(BaseModel):
+    """RunningHub API Key 与自定义工作流提示词节点映射。"""
+
+    api_key: str | None = Field(None, max_length=512, description="留空时保留已保存的 API Key")
+    workflow_id: str = Field(..., min_length=1, max_length=128, pattern=r"^[A-Za-z0-9_-]+$")
+    prompt_node_id: str = Field(..., min_length=1, max_length=128, pattern=r"^[A-Za-z0-9_-]+$")
+    prompt_field: str = Field(..., min_length=1, max_length=128)
+    negative_prompt_node_id: str | None = Field(
+        None, max_length=128, pattern=r"^[A-Za-z0-9_-]+$"
+    )
+    negative_prompt_field: str | None = Field(None, max_length=128)
+
+    @field_validator("api_key")
+    @classmethod
+    def _strip_api_key(cls, value: str | None) -> str | None:
+        return value.strip() if value is not None else None
+
+    @model_validator(mode="after")
+    def _validate_negative_mapping(self):
+        if bool(self.negative_prompt_node_id) != bool(self.negative_prompt_field):
+            raise ValueError("负向提示词节点 ID 与字段名必须同时填写或同时留空")
+        return self
+
+
+class RunningHubWorkflowNodesRequest(BaseModel):
+    """查询 RunningHub 工作流的可映射文本输入。"""
+
+    api_key: str | None = Field(None, max_length=512)
+    workflow_id: str | None = Field(
+        None, min_length=1, max_length=128, pattern=r"^[A-Za-z0-9_-]+$"
+    )
+
+    @field_validator("api_key")
+    @classmethod
+    def _strip_optional_api_key(cls, value: str | None) -> str | None:
+        return value.strip() if value is not None else None
+
+
 class AgentGenerateRequest(BaseModel):
-    """一句话生图请求（多 Agent 流水线）。"""
+    """对话式 ComfyUI Agent 请求。"""
 
     request: str = Field(..., min_length=1, max_length=2000, description="用户的自然语言描述")
+    history: list[ChatMessage] = Field([], max_length=20, description="最近对话上下文")
+    provider: str = Field(
+        "",
+        pattern="^(|openai|llama|custom)$",
+        description="LLM provider；空值使用服务端默认 provider",
+    )
+    custom_config_id: int | None = Field(None, description="自定义模型配置 ID")
+    use_rag: bool = Field(False, description="是否将知识库检索结果作为 Agent 参考资料")
+    quality_review_enabled: bool = Field(
+        False, description="是否在生成后运行视觉质量审查 Harness"
+    )
+    generation_backend: str = Field(
+        "comfyui",
+        pattern="^(comfyui|runninghub)$",
+        description="生成后端，与 LLM provider 分开选择",
+    )
 
 
 class AgentConfirmationRequest(BaseModel):

@@ -14,7 +14,7 @@ _LORA_EXTS = {".safetensors", ".ckpt", ".pt", ".bin"}
 
 @router.get("/loras", response_model=list[str])
 def list_loras(user: User = Depends(get_current_user)):
-    """列出 ComfyUI 可用 LoRA 文件名（需登录）。
+    """列出 ComfyUI 可用 LoRA 文件名。
 
     未配置 comfyui_loras_dir 时返回空列表。
     """

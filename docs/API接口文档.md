@@ -1,7 +1,7 @@
 # AI 生图工坊 · API 接口文档
 
 > 基于 FastAPI + Celery + SQLite + ComfyUI 的个人 AIGC 生图/生视频助手接口。
-> 当前按单实例个人使用设计；登录用于保护该实例，不代表多租户或 SaaS 支持。
+> 当前为无需登录的单实例使用模式，不代表多租户或 SaaS 支持。
 >
 > - **版本**：0.1.0
 > - **Base URL**：`http://127.0.0.1:8000`
@@ -13,7 +13,7 @@
 ## 目录
 
 1. [通用约定](#1-通用约定)
-2. [认证接口](#2-认证接口)
+2. [访问模式](#2-访问模式)
 3. [生图接口](#3-生图接口)
 4. [视频生成接口](#4-视频生成接口)
 5. [任务查询接口](#5-任务查询接口)
@@ -30,15 +30,9 @@
 
 ## 1. 通用约定
 
-### 1.1 鉴权
+### 1.1 访问方式
 
-除「注册」「登录」「健康检查」外，**所有接口都需要鉴权**。在请求头携带：
-
-```
-Authorization: Bearer <access_token>
-```
-
-`access_token` 由注册或登录接口返回。未携带或 token 无效时返回 `401 Unauthorized`。
+当前所有业务接口均无需登录或携带认证头；/api/auth/login 与 /api/auth/register 已移除。部署时应通过回环地址、SSH 隧道或可信网络限制访问。
 
 ### 1.2 请求体
 
@@ -61,42 +55,9 @@ Authorization: Bearer <access_token>
 
 ---
 
-## 2. 认证接口
+## 2. 访问模式
 
-### 2.1 注册
-
-`POST /api/auth/register`
-
-**请求体：**
-
-| 字段 | 类型 | 必填 | 约束 | 说明 |
-|---|---|---|---|---|
-| username | string | 是 | 3–64 位，仅字母/数字/下划线 | 用户名 |
-| password | string | 是 | 8–128 位 | 密码 |
-
-**响应 `201`：**
-
-```json
-{
-  "access_token": "<jwt-token>",
-  "token_type": "bearer",
-  "username": "alice"
-}
-```
-
-**错误：** `409` 用户名已存在。
-
-### 2.2 登录
-
-`POST /api/auth/login`
-
-**请求体：** 同注册（`username` 允许 1–64 位）。
-
-**响应 `200`：** 同注册，返回 `access_token`。
-
-**错误：** `401` 用户名或密码错误。
-
----
+本应用为单实例匿名访问，不创建账号、不签发 token。业务数据使用内部本地资料归属，浏览器不需要保存认证凭据。
 
 ## 3. 生图接口
 
@@ -270,7 +231,7 @@ Authorization: Bearer <access_token>
 
 - 返回二进制文件流（`Content-Type` 为 `image/png`，视频任务则为实际媒体类型）。
 - 仅限本人资产；文件不存在返回 `404`。
-- 前端因 `<img>`/`<video>` 无法携带 `Authorization` 头，可用 `fetch` 携带 token 拉取 blob 后展示。
+- 前端通过 `fetch` 拉取媒体并创建 blob URL 预览；接口无需认证头。
 
 ---
 
@@ -423,7 +384,7 @@ data: [DONE]
 
 `POST /api/agent/generate`
 
-提交“一句话生图”固定流程（提示词优化 → 生图 → 审图），返回 Celery 任务 ID。
+兼容接口：提交“一句话生图”固定流程（提示词优化 → 生图 → 审图），返回 Celery 任务 ID。当前前端不再提供固定流水线表单，创作入口统一使用 MCP Agent。
 
 **请求体：**
 
@@ -440,13 +401,23 @@ data: [DONE]
 }
 ```
 
-### 11.2 MCP Agent 控制 ComfyUI
+### 11.2 MCP Agent 控制生成后端
 
 `POST /api/agent/mcp`
 
-提交自然语言控制任务，Agent 通过 MCP 直连 ComfyUI，可自主选择工具（查状态、查队列、生成、中断、释放显存等）。
+提交自然语言创作或控制任务，Agent 通过 MCP 调用所选生成后端：本地 ComfyUI 可生成图片/视频、查询状态和队列、管理工作流等；RunningHub 使用已配置的自定义工作流生成媒体。中断、清理队列、删除素材、释放显存及清除偏好等有影响的本地操作需要用户确认。
 
-**请求体：** 同 [11.1](#111-固定流水线生图)。
+**请求体：**
+
+| 字段 | 类型 | 必填 | 约束 / 默认值 | 说明 |
+|---|---|---|---|---|
+| request | string | 是 | 1–2000 字符 | 当前自然语言请求 |
+| history | array | 否 | 最多 20 条 | 历史消息；每条含 `role`（`user` 或 `assistant`）和 `content` |
+| provider | string | 否 | `""`、`openai`、`llama` 或 `custom`；默认 `""` | 空值使用服务端默认 provider |
+| custom_config_id | integer | 条件必填 | `provider=custom` 时必须是当前用户的有效配置 ID | 选择自定义模型 |
+| use_rag | boolean | 否 | `false` | 将知识库检索结果作为 Agent 参考资料 |
+| generation_backend | string | 否 | `comfyui` 或 `runninghub`；默认 `comfyui` | 选择生成后端，与 LLM provider 分开 |
+| quality_review_enabled | boolean | 否 | `false` | 开启图片/视频生成的视觉质量 Harness；当前所选模型需支持图片输入。低于 8/10 时最多自动优化重生成 2 次；视频评审均匀抽取最多 5 帧。RunningHub 重试会再次提交远程任务，可能产生费用 |
 
 **响应 `202`：**
 
@@ -456,6 +427,27 @@ data: [DONE]
   "request": "先看下状态，再生成一张赛博风格城市夜景"
 }
 ```
+
+### 11.2.1 RunningHub 工作流配置
+
+- `GET /api/runninghub/config`：读取工作流 ID 和提示词节点映射，不返回 API Key 明文。
+- `PUT /api/runninghub/config`：保存单个 RunningHub 工作流配置；首次保存必须提供 `api_key`，后续可省略或传空字符串以保留已保存的密钥。
+- `POST /api/runninghub/workflow-nodes`：读取给定工作流的文本输入，用于选择正向和可选的负向提示词映射。首次配置时请求需包含 `api_key`。
+
+保存请求示例：
+
+```json
+{
+  "api_key": "用户的 RunningHub API Key",
+  "workflow_id": "workflow-id",
+  "prompt_node_id": "6",
+  "prompt_field": "text",
+  "negative_prompt_node_id": "7",
+  "negative_prompt_field": "text"
+}
+```
+
+API Key 使用应用配置的加密密钥存储，读取接口不会返回密钥。RunningHub 成功输出会下载到 MCP Agent 媒体目录，并可通过 `GET /api/agent/files` 和 `GET /api/agent/files/{filename}` 访问。输出下载只允许 HTTPS 及受信任的 RunningHub 文件域名。
 
 ### 11.3 查询 Agent 任务结果
 
@@ -480,11 +472,15 @@ data: [DONE]
 
 任务执行期间，`state` 可为 `STARTED` 或 `PROGRESS`；`PROGRESS` 时 `progress.current_tool` 和 `progress.running` 表示正在执行的工具，`progress.steps` 包含已完成的 MCP 工具调用记录。完成后 `result` 返回最终回答和全部调用步骤。`result` 内输出文件包含 `filename`、`kind` 和本机路径。
 
+开启 Harness 后，支持的图片/视频生成工具结果还包含 `quality_review`，其中 `status` 为 `passed`、`retry_limit`、`retry_failed` 或 `error`，`attempts` 列出每轮评分和问题；只有达到 8/10 才标记为通过。模型不支持视觉输入或审查失败时会明确显示为未完成，不会默认为通过；RunningHub 重新生成会再次提交远程任务。
+
 ### 11.4 预览 MCP Agent 生成文件
 
 `GET /api/agent/files/{filename}`
 
-返回 MCP Agent 生成的图片或视频二进制内容，需要登录。此接口只从 MCP Agent 专用输出目录读取文件。
+返回 MCP Agent 生成的图片或视频二进制内容，无需登录。此接口只从 MCP Agent 专用输出目录读取文件。
+
+`GET /api/agent/files` 返回 MCP Agent 已生成媒体的列表，含文件名、类型和生成时间，供结果库恢复历史结果。
 
 ### 11.5 确认 MCP Agent 有影响的操作
 
@@ -529,17 +525,45 @@ Agent 请求中断生成、清理队列、删除排队任务/输入素材或释�
 
 ## 12. 系统接口
 
-### 12.1 健康检查
+### 12.1 ComfyUI 网页入口配置
 
-`GET /health`（无需鉴权）
+`GET /api/instance`（无需登录）返回浏览器打开 ComfyUI 所需的非敏感连接信息：
+
+```json
+{
+  "comfyui_web_url": "http://127.0.0.1:8188",
+  "default_llm_provider": "openai"
+}
+```
+
+`COMFYUI_WEB_URL` 面向用户浏览器；它与后端连接 ComfyUI API 的 `COMFYUI_BASE_URL` 分开配置。远程访问时，网页地址必须是浏览器可达的 HTTP 或 HTTPS 地址。
+前端允许用户保存浏览器本地覆盖地址，保存在当前浏览器的单实例本地配置中；恢复默认会重新读取 `COMFYUI_WEB_URL`。此覆盖不会写入后端，也不会更改 MCP Agent 使用的 `COMFYUI_BASE_URL`。Agent 通过后端 MCP 工具直接控制 ComfyUI，无需浏览器自动化。
+`default_llm_provider` 返回当前默认的 `openai` 或 `llama` provider；用户在 Agent 区选择其他模型后，该次请求使用所选模型。
+
+### 12.2 本地依赖自检
+
+`GET /api/instance/diagnostics`（无需登录）检查数据库、Redis、Celery Worker、ComfyUI API、媒体目录和默认 LLM 配置是否就绪。响应不包含内部服务地址、密钥或上游异常内容；LLM 检查只确认配置是否完整，不会发起真实调用。
+
+```json
+{
+  "status": "ready",
+  "checks": [
+    {"id": "database", "label": "数据库", "status": "ok", "message": "数据库连接正常。"},
+    {"id": "redis", "label": "Redis 队列", "status": "ok", "message": "Redis 连接正常。"}
+  ]
+}
+```
+
+完整检查项为 `database`、`redis`、`worker`、`comfyui`、`storage` 和 `llm`。核心依赖全部正常时 `status` 为 `ready`，否则为 `degraded`；LLM 配置缺失会单独显示 `warning`，不影响 ComfyUI 基础生成就绪状态。
+
+### 12.3 健康检查
+
+`GET /health`（无需鉴权），仅用于确认 API 进程存活，不检查依赖，也不返回内部服务地址。
 
 **响应 `200`：**
 
 ```json
-{
-  "status": "ok",
-  "comfyui_base_url": "http://127.0.0.1:8188"
-}
+{"status": "ok"}
 ```
 
 ---
@@ -549,9 +573,7 @@ Agent 请求中断生成、清理队列、删除排队任务/输入素材或释�
 | 状态码 | 含义 | 场景 |
 |---|---|---|
 | 400 | 请求参数错误 | 非法宽高比、非法状态、不支持的 provider/文件类型、空文件 |
-| 401 | 未认证 / token 无效 | 缺少 `Authorization` 头或 token 过期 |
 | 404 | 资源不存在 | 任务/图片不存在、图片文件丢失 |
-| 409 | 冲突 | 用户名已存在 |
 | 413 | 文件过大 | 上传超出大小上限 |
 | 422 | 校验失败 | 请求体字段不满足 Pydantic 约束 |
 | 502 | 上游服务错误 | LLM 服务不可用 |
@@ -567,22 +589,14 @@ Agent 请求中断生成、清理队列、删除排队任务/输入素材或释�
 ## 附：快速上手（curl 示例）
 
 ```bash
-# 1. 注册并获取 token
-curl -X POST http://127.0.0.1:8000/api/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{"username":"alice","password":"password123"}'
-
-# 2. 提交文生图任务（用上一步返回的 token）
+# 提交文生图任务，无需注册或登录
 curl -X POST http://127.0.0.1:8000/api/generate \
-  -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
   -d '{"prompt":"a cute corgi astronaut","aspect_ratio":"16:9 (Widescreen)","seed":-1}'
 
-# 3. 轮询任务状态
-curl http://127.0.0.1:8000/api/tasks/1 \
-  -H "Authorization: Bearer <token>"
+# 轮询任务状态
+curl http://127.0.0.1:8000/api/tasks/1
 
-# 4. 下载产物（image_id 见任务详情 images[0].id）
-curl -OJ http://127.0.0.1:8000/api/images/1/file \
-  -H "Authorization: Bearer <token>"
+# 下载生成图片
+curl -OJ http://127.0.0.1:8000/api/images/1/file
 ```

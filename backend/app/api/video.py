@@ -19,7 +19,7 @@ def generate_video(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """提交一个视频生成任务，返回 task_id；实际生成由 Celery worker 异步执行（需登录）。"""
+    """提交一个视频生成任务，返回 task_id；实际生成由 Celery worker 异步执行。"""
     task = GenerationTask(
         user_id=user.id,
         task_type="video",
