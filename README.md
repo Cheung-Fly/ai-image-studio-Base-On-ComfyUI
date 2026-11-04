@@ -20,16 +20,17 @@
 | 任务队列 | Celery 5 + Redis（broker / result backend）          |
 | 生成引擎 | 本地 ComfyUI（API 模式）+ 可选 RunningHub Workflow API |
 | 存储   | SQLite（数据）+ 本地文件（图片）                               |
-| 前端   | 原生 HTML / CSS / JS 单页（`frontend/index.html`，无构建步骤） |
+| 前端   | Vue 3 + TypeScript + Vite（`frontend/src/`；生产构建由 FastAPI 提供） |
 | 访问模式 | 单实例匿名访问；模型与 RunningHub API Key 加密存储                    |
 
 ## 功能一览
 
 1. **ComfyUI 自由操作**：打开原生节点和工作流界面；网页地址默认使用 `COMFYUI_WEB_URL`，也可按浏览器保存覆盖地址，并自检本地生成依赖。
 2. **Agent 自动化**：始终由 MCP Agent 执行对话；生成后端可切换为本地 ComfyUI 或 RunningHub 自定义工作流，LLM 提供方与生成后端分别选择。本地后端可查询 ComfyUI 状态/工作流/队列并执行管理操作；有影响的本地操作需要用户确认。可选开启视觉质量 Harness，支持的生成结果会被审查，低于 8/10 时最多自动优化并重生成 2 次；RunningHub 重试会再次提交远程任务并可能产生费用。
-3. **模型选择**：支持配置的 OpenAI 兼容服务、llama.cpp 和用户自定义 OpenAI 兼容模型；自定义 API Key 加密存储。
-4. **创作助手能力**：可选启用项目文档 RAG、管理知识文档、编辑生成偏好；最近 20 条 Agent 对话历史保存在当前浏览器。
-5. **创作结果库**：合并展示原任务 API 与 MCP Agent 生成的图片/视频，可点击预览；后端生图、视频和聊天 API 仍保留供外部集成使用。
+3. **导演分镜**：独立的导演 Agent 一次处理一集或一段剧本，按样表拆出景别、运镜、画面内容、时长、台词、音效和提示词；分镜可在线编辑并导出为 Excel，不调用 ComfyUI 生成工具。
+4. **模型选择**：支持配置的 OpenAI 兼容服务、llama.cpp 和用户自定义 OpenAI 兼容模型；自定义 API Key 加密存储。
+5. **创作助手能力**：可选启用项目文档 RAG、管理知识文档、编辑生成偏好；最近 20 条 Agent 对话历史保存在当前浏览器。
+6. **创作结果库**：合并展示原任务 API 与 MCP Agent 生成的图片/视频，可点击预览；后端生图、视频和聊天 API 仍保留供外部集成使用。
 
 本项目采用 MIT License。开源目标不是把 ComfyUI 封装成不可见的黑盒，而是在不限制团队自有模型、节点和工作流的基础上，提供更便捷的常用操作、可检查的执行过程和可贡献的扩展能力。当前部署和协作边界见[商业化市场调研与架构路线图](docs/商业化市场调研与架构路线图.md)。
 
@@ -73,7 +74,9 @@ ai-image-studio/
 ├── workflows/
 │   └── Krea2-极清生图流+SeedVR2-int8图像放大.json   # 文生图工作流（ComfyUI API 格式）
 ├── frontend/
-│   └── index.html               # 单文件前端（自定义操作 / Agent 自动化 / 结果库）
+│   ├── src/                     # Vue 页面、TypeScript API 客户端与样式
+│   ├── package.json
+│   └── vite.config.ts           # 本地开发 API 代理与生产构建
 ├── docs/                        # 架构、API、变更记录、商业化调研与版本路线图
 ├── docker-compose.yml
 ├── start_local.md               # 一键启动本地全链路
@@ -142,9 +145,15 @@ celery -A app.workers.celery_app worker --loglevel=info --pool=solo
 
 ### 第 5 步：打开前端
 
-浏览器直接打开 `frontend/index.html`（前端硬编码后端地址 `http://127.0.0.1:8000`，需先启动 API）。无需注册或登录，打开后即可使用自定义操作和 Agent 自动化。
+在另一个 PowerShell 窗口启动 Vue 开发服务器：
 
-> 前端也可通过简单静态服务访问，例如在 `frontend/` 目录下 `python -m http.server 5500`。
+```powershell
+cd frontend
+npm ci
+npm run dev
+```
+
+打开 Vite 显示的地址（默认 `http://127.0.0.1:5173`）。页面默认进入 **创作 Agent**；开发服务器会将 `/api` 请求代理到 `http://127.0.0.1:8000`，无需单独修改前端 API 地址。无需注册或登录，打开后即可使用创作工作区。
 
 ### 第 6 步：提交生图任务（命令行方式）
 
@@ -226,9 +235,11 @@ Swagger：<http://127.0.0.1:8000/docs>
 - **V6**：MCP Agent 对话控制 ComfyUI，显示工具执行进度，并预览生成图片/视频。
 - **V7**：增强 ComfyUI 管理（查看工作流/节点/输入素材、按 ID 删除排队任务），中断、清队列、删除素材及释放显存前需在界面确认。
 - **V8**：为个人助手增加可查看/编辑/清除的持久偏好记忆，并让 MCP Agent 在生成时使用这些默认偏好。
-- **V9**：为通用聊天 API 增加 SSE 流式响应，同时保留 JSON 对话接口。
-- **未发布**：前端拆分为“自定义操作 / Agent 自动化”；Agent 支持模型选择、历史上下文、可选 RAG 和对话式视频生成。
+- **V9（已发布，2026-10-28）**：为通用聊天 API 增加 SSE 流式响应，同时保留 JSON 对话接口。
+- **V10（已发布，2026-11-03）**：完善 Agent 自动化、对话式视频生成、RunningHub 后端和可选视觉质量审查；单实例部署提供自检。
+- **未发布**：将前端重构为 Vue 3、TypeScript 和 Vite 单页应用，默认进入 Agent 工作区。
 - **V11（开发中）**：已加入持久任务事件、错误分类、最多 3 次手动重试和排队/运行任务取消；仍需完成密钥与备份基线及真实工作流回归。
+- **V12（开发中）**：引入导演 Agent，将单集剧本拆成可编辑分镜表并导出 Excel；后续扩展多角色协作与调度。
 
 ### MCP Agent 使用方式
 
@@ -315,7 +326,7 @@ Agent 通过后端 MCP 工具直接连接 `COMFYUI_BASE_URL`，不需要浏览�
 3. **任务 failed：无法连接 ComfyUI** → 确认 ComfyUI 已启动且端口 8188。
 4. **任务 failed：节点 / 模型错误** → 工作流与本机模型不匹配，看 worker 日志里 ComfyUI 返回的完整报错，检查工作流 JSON 中的模型文件名。
 5. **对话返回「LLM 服务暂不可用」** → 未配置对应 provider 的 API Key，或 LLM 服务不可达；配好 Key 后即可调用真实模型（未配 Key 时返回占位回复，保证链路可先跑通）。
-6. **端口被占用** → uvicorn 改 `--port 8001`，同时把前端 `index.html` 里的 `API` 常量一并改掉。
+6. **端口被占用** → 若 API 改用 `--port 8001`，启动 Vite 前设置 `$env:VITE_API_PROXY_TARGET = "http://127.0.0.1:8001"`。
 
 
 ## Docker 部署（日常开发测试方式）
@@ -356,6 +367,7 @@ docker compose up -d --build
 - `docker compose ps` 查看容器状态（三个都应 `Up`）；
 - `docker compose logs -f api` / `-f worker` 跟踪日志；
 - API 代码已挂载热更新（`./backend/app:/app/app` + `--reload`），改后端代码无需重新 build；
+- Vue 前端构建产物打包进 API 镜像；改动前端后运行 `docker compose up -d --build api worker`；
 - 改了 `docker-compose.yml` 本身，用 `docker compose up -d api`（或 `--force-recreate`）重建。
 - API 和 Redis 的宿主机端口只绑定到 `127.0.0.1`，不会直接暴露到公网。远程服务器可用 SSH 本地转发访问 API：
 

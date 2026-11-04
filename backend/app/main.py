@@ -15,6 +15,7 @@ from .api import (
     chat,
     conversations,
     custom_models,
+    director,
     generate,
     images,
     instance,
@@ -31,8 +32,10 @@ from .api import (
 from .config import settings
 from .database import init_db
 
-# 前端静态目录（相对 backend/ 的 ../frontend）
-FRONTEND_DIR = Path(__file__).resolve().parent.parent.parent / "frontend"
+# Vite production build (local build output and Docker image use the same path).
+FRONTEND_DIR = (
+    Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
+)
 
 
 @asynccontextmanager
@@ -64,6 +67,7 @@ app.include_router(instance.router, prefix="/api")
 app.include_router(chat.router, prefix="/api")
 app.include_router(conversations.router, prefix="/api")
 app.include_router(custom_models.router, prefix="/api")
+app.include_router(director.router, prefix="/api")
 app.include_router(runninghub.router, prefix="/api")
 app.include_router(workflows.router, prefix="/api")
 app.include_router(model_presets.router, prefix="/api")
@@ -79,7 +83,7 @@ def health():
     return {"status": "ok"}
 
 
-# ---- 前端静态托管（开发期：直接从 8000 端口打开应用）----
+# ---- Serve the compiled Vite frontend from the API origin. ----
 @app.get("/", include_in_schema=False)
 def index():
     idx = FRONTEND_DIR / "index.html"

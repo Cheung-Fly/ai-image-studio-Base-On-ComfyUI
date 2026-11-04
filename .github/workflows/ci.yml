@@ -8,6 +8,31 @@ permissions:
   contents: read
 
 jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Check frontend types
+        working-directory: frontend
+        run: npm run typecheck
+
+      - name: Build Vue frontend
+        working-directory: frontend
+        run: npm run build
+
   backend:
     runs-on: ubuntu-latest
     steps:
@@ -30,6 +55,7 @@ jobs:
           "celery>=5.4"
           "redis>=5.0"
           "pillow>=10.0"
+          "openpyxl>=3.1,<4"
           "imageio-ffmpeg>=0.5.1,<1.0"
           pytest
           ruff
@@ -40,13 +66,14 @@ jobs:
 
       - name: Import MCP API routes
         working-directory: backend
-        run: python -c "from app.api.agent import router; from app.api.chat import router as chat_router; from app.api.generate import router as generate_router; from app.api.instance import router as instance_router; from app.api.runninghub import router as runninghub_router; from app.api.tasks import router as tasks_router; from app.api.video import router as video_router"
+        run: python -c "from app.api.agent import router; from app.api.chat import router as chat_router; from app.api.director import router as director_router; from app.api.generate import router as generate_router; from app.api.instance import router as instance_router; from app.api.runninghub import router as runninghub_router; from app.api.tasks import router as tasks_router; from app.api.video import router as video_router"
 
       - name: Lint changed backend areas
         run: >-
           ruff check
           backend/app/api/agent.py
           backend/app/api/chat.py
+          backend/app/api/director.py
           backend/app/api/generate.py
           backend/app/api/instance.py
           backend/app/api/runninghub.py
@@ -54,6 +81,7 @@ jobs:
           backend/app/api/video.py
           backend/app/mcp_server
           backend/app/services/comfy_client.py
+          backend/app/services/director_agent.py
           backend/app/services/task_reliability.py
           backend/app/services/agents.py
           backend/app/services/llm_client.py
@@ -70,6 +98,7 @@ jobs:
           backend/tests/test_chat_stream.py
           backend/tests/test_quality_review.py
           backend/tests/test_runninghub.py
+          backend/tests/test_director_agent.py
           backend/tests/test_task_reliability.py
 
       - name: Test MCP Agent with mocked ComfyUI
@@ -95,3 +124,7 @@ jobs:
       - name: Test task reliability
         working-directory: backend
         run: python -m unittest tests.test_task_reliability
+
+      - name: Test Director Agent
+        working-directory: backend
+        run: python -m unittest tests.test_director_agent

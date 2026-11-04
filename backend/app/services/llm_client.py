@@ -25,6 +25,7 @@ def _build_messages(
     message: str,
     history: list[dict[str, str]] | None = None,
     image_base64: str | list[str] | None = None,
+    system_prompt: str | None = None,
 ) -> list[dict[str, Any]]:
     """把前端传来的 history + 当前消息拼成 messages 列表。
 
@@ -32,6 +33,8 @@ def _build_messages(
     （image_url + text），否则用纯文本字符串。
     """
     messages: list[dict[str, Any]] = []
+    if system_prompt and system_prompt.strip():
+        messages.append({"role": "system", "content": system_prompt.strip()})
     for item in history or []:
         role = item.get("role")
         content = item.get("content", "")
@@ -78,6 +81,7 @@ def chat(
     history: list[dict[str, str]] | None = None,
     provider: str = "",
     image_base64: str | list[str] | None = None,
+    system_prompt: str | None = None,
 ) -> str:
     """调用指定 provider 的 LLM，返回回复文本。"""
     provider = provider or settings.default_llm_provider
@@ -95,7 +99,12 @@ def chat(
             f"已收到你的消息：{message!r}。配置后即可调用真实模型。"
         )
 
-    messages = _build_messages(message, history, image_base64=image_base64)
+    messages = _build_messages(
+        message,
+        history,
+        image_base64=image_base64,
+        system_prompt=system_prompt,
+    )
 
     payload: dict[str, Any] = {
         "model": cfg["model"],
@@ -147,6 +156,7 @@ def chat_with_config(
     model: str,
     history: list[dict[str, str]] | None = None,
     image_base64: str | list[str] | None = None,
+    system_prompt: str | None = None,
 ) -> str:
     """用运行时传入的自定义配置调用 OpenAI 兼容 LLM（用于用户自带模型）。
 
@@ -156,7 +166,12 @@ def chat_with_config(
     if not api_key:
         raise LLMError("自定义模型未提供 API Key")
 
-    messages = _build_messages(message, history, image_base64=image_base64)
+    messages = _build_messages(
+        message,
+        history,
+        image_base64=image_base64,
+        system_prompt=system_prompt,
+    )
     payload: dict[str, Any] = {"model": model, "messages": messages}
     headers = {
         "Authorization": f"Bearer {api_key}",

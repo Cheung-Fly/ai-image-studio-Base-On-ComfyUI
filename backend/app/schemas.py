@@ -265,6 +265,68 @@ class AgentConfirmationRequest(BaseModel):
     confirmed: bool
 
 
+class DirectorStoryboardRequest(BaseModel):
+    """导演 Agent 的单集分镜生成请求。"""
+
+    script: str = Field(..., min_length=1, max_length=50000)
+    video_title: str = Field("", max_length=128)
+    provider: str = Field("openai", pattern="^(openai|llama|custom)$")
+    custom_config_id: int | None = Field(None, gt=0)
+
+    model_config = {"extra": "forbid"}
+
+    @field_validator("script")
+    @classmethod
+    def _strip_director_script(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("请先填写剧本")
+        return value
+
+    @field_validator("video_title")
+    @classmethod
+    def _strip_director_title(cls, value: str) -> str:
+        return value.strip()
+
+
+class DirectorStoryboardShot(BaseModel):
+    """单个分镜行；字段对应 Excel 样表。"""
+
+    shot_no: str = Field(..., min_length=1, max_length=32)
+    framing: str = Field("", max_length=64)
+    camera_movement: str = Field("", max_length=128)
+    visual_description: str = Field(..., min_length=1, max_length=3000)
+    duration_seconds: float = Field(..., gt=0, le=300)
+    dialogue: str = Field("", max_length=2000)
+    sound_effects: str = Field("", max_length=1000)
+    prompt: str = Field("", max_length=2000)
+    producer: str = Field("", max_length=128)
+    expected_submission_time: str = Field("", max_length=128)
+    reviewer: str = Field("", max_length=128)
+    actual_submission_time: str = Field("", max_length=128)
+
+    @field_validator("shot_no", mode="before")
+    @classmethod
+    def _normalize_shot_no(cls, value: object) -> str:
+        return str(value).strip() if value is not None else ""
+
+    model_config = {"extra": "ignore"}
+
+
+class DirectorStoryboardOut(BaseModel):
+    """导演 Agent 输出的单集分镜表。"""
+
+    video_title: str = Field(..., min_length=1, max_length=128)
+    theme: str = Field("", max_length=1000)
+    shooting_time: str = Field("", max_length=128)
+    deadline: str = Field("", max_length=128)
+    props: str = Field("", max_length=1000)
+    characters: str = Field("", max_length=1000)
+    shots: list[DirectorStoryboardShot] = Field(..., min_length=1, max_length=120)
+
+    model_config = {"extra": "ignore"}
+
+
 class AgentMemoryUpdate(BaseModel):
     """个人 ComfyUI 偏好记忆的局部更新。"""
 

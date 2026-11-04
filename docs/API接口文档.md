@@ -521,6 +521,21 @@ Agent 请求中断生成、清理队列、删除排队任务/输入素材或释�
 
 工作流和模型预设必须是当前可用项；宽高比和百万像素使用与生图接口相同的约束。MCP Agent 会把已保存偏好作为生成默认值，用户当前请求中的明确参数优先。
 
+### 11.7 导演分镜
+
+`POST /api/director/storyboard` 接收一集或一段剧本，返回可编辑的分镜表。
+
+| 字段 | 类型 | 必填 | 默认 | 说明 |
+|---|---|---|---|---|
+| script | string | 是 | — | 剧本文本，去除首尾空格后为 1–50,000 字符 |
+| video_title | string | 否 | `""` | 视频名称，最多 128 字符 |
+| provider | string | 否 | `"openai"` | 模型提供方：`openai` / `llama` / `custom` |
+| custom_config_id | int | 否 | `null` | `provider=custom` 时选择自定义模型配置 |
+
+成功响应包含 `video_title`、`theme`、`shooting_time`、`deadline`、`props`、`characters` 和 `shots`。每个镜头包含 `shot_no`、`framing`、`camera_movement`、`visual_description`、`duration_seconds`、`dialogue`、`sound_effects`、`prompt`，以及制作、提交和审核字段；镜头数为 1–120。
+
+`POST /api/director/export` 接收当前编辑后的同一分镜结构，返回 `.xlsx` 工作簿（二进制），可用于下载和后续制作。
+
 ---
 
 ## 12. 系统接口

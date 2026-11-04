@@ -26,7 +26,7 @@ image or video inference engine:
 
 ```mermaid
 flowchart LR
-    User[User] --> Browser[Browser UI<br/>frontend/index.html]
+    User[User] --> Browser[Vue Browser UI<br/>frontend/src/App.vue]
     Browser -->|HTTP / JSON| API[FastAPI API]
     Browser -->|Open configured web URL| ComfyWeb[ComfyUI web UI]
     API --> DB[(SQLite)]
@@ -45,8 +45,8 @@ flowchart LR
 In the current Docker Compose setup, Redis, API, and worker are containers.
 ComfyUI and an optional local `llama.cpp` server run outside the Compose stack;
 the containers reach host services through their configured URLs. The browser
-UI is a single HTML/CSS/JavaScript page served by FastAPI. It has no frontend
-build step.
+UI is a Vue single-page application written in TypeScript and built by Vite; Docker packages the
+production bundle into the API image, and FastAPI serves it from `/`.
 
 ## 3. Runtime components and responsibilities
 
@@ -61,7 +61,7 @@ build step.
 | MCP agent | Discover tools from the MCP server, expose them to the LLM, execute approved calls | `backend/app/services/mcp_agent.py`, `backend/app/mcp_server/` |
 | Quality review | Review generated images/video frames and run bounded prompt-refinement retries | `backend/app/services/quality_review.py`, `backend/app/services/mcp_agent.py` |
 | Retrieval | Index fixed project documents and dynamic knowledge-base documents for RAG | `backend/app/services/rag.py` |
-| Browser UI | Login, open ComfyUI for manual work, agent automation, and the result gallery | `frontend/index.html` |
+| Browser UI | Open ComfyUI for manual work, agent automation, and the result gallery | `frontend/src/App.vue` |
 
 `backend/app/api/` owns HTTP concerns and delegates application work to
 services or Celery tasks. The worker owns long-running generation and agent
@@ -243,7 +243,7 @@ Harness tests.
   moderation, and AI-content labeling are not currently implemented
   requirements. Evaluate security, privacy, and applicable regulations before
   exposing an instance beyond its trusted network.
-- The Vue/Vite migration and broader multi-client deployment are optional
+- Broader multi-client deployment and migration to a shared component library are optional
   roadmap items, not current runtime components.
 
 ## 9. Commercialization target (proposed, not implemented)

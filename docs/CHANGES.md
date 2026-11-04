@@ -26,9 +26,16 @@ history, not a roadmap; planned work belongs in `项目技术演进路线图.md`
   up to three times; tasks with a submitted ComfyUI prompt are resumed rather
   than submitted again. Cancellation targets only the matching queued/running
   prompt and reports when stopping it could not be confirmed.
+- Added a standalone Director Agent workspace that turns one episode or script
+  segment into an editable storyboard table and downloads it as an Excel
+  workbook using the supplied production-sheet fields.
 
 ### Changed
 
+- Rebuilt the browser interface as a Vue 3 and TypeScript single-page
+  application with Vite; the Agent workspace is now the default landing page,
+  development requests use a same-origin API proxy, and FastAPI serves the
+  compiled frontend from the Docker image.
 - Replaced the GitHub Pages project showcase with a 36-second silent animated
   GIF embedded directly in the README. Removed the previous video and cover.
 

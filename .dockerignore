@@ -9,6 +9,8 @@ backend/.venv
 # 本地数据与图片（走 volume 挂载，不打包进镜像）
 data
 backend/data
+frontend/node_modules
+frontend/dist
 
 # 文档：.md 进镜像作 RAG 知识库，.html 排除；测试排除
 docs/*.html
