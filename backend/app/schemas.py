@@ -67,12 +67,35 @@ class TaskOut(BaseModel):
     seed: int
     status: str
     error: str | None = None
+    error_code: str | None = None
+    retry_count: int
+    manual_retry_count: int
     comfy_prompt_id: str | None = None
     created_at: datetime
     updated_at: datetime
-    images: list[ImageOut] = []
+    images: list[ImageOut] = Field(default_factory=list)
 
     model_config = {"from_attributes": True}
+
+
+class TaskEventOut(BaseModel):
+    id: int
+    task_id: int
+    event_type: str
+    status: str
+    message: str
+    error_code: str | None = None
+    attempt: int
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class TaskActionOut(BaseModel):
+    task: TaskOut
+    message: str
+    celery_revoke: str
+    comfy_stop: str
 
 
 class GenerateVideoRequest(BaseModel):

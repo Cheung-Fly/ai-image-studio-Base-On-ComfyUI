@@ -59,6 +59,7 @@ ai-image-studio/
 │   │   ├── api/                 # generate / tasks / images / chat / conversations 路由
 │   │   ├── services/
 │   │   │   ├── comfy_client.py  # ComfyUI HTTP 客户端（提交/轮询/下载）
+│   │   │   ├── task_reliability.py # 任务事件、错误分类与安全投递
 │   │   │   ├── llm_client.py    # 多 provider LLM 客户端（openai / llama / custom）
 │   │   │   ├── mcp_agent.py     # MCP 工具发现与 Agent 循环
 │   │   │   └── workflow.py      # 工作流模板加载 + {{参数}} 注入
@@ -81,7 +82,7 @@ ai-image-studio/
 
 商业化方向、三项市场调研和建议版本闸门见 [`docs/商业化市场调研与架构路线图.md`](docs/商业化市场调研与架构路线图.md)。该文档中的目标架构和 V11+ 阶段是提案，不是当前已交付功能。
 
-任务状态机：`pending → processing → completed / failed`（连接类失败自动重试 2 次）。
+任务状态机：`pending → processing → completed / failed / cancelled`。生命周期事件持久化；可安全恢复的短暂错误自动重试最多 2 次，已提交的 ComfyUI prompt 会复用而不重复生成。安全可重试的失败支持手动重试最多 3 次。任务 API 提供事件查询、重试和取消；无法确认 ComfyUI 停止时会明确返回结果。
 
 ---
 
@@ -227,7 +228,7 @@ Swagger：<http://127.0.0.1:8000/docs>
 - **V8**：为个人助手增加可查看/编辑/清除的持久偏好记忆，并让 MCP Agent 在生成时使用这些默认偏好。
 - **V9**：为通用聊天 API 增加 SSE 流式响应，同时保留 JSON 对话接口。
 - **未发布**：前端拆分为“自定义操作 / Agent 自动化”；Agent 支持模型选择、历史上下文、可选 RAG 和对话式视频生成。
-- **V11（开发中）**：Agent 可切换本地 ComfyUI 或 RunningHub；支持加密保存 API Key、发现并映射自定义工作流文本节点、下载远程输出到结果库。
+- **V11（开发中）**：已加入持久任务事件、错误分类、最多 3 次手动重试和排队/运行任务取消；仍需完成密钥与备份基线及真实工作流回归。
 
 ### MCP Agent 使用方式
 

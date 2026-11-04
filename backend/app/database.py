@@ -67,6 +67,10 @@ def _migrate_missing_columns() -> None:
         ("tasks", "steps", "INTEGER NOT NULL DEFAULT 20"),
         ("tasks", "refine_steps", "INTEGER NOT NULL DEFAULT 4"),
         ("tasks", "loras", "TEXT NOT NULL DEFAULT '[]'"),
+        ("tasks", "error_code", "VARCHAR(64)"),
+        ("tasks", "celery_task_id", "VARCHAR(255)"),
+        ("tasks", "retry_count", "INTEGER NOT NULL DEFAULT 0"),
+        ("tasks", "manual_retry_count", "INTEGER NOT NULL DEFAULT 0"),
         ("images", "media_type", "VARCHAR(16) NOT NULL DEFAULT 'image'"),
     ]
     inspector = inspect(engine)

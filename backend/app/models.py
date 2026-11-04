@@ -13,6 +13,7 @@ class TaskStatus(str, enum.Enum):
     processing = "processing"    # worker 正在生成
     completed = "completed"      # 生成成功
     failed = "failed"            # 生成失败
+    cancelled = "cancelled"      # 用户已取消
 
 
 class User(Base):
@@ -65,7 +66,11 @@ class GenerationTask(Base):
     ref_audios = Column(Text, default="")   # 视频素材：参考音频文件名（逗号分隔）
     status = Column(Enum(TaskStatus, native_enum=False), default=TaskStatus.pending, index=True)
     error = Column(Text, nullable=True)
+    error_code = Column(String(64), nullable=True)
     comfy_prompt_id = Column(String(64), nullable=True)  # ComfyUI 返回的 prompt_id
+    celery_task_id = Column(String(255), nullable=True, index=True)
+    retry_count = Column(Integer, default=0, nullable=False)
+    manual_retry_count = Column(Integer, default=0, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -75,6 +80,29 @@ class GenerationTask(Base):
         cascade="all, delete-orphan",
         order_by="ImageAsset.id",
     )
+    events = relationship(
+        "TaskEvent",
+        back_populates="task",
+        cascade="all, delete-orphan",
+        order_by="TaskEvent.id",
+    )
+
+
+class TaskEvent(Base):
+    """持久化的任务生命周期事件。"""
+
+    __tablename__ = "task_events"
+
+    id = Column(Integer, primary_key=True, index=True)
+    task_id = Column(Integer, ForeignKey("tasks.id"), nullable=False, index=True)
+    event_type = Column(String(32), nullable=False)
+    status = Column(String(16), nullable=False)
+    message = Column(Text, nullable=False)
+    error_code = Column(String(64), nullable=True)
+    attempt = Column(Integer, default=1, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    task = relationship("GenerationTask", back_populates="events")
 
 
 class ImageAsset(Base):

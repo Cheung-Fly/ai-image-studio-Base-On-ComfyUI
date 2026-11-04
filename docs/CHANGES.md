@@ -18,6 +18,15 @@ history, not a roadmap; planned work belongs in `项目技术演进路线图.md`
 
 ## Unreleased
 
+### Added
+
+- Added persistent lifecycle events and classified errors for image/video
+  generation tasks, with event-history, retry, and cancellation endpoints.
+  Safe transient failures can be retried automatically up to twice or manually
+  up to three times; tasks with a submitted ComfyUI prompt are resumed rather
+  than submitted again. Cancellation targets only the matching queued/running
+  prompt and reports when stopping it could not be confirmed.
+
 ### Changed
 
 - Replaced the GitHub Pages project showcase with a 36-second silent animated

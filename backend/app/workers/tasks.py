@@ -10,8 +10,14 @@ from PIL import Image
 from ..config import settings
 from ..database import SessionLocal
 from ..models import GenerationTask, ImageAsset, TaskStatus
-from ..services.comfy_client import ComfyClient, ComfyError
-from ..services.video_workflow import VideoWorkflowError, build_video_workflow
+from ..services.comfy_client import ComfyClient
+from ..services.task_reliability import (
+    TaskCancelled,
+    add_task_event,
+    classify_task_error,
+    stop_comfy_prompt,
+)
+from ..services.video_workflow import build_video_workflow
 from ..services.workflow import build_workflow
 from .celery_app import celery_app
 
@@ -47,6 +53,18 @@ def _split_csv(s: str) -> list[str]:
     return [x for x in (s or "").split(",") if x.strip()]
 
 
+def _cleanup_saved_files(task_id: int, paths: list[Path]) -> None:
+    for path in paths:
+        try:
+            path.unlink(missing_ok=True)
+        except OSError:
+            logger.exception(
+                "生成任务结束后清理媒体文件失败 task_id=%s file=%s",
+                task_id,
+                path.name,
+            )
+
+
 def _parse_loras(raw: str) -> list[dict]:
     """把 tasks.loras 字段（JSON 数组字符串）解析为 [{name, strength}] 列表。"""
     if not raw:
@@ -74,57 +92,139 @@ def _parse_loras(raw: str) -> list[dict]:
     acks_late=True,
 )
 def run_generation(self, task_id: int):
-    """执行一次生成：processing -> 提交 ComfyUI -> 轮询 -> 下载 -> completed/failed。"""
+    """执行一次生成，并持久化状态变化、失败分类与可观察事件。"""
     db = SessionLocal()
+    prompt_id = None
+    submission_attempted = False
+    saved_files: list[Path] = []
+
+    def check_cancelled() -> None:
+        with SessionLocal() as status_db:
+            current = status_db.get(GenerationTask, task_id)
+            cancelled = current is not None and current.status == TaskStatus.cancelled
+        if cancelled:
+            raise TaskCancelled()
+
     try:
         task = db.get(GenerationTask, task_id)
         if task is None:
             return {"status": "not_found", "task_id": task_id}
+        if task.status in (TaskStatus.cancelled, TaskStatus.completed):
+            return {"status": task.status.value, "task_id": task_id}
 
-        task.status = TaskStatus.processing
-        task.error = None
+        updated = (
+            db.query(GenerationTask)
+            .filter(
+                GenerationTask.id == task_id,
+                GenerationTask.status.in_((TaskStatus.pending, TaskStatus.processing)),
+            )
+            .update(
+                {
+                    GenerationTask.status: TaskStatus.processing,
+                    GenerationTask.error: None,
+                    GenerationTask.error_code: None,
+                    GenerationTask.updated_at: datetime.utcnow(),
+                },
+                synchronize_session=False,
+            )
+        )
+        if not updated:
+            db.rollback()
+            task = db.get(GenerationTask, task_id)
+            return {
+                "status": task.status.value if task else "not_found",
+                "task_id": task_id,
+            }
+        db.refresh(task)
+        add_task_event(
+            db,
+            task,
+            "started",
+            "开始生成。",
+        )
         db.commit()
-
-        # 构建工作流：图片 / 视频两路
-        if task.task_type == "video":
-            workflow = build_video_workflow(
-                prompt=task.prompt,
-                duration=task.duration or 4.0,
-                aspect_ratio=task.aspect_ratio,
-                megapixels=task.megapixels,
-                seed=task.seed,
-                steps=task.steps if task.steps is not None else 20,
-                loras=_parse_loras(task.loras),
-                ref_images=_split_csv(task.ref_images),
-                ref_videos=_split_csv(task.ref_videos),
-                ref_audios=_split_csv(task.ref_audios),
-            )
-        else:
-            workflow = build_workflow(
-                prompt=task.prompt,
-                negative_prompt=task.negative_prompt,
-                aspect_ratio=task.aspect_ratio,
-                megapixels=task.megapixels,
-                seed=task.seed,
-                workflow_file=task.workflow,
-                model_preset=task.model_preset,
-                steps=task.steps if task.steps is not None else 8,
-                refine_steps=task.refine_steps if task.refine_steps is not None else 4,
-                loras=_parse_loras(task.loras),
-            )
 
         client = ComfyClient()
-        prompt_id = client.submit_prompt(workflow)
-        task.comfy_prompt_id = prompt_id
-        db.commit()
+        prompt_id = task.comfy_prompt_id
+        if not prompt_id:
+            # 构建工作流：图片 / 视频两路
+            if task.task_type == "video":
+                workflow = build_video_workflow(
+                    prompt=task.prompt,
+                    duration=task.duration or 4.0,
+                    aspect_ratio=task.aspect_ratio,
+                    megapixels=task.megapixels,
+                    seed=task.seed,
+                    steps=task.steps if task.steps is not None else 20,
+                    loras=_parse_loras(task.loras),
+                    ref_images=_split_csv(task.ref_images),
+                    ref_videos=_split_csv(task.ref_videos),
+                    ref_audios=_split_csv(task.ref_audios),
+                )
+            else:
+                workflow = build_workflow(
+                    prompt=task.prompt,
+                    negative_prompt=task.negative_prompt,
+                    aspect_ratio=task.aspect_ratio,
+                    megapixels=task.megapixels,
+                    seed=task.seed,
+                    workflow_file=task.workflow,
+                    model_preset=task.model_preset,
+                    steps=task.steps if task.steps is not None else 8,
+                    refine_steps=task.refine_steps if task.refine_steps is not None else 4,
+                    loras=_parse_loras(task.loras),
+                )
 
-        media_meta = client.wait_for_media(prompt_id)
+            check_cancelled()
+            submission_attempted = True
+            prompt_id = client.submit_prompt(workflow)
+            task = db.get(GenerationTask, task_id)
+            if task is None:
+                return {"status": "not_found", "task_id": task_id}
+            task.comfy_prompt_id = prompt_id
+            add_task_event(
+                db,
+                task,
+                "submitted",
+                "工作流已提交到 ComfyUI。",
+            )
+            db.commit()
+            db.refresh(task)
+            submission_attempted = False
+            if task.status == TaskStatus.cancelled:
+                try:
+                    stop_comfy_prompt(client, prompt_id)
+                except Exception:
+                    logger.exception("取消已提交的 ComfyUI 任务失败 task_id=%s", task_id)
+                    add_task_event(
+                        db,
+                        task,
+                        "cancel_control_failed",
+                        "任务已取消，但无法确认 ComfyUI 是否停止。",
+                        error_code="comfy_cancel_failed",
+                    )
+                    db.commit()
+                return {"status": "cancelled", "task_id": task_id}
+        else:
+            add_task_event(
+                db,
+                task,
+                "resumed",
+                "恢复等待已提交的 ComfyUI prompt，避免重复生成。",
+            )
+            db.commit()
+
+        media_meta = client.wait_for_media(prompt_id, cancel_check=check_cancelled)
         for meta in media_meta:
+            check_cancelled()
             data = client.download_image(
                 meta["filename"], meta.get("subfolder", ""), meta.get("type", "output")
             )
             kind = meta.get("kind", "image")
-            _, rel, width, height = _save_media_bytes(task_id, meta["filename"], data, kind)
+            path, rel, width, height = _save_media_bytes(
+                task_id, meta["filename"], data, kind
+            )
+            saved_files.append(path)
             db.add(
                 ImageAsset(
                     task_id=task_id,
@@ -137,23 +237,136 @@ def run_generation(self, task_id: int):
                 )
             )
 
-        task.status = TaskStatus.completed
+        check_cancelled()
+        db.expire_all()
+        task = db.get(GenerationTask, task_id)
+        if task is None or task.status == TaskStatus.cancelled:
+            raise TaskCancelled()
+        updated = (
+            db.query(GenerationTask)
+            .filter(
+                GenerationTask.id == task_id,
+                GenerationTask.status == TaskStatus.processing,
+            )
+            .update(
+                {
+                    GenerationTask.status: TaskStatus.completed,
+                    GenerationTask.error: None,
+                    GenerationTask.error_code: None,
+                    GenerationTask.updated_at: datetime.utcnow(),
+                },
+                synchronize_session=False,
+            )
+        )
+        if not updated:
+            db.rollback()
+            raise TaskCancelled()
+        db.refresh(task)
+        add_task_event(
+            db,
+            task,
+            "completed",
+            "生成完成。",
+        )
         db.commit()
         return {"status": "completed", "task_id": task_id, "prompt_id": prompt_id}
+
+    except TaskCancelled:
+        db.rollback()
+        _cleanup_saved_files(task_id, saved_files)
+        current = db.get(GenerationTask, task_id)
+        return {
+            "status": current.status.value if current else "not_found",
+            "task_id": task_id,
+        }
 
     except Exception as exc:
         db.rollback()
         task = db.get(GenerationTask, task_id)
-        if task is not None:
-            task.status = TaskStatus.failed
-            task.error = str(exc)[:1000]
-            task.updated_at = datetime.utcnow()
+        _cleanup_saved_files(task_id, saved_files)
+        if task is None:
+            logger.exception("生成任务失败且任务记录不存在 task_id=%s", task_id)
+            return {"status": "failed", "task_id": task_id}
+        if task.status == TaskStatus.cancelled:
+            return {"status": "cancelled", "task_id": task_id}
+
+        error = classify_task_error(exc)
+        prompt_persisted = bool(
+            task.comfy_prompt_id
+            and (not prompt_id or task.comfy_prompt_id == prompt_id)
+        )
+        retryable = (
+            (
+                error.retryable
+                or (error.code == "comfy_timeout" and prompt_persisted)
+            )
+            and not (
+                submission_attempted
+                and not prompt_persisted
+                and error.code == "comfy_timeout"
+            )
+            and self.request.retries < self.max_retries
+        )
+        updates = {
+            GenerationTask.error: error.message,
+            GenerationTask.error_code: error.code,
+            GenerationTask.updated_at: datetime.utcnow(),
+        }
+        if retryable:
+            updates[GenerationTask.status] = TaskStatus.pending
+            updates[GenerationTask.retry_count] = GenerationTask.retry_count + 1
+        else:
+            updates[GenerationTask.status] = TaskStatus.failed
+
+        updated = (
+            db.query(GenerationTask)
+            .filter(
+                GenerationTask.id == task_id,
+                GenerationTask.status == TaskStatus.processing,
+            )
+            .update(updates, synchronize_session=False)
+        )
+        if not updated:
+            db.rollback()
+            current = db.get(GenerationTask, task_id)
+            return {
+                "status": current.status.value if current else "not_found",
+                "task_id": task_id,
+            }
+
+        db.refresh(task)
+        if retryable:
+            add_task_event(
+                db,
+                task,
+                "retry_scheduled",
+                "ComfyUI 暂时无响应，任务将在短暂等待后恢复。",
+                error_code=error.code,
+            )
             db.commit()
-        # 短暂瞬时错误（连接/超时）允许重试
-        retryable = isinstance(exc, (ComfyError, VideoWorkflowError))
-        if retryable and self.request.retries < self.max_retries:
+            logger.warning(
+                "生成任务将自动重试 task_id=%s error_code=%s retry=%s",
+                task_id,
+                error.code,
+                self.request.retries + 1,
+            )
             raise self.retry(exc=exc) from exc
-        return {"status": "failed", "task_id": task_id, "error": str(exc)[:500]}
+
+        add_task_event(
+            db,
+            task,
+            "failed",
+            error.message,
+            error_code=error.code,
+        )
+        db.commit()
+        logger.exception("生成任务失败 task_id=%s error_code=%s", task_id, error.code)
+        return {
+            "status": "failed",
+            "task_id": task_id,
+            "error_code": error.code,
+            "error": error.message,
+        }
     finally:
         db.close()
 

@@ -40,17 +40,22 @@ jobs:
 
       - name: Import MCP API routes
         working-directory: backend
-        run: python -c "from app.api.agent import router; from app.api.chat import router as chat_router; from app.api.instance import router as instance_router; from app.api.runninghub import router as runninghub_router"
+        run: python -c "from app.api.agent import router; from app.api.chat import router as chat_router; from app.api.generate import router as generate_router; from app.api.instance import router as instance_router; from app.api.runninghub import router as runninghub_router; from app.api.tasks import router as tasks_router; from app.api.video import router as video_router"
 
       - name: Lint changed backend areas
         run: >-
           ruff check
           backend/app/api/agent.py
           backend/app/api/chat.py
+          backend/app/api/generate.py
           backend/app/api/instance.py
           backend/app/api/runninghub.py
+          backend/app/api/tasks.py
+          backend/app/api/video.py
           backend/app/mcp_server
           backend/app/services/comfy_client.py
+          backend/app/services/task_reliability.py
+          backend/app/services/agents.py
           backend/app/services/llm_client.py
           backend/app/services/mcp_agent.py
           backend/app/services/quality_review.py
@@ -59,11 +64,13 @@ jobs:
           backend/app/workers/tasks.py
           backend/app/schemas.py
           backend/app/models.py
+          backend/app/database.py
           backend/tests/test_mcp_agent.py
           backend/tests/test_agent_memory.py
           backend/tests/test_chat_stream.py
           backend/tests/test_quality_review.py
           backend/tests/test_runninghub.py
+          backend/tests/test_task_reliability.py
 
       - name: Test MCP Agent with mocked ComfyUI
         working-directory: backend
@@ -84,3 +91,7 @@ jobs:
       - name: Test RunningHub workflow backend
         working-directory: backend
         run: python -m tests.test_runninghub
+
+      - name: Test task reliability
+        working-directory: backend
+        run: python -m unittest tests.test_task_reliability
