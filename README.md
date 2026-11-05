@@ -28,9 +28,10 @@
 1. **ComfyUI 自由操作**：打开原生节点和工作流界面；网页地址默认使用 `COMFYUI_WEB_URL`，也可按浏览器保存覆盖地址，并自检本地生成依赖。
 2. **Agent 自动化**：始终由 MCP Agent 执行对话；生成后端可切换为本地 ComfyUI 或 RunningHub 自定义工作流，LLM 提供方与生成后端分别选择。本地后端可查询 ComfyUI 状态/工作流/队列并执行管理操作；有影响的本地操作需要用户确认。可选开启视觉质量 Harness，支持的生成结果会被审查，低于 8/10 时最多自动优化并重生成 2 次；RunningHub 重试会再次提交远程任务并可能产生费用。
 3. **导演分镜**：独立的导演 Agent 一次处理一集或一段剧本，按样表拆出景别、运镜、画面内容、时长、台词、音效和提示词；分镜可在线编辑并导出为 Excel，不调用 ComfyUI 生成工具。
-4. **模型选择**：支持配置的 OpenAI 兼容服务、llama.cpp 和用户自定义 OpenAI 兼容模型；自定义 API Key 加密存储。
-5. **创作助手能力**：可选启用项目文档 RAG、管理知识文档、编辑生成偏好；最近 20 条 Agent 对话历史保存在当前浏览器。
-6. **创作结果库**：合并展示原任务 API 与 MCP Agent 生成的图片/视频，可点击预览；后端生图、视频和聊天 API 仍保留供外部集成使用。
+4. **自动视频**：可选择或直接拖入整剧材料文件夹（每集一个子文件夹，包含分镜与素材），Agent 逐集建议镜头匹配；确认全部分集后按集号串行执行 ComfyUI 工作流，失败可从对应分集继续。
+5. **模型选择**：支持配置的 OpenAI 兼容服务、llama.cpp 和用户自定义 OpenAI 兼容模型；自定义 API Key 加密存储。
+6. **创作助手能力**：可选启用项目文档 RAG、管理知识文档、编辑生成偏好；最近 20 条 Agent 对话历史保存在当前浏览器。
+7. **创作结果库**：合并展示原任务 API 与 MCP Agent 生成的图片/视频，可点击预览；后端生图、视频和聊天 API 仍保留供外部集成使用。
 
 本项目采用 MIT License。开源目标不是把 ComfyUI 封装成不可见的黑盒，而是在不限制团队自有模型、节点和工作流的基础上，提供更便捷的常用操作、可检查的执行过程和可贡献的扩展能力。当前部署和协作边界见[商业化市场调研与架构路线图](docs/商业化市场调研与架构路线图.md)。
 
@@ -54,19 +55,21 @@ ai-image-studio/
 │   │   ├── main.py              # FastAPI 入口（/health、路由注册、建表）
 │   │   ├── config.py            # 环境变量配置（含 LLM / 加密 / 额度）
 │   │   ├── database.py          # SQLAlchemy 引擎/会话
-│   │   ├── models.py            # User / Task / Image / Conversation / Message / UsageRecord ORM
+│   │   ├── models.py            # User / Task / Image / VideoEpisode / Conversation 等 ORM
 │   │   ├── schemas.py           # Pydantic 请求/响应模型
 │   │   ├── throttle.py          # 频率限流 + 每日 LLM 额度
-│   │   ├── api/                 # generate / tasks / images / chat / conversations 路由
+│   │   ├── api/                 # generate / tasks / images / chat / director / video_agent 路由
 │   │   ├── services/
 │   │   │   ├── comfy_client.py  # ComfyUI HTTP 客户端（提交/轮询/下载）
+│   │   │   ├── video_episode.py # 单集素材包解析、分镜读取与素材匹配
 │   │   │   ├── task_reliability.py # 任务事件、错误分类与安全投递
 │   │   │   ├── llm_client.py    # 多 provider LLM 客户端（openai / llama / custom）
 │   │   │   ├── mcp_agent.py     # MCP 工具发现与 Agent 循环
 │   │   │   └── workflow.py      # 工作流模板加载 + {{参数}} 注入
 │   │   └── workers/
 │   │       ├── celery_app.py    # Celery 实例（含软/硬超时配置）
-│   │       └── tasks.py         # 生成任务执行体（状态机 + 自动重试）
+│   │       ├── tasks.py         # 生成任务执行体（状态机 + 自动重试）
+│   │       └── video_episode_tasks.py # 单集串行生成与成片合成
 │   ├── tests/smoke_test.py      # 无需 ComfyUI/Redis 的端到端冒烟测试
 │   ├── requirements.txt
 │   ├── Dockerfile
@@ -237,9 +240,9 @@ Swagger：<http://127.0.0.1:8000/docs>
 - **V8**：为个人助手增加可查看/编辑/清除的持久偏好记忆，并让 MCP Agent 在生成时使用这些默认偏好。
 - **V9（已发布，2026-10-28）**：为通用聊天 API 增加 SSE 流式响应，同时保留 JSON 对话接口。
 - **V10（已发布，2026-11-03）**：完善 Agent 自动化、对话式视频生成、RunningHub 后端和可选视觉质量审查；单实例部署提供自检。
-- **未发布**：将前端重构为 Vue 3、TypeScript 和 Vite 单页应用，默认进入 Agent 工作区。
 - **V11（开发中）**：已加入持久任务事件、错误分类、最多 3 次手动重试和排队/运行任务取消；仍需完成密钥与备份基线及真实工作流回归。
-- **V12（开发中）**：引入导演 Agent，将单集剧本拆成可编辑分镜表并导出 Excel；后续扩展多角色协作与调度。
+- **V12（已发布，2026-11-03）**：加入 Vue 3、TypeScript 和 Vite 创作工作区，以及导演 Agent 的单集分镜生成、编辑与 Excel 导出。
+- **V13（开发中）**：加入自动视频 Agent，导入单集分镜与素材包后逐镜串行生成、续段适配并合成整集 MP4。
 
 ### MCP Agent 使用方式
 

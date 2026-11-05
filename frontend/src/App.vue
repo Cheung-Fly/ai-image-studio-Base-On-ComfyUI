@@ -9,7 +9,11 @@ import {
   watch,
 } from "vue";
 import { apiFetch, apiJson, errorMessage } from "./api";
+import { beginAgentActivity } from "./agentActivity";
+import AutoImageView from "./components/AutoImageView.vue";
 import DirectorView from "./components/DirectorView.vue";
+import PandaAgent from "./components/PandaPet.vue";
+import VideoAgentView from "./components/VideoAgentView.vue";
 import type {
   AgentConfirmation,
   AgentFile,
@@ -239,7 +243,7 @@ function generatedFiles(steps: AgentStep[]): AgentFile[] {
 }
 
 const state = reactive({
-  activeView: "agent" as "agent" | "director" | "comfyui",
+  activeView: "agent" as "agent" | "director" | "images" | "video" | "comfyui",
   activePanel: null as "runninghub" | "memory" | "rag" | null,
   apiStatus: "checking" as "checking" | "online" | "offline",
   history: readHistory(),
@@ -946,6 +950,7 @@ async function sendChat(): Promise<void> {
   state.messages.push(userMessage, progressMessage);
   state.chatInput = "";
   state.chatBusy = true;
+  const endActivity = beginAgentActivity();
 
   try {
     const result = await pollAgent(text, history, (progress) => {
@@ -968,6 +973,7 @@ async function sendChat(): Promise<void> {
     const message = state.messages.find((item) => item.id === progressId);
     if (message) message.text = "Agent 执行失败：" + errorMessage(error);
   } finally {
+    endActivity();
     state.chatBusy = false;
     await nextTick();
     document.querySelector<HTMLTextAreaElement>(".composer-input")?.focus();
@@ -1089,6 +1095,32 @@ onUnmounted(() => {
         </button>
         <button
           class="side-nav-item"
+          :class="{ active: state.activeView === 'images' }"
+          type="button"
+          @click="state.activeView = 'images'"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4 5.5h16v13H4zM5 17l5-5 3 3 2-2 4 4" />
+            <circle cx="15.5" cy="9" r="1.5" />
+          </svg>
+          <span>自动图片</span>
+          <span class="nav-indicator" />
+        </button>
+        <button
+          class="side-nav-item"
+          :class="{ active: state.activeView === 'video' }"
+          type="button"
+          @click="state.activeView = 'video'"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4 5.5h11.5v13H4zM15.5 10l5-3v10l-5-3" />
+            <path d="M7 8.5h5.5M7 12h5.5M7 15.5h3" />
+          </svg>
+          <span>自动视频</span>
+          <span class="nav-indicator" />
+        </button>
+        <button
+          class="side-nav-item"
           :class="{ active: state.activeView === 'comfyui' }"
           type="button"
           @click="state.activeView = 'comfyui'"
@@ -1146,7 +1178,11 @@ onUnmounted(() => {
                 ? "创作 Agent"
                 : state.activeView === "director"
                   ? "导演分镜"
-                  : "ComfyUI 工作台"
+                  : state.activeView === "images"
+                    ? "自动图片"
+                    : state.activeView === "video"
+                      ? "自动视频"
+                      : "ComfyUI 工作台"
             }}
           </strong>
         </div>
@@ -1652,15 +1688,37 @@ onUnmounted(() => {
         </div>
       </section>
 
-      <DirectorView
-        v-else-if="state.activeView === 'director'"
-        :provider="state.provider"
-        :selected-custom-id="state.selectedCustomId"
-        :custom-models="state.customModels"
-        @select-provider="selectProvider"
-      />
+      <KeepAlive>
+        <DirectorView
+          v-if="state.activeView === 'director'"
+          :provider="state.provider"
+          :selected-custom-id="state.selectedCustomId"
+          :custom-models="state.customModels"
+          @select-provider="selectProvider"
+        />
+      </KeepAlive>
 
-      <section v-else class="comfy-page">
+      <KeepAlive>
+        <VideoAgentView
+          v-if="state.activeView === 'video'"
+          :provider="state.provider"
+          :selected-custom-id="state.selectedCustomId"
+          :custom-models="state.customModels"
+          :running-hub-config="state.runningHubConfig"
+        />
+      </KeepAlive>
+
+      <KeepAlive>
+        <AutoImageView
+          v-if="state.activeView === 'images'"
+          :provider="state.provider"
+          :selected-custom-id="state.selectedCustomId"
+          :custom-models="state.customModels"
+          :running-hub-config="state.runningHubConfig"
+        />
+      </KeepAlive>
+
+      <section v-if="state.activeView === 'comfyui'" class="comfy-page">
         <div class="page-heading compact-heading">
           <div>
             <div class="eyebrow"><span class="eyebrow-line" /> ComfyUI 工作台</div>
@@ -2051,5 +2109,7 @@ onUnmounted(() => {
         @click.stop
       />
     </div>
+
+    <PandaAgent />
   </div>
 </template>

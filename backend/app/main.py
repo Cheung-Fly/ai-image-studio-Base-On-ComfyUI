@@ -9,9 +9,12 @@ from fastapi.staticfiles import StaticFiles
 
 # 提前导入，确保 worker 任务在 API 进程内也完成注册（eager 模式/调试用）
 from app.workers import tasks as _worker_tasks  # noqa: F401
+from app.workers import video_episode_tasks as _video_episode_tasks  # noqa: F401
+from app.workers import auto_image_tasks as _auto_image_tasks  # noqa: F401
 
 from .api import (
     agent,
+    auto_image,
     chat,
     conversations,
     custom_models,
@@ -27,6 +30,7 @@ from .api import (
     tasks,
     upload,
     video,
+    video_agent,
     workflows,
 )
 from .config import settings
@@ -60,6 +64,7 @@ app.add_middleware(
 )
 
 app.include_router(agent.router, prefix="/api")
+app.include_router(auto_image.router, prefix="/api")
 app.include_router(generate.router, prefix="/api")
 app.include_router(tasks.router, prefix="/api")
 app.include_router(images.router, prefix="/api")
@@ -75,6 +80,8 @@ app.include_router(rag_docs.router, prefix="/api")
 app.include_router(me.router, prefix="/api")
 app.include_router(upload.router, prefix="/api")
 app.include_router(video.router, prefix="/api")
+app.include_router(video_agent.router, prefix="/api")
+app.include_router(video_agent.series_router, prefix="/api")
 app.include_router(loras.router, prefix="/api")
 
 

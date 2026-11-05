@@ -133,7 +133,34 @@ returned explicitly and are never represented as a passing result. The option
 defaults to false, preserving the existing single-generation flow. Arbitrary
 ComfyUI workflow JSON is not rewritten or automatically retried.
 
-### 4.3 Chat, streaming, and retrieval
+### 4.3 Automatic episode video
+
+1. The client uploads a selected series root folder. Each episode subfolder
+   contains exactly one storyboard (`.xlsx` or `storyboard.json`) and optional
+   image, video, and audio assets.
+2. The API validates relative paths, file and episode counts, total size,
+   media types, and per-file limits; it stages each episode independently,
+   copies supported assets into ComfyUI's input folder, and stores the series,
+   episode ordering, and shot records in SQLite.
+3. The selected LLM receives each storyboard's text and asset filenames, not
+   media contents, and suggests asset IDs for each shot. The client can review
+   all episodes and edit every suggestion and generation setting before
+   starting production.
+4. A Celery worker processes episodes in natural folder-name order, then
+   processes each episode's shots and continuation segments sequentially
+   through the existing ComfyUI video workflow. It persists completed
+   segments; a failure stops later episodes, and resume continues at the
+   failed episode without regenerating completed episodes or shots.
+5. After an episode's shots complete, the worker uses the bundled FFmpeg
+   executable to normalize dimensions, frame rate, and audio, then concatenates
+   the clips into an MP4. Cancellation is checked during generation and
+   assembly and stops the series queue.
+
+The series workflow is a single-instance local-storage feature; its records
+are not a multi-tenant project or shared team workspace. The single-episode
+ZIP endpoints remain available for API compatibility.
+
+### 4.4 Chat, streaming, and retrieval
 
 - `POST /api/chat` returns a JSON response; `POST /api/chat/stream` returns
   server-sent events.
@@ -147,7 +174,7 @@ ComfyUI workflow JSON is not rewritten or automatically retried.
   vector index is a retrieval aid, not the source of truth for application
   records.
 
-### 4.4 Browser interaction model
+### 4.5 Browser interaction model
 
 - **Custom operation** opens the ComfyUI web interface at `COMFYUI_WEB_URL` by
   default. The user can save a browser-local override in the UI; it is scoped

@@ -72,6 +72,8 @@ def _migrate_missing_columns() -> None:
         ("tasks", "retry_count", "INTEGER NOT NULL DEFAULT 0"),
         ("tasks", "manual_retry_count", "INTEGER NOT NULL DEFAULT 0"),
         ("images", "media_type", "VARCHAR(16) NOT NULL DEFAULT 'image'"),
+        ("video_episodes", "generation_backend", "VARCHAR(16) NOT NULL DEFAULT 'comfyui'"),
+        ("video_episodes", "workflow_config_json", "TEXT NOT NULL DEFAULT '{}'"),
     ]
     inspector = inspect(engine)
     with engine.begin() as conn:

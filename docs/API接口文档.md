@@ -531,10 +531,84 @@ Agent 请求中断生成、清理队列、删除排队任务/输入素材或释�
 | video_title | string | 否 | `""` | 视频名称，最多 128 字符 |
 | provider | string | 否 | `"openai"` | 模型提供方：`openai` / `llama` / `custom` |
 | custom_config_id | int | 否 | `null` | `provider=custom` 时选择自定义模型配置 |
+| skill_ids | int[] | 否 | `[]` | 最多选择 10 个当前用户已保存的 Skill |
 
 成功响应包含 `video_title`、`theme`、`shooting_time`、`deadline`、`props`、`characters` 和 `shots`。每个镜头包含 `shot_no`、`framing`、`camera_movement`、`visual_description`、`duration_seconds`、`dialogue`、`sound_effects`、`prompt`，以及制作、提交和审核字段；镜头数为 1–120。
 
+- `GET /api/director/skills`、`POST /api/director/skills`、`PUT /api/director/skills/{skill_id}` 和 `DELETE /api/director/skills/{skill_id}`：列出和管理当前用户的分镜 Skill；指导内容最多 10,000 字符。
+- `POST /api/director/skills/import`：以 `multipart/form-data` 上传 `file` 字段导入 `SKILL.md`，最大 256 KB。文件夹导入只读取唯一的 `SKILL.md`，支持 YAML frontmatter 中的 `name`、`description` 和 Markdown 正文；其他文件不会上传或执行。
+
 `POST /api/director/export` 接收当前编辑后的同一分镜结构，返回 `.xlsx` 工作簿（二进制），可用于下载和后续制作。
+
+### 11.8 自动图片 Agent
+
+- `POST /api/auto-image/plan`：以 `multipart/form-data` 上传整剧 `.xlsx` 分镜表并建立资产清单。字段包括 `file`、`episode_index`（默认 1，作为首个试跑分集）、`provider` 和可选的 `custom_config_id`。接口解析全部工作表后将资产规划提交给 Celery Worker，并立即返回 `planning` 批次；只规划资产，不提交生图任务。
+- `GET /api/auto-image/batches?limit=20` 和 `GET /api/auto-image/batches/{batch_id}`：读取最近资产清单、任务状态和按时间排列的 `logs`。规划事件包含工作簿解析、后台排队、LLM 请求成功/失败与耗时、资产清单保存；后续也记录设定图生成阶段和节流后的 RunningHub 状态变化。LLM 规划仍使用 300 秒请求超时，超时详情会保存在批次日志中。
+- `POST /api/auto-image/batches/{batch_id}/start`：只启动指定的一集。请求包含 `episode_index`、`generation_backend`（`comfyui` / `runninghub`）、`workflow_file`、`aspect_ratio`、`megapixels`、`seed`、`steps` 和 `refine_steps`。RunningHub 后端还需提供 `runninghub` 工作流 ID 与正向提示词节点/字段；API Key 使用已保存的加密配置。
+- RunningHub 自动映射工作流中名为 `width`、`height`、`aspect_ratio`、`resolution`、`megapixels`、`seed`、`steps` 等标准输入，并要求任务返回图片。ComfyUI 后端使用所选图片工作流。
+- `GET /api/auto-image/batches/{batch_id}/episodes/{episode_index}.zip`：本集全部设定图完成后下载素材包，包含 `storyboard.json`、`assets/` 和 `assets_manifest.json`，可交给自动视频栏目继续制作。
+
+### 11.9 自动视频 Agent
+
+`POST /api/video-agent/episodes` 以 `multipart/form-data` 导入一个 `.zip` 单集素材包：
+
+| 字段 | 类型 | 必填 | 默认 | 说明 |
+|---|---|---|---|---|
+| file | file | 是 | — | ZIP 内必须包含一份分镜 `.xlsx` 或 `storyboard.json`，可同时包含图片、视频和音频素材 |
+| provider | string | 否 | `openai` | 素材匹配模型：`openai` / `llama` / `custom` |
+| custom_config_id | int | 否 | `null` | `provider=custom` 时选择自定义模型配置 |
+
+Agent 根据分镜内容和素材文件名提出镜头匹配建议；用户可逐镜调整匹配、时长后确认制作。匹配阶段只向 LLM 发送分镜文本和文件名，不上传素材内容。素材包压缩后最大 1 GB、解压后最大 4 GB，最多 200 个媒体文件；单张图片不超过 20 MB、视频不超过 500 MB、音频不超过 100 MB。
+
+- `GET /api/video-agent/episodes`：列出最近单集任务；`GET /api/video-agent/episodes/{episode_id}`：读取单集、素材建议和逐镜状态。
+- `POST /api/video-agent/episodes/{episode_id}/start`：确认镜头参数并串行启动制作。请求体示例：
+
+```json
+{
+  "aspect_ratio": "16:9 (Widescreen)",
+  "megapixels": 1.0,
+  "generation_backend": "comfyui",
+  "workflow_file": "MiniMaxH3_ref2va_video.json",
+  "shots": [
+    {"shot_no": "1", "duration_seconds": 6, "asset_ids": ["a0001"]}
+  ]
+}
+```
+
+`generation_backend` 可选 `comfyui` 或 `runninghub`；ComfyUI 当前只接受兼容自动视频管线的模板。RunningHub 请求额外提供 `runninghub` 对象（`workflow_id`、`prompt_node_id`、`prompt_field`，以及可选负向提示词映射），运行时会上传已选素材并按 `LoadImage`、`LoadVideo`、`LoadAudio` 节点顺序映射。工作流可通过标准 `width`、`height`、`duration`、`frames`、`fps` 等输入接收画幅与时长参数；提交前会检查提示词映射和媒体输入容量。
+
+每个镜头可使用最多 9 张图片、3 个视频和 3 个音频；音频参考需要同时至少选择一张图片或一个视频。单镜不足 2 秒时按 2 秒生成并在成片中裁短；超过 15 秒时拆分为不超过 15 秒的连续片段，后续片段参考前一段。所有镜头按分镜顺序执行，结束后统一画幅并合成 MP4。取消 RunningHub 单集会停止本地等待与后续处理；RunningHub 远端已提交的任务可能仍会继续运行。
+
+- `POST /api/video-agent/episodes/{episode_id}/cancel`：取消排队或执行中的单集。
+- `POST /api/video-agent/episodes/{episode_id}/resume`：从失败镜头继续，或在镜头均完成但合成失败时重新合成。
+- `GET /api/video-agent/episodes/{episode_id}/assets/{asset_id}`：读取已导入素材；`GET /api/video-agent/episodes/{episode_id}/output`：下载完成的 MP4。
+
+整剧目录导入和批量制作使用以下接口：
+
+- `POST /api/video-agent/series`：以 `multipart/form-data` 上传同一个根目录中的多个文件。重复的 `files` 字段携带文件，文件名保留 `整剧名称/第1集/分镜.xlsx` 这样的相对路径；可选字段 `provider` 和 `custom_config_id` 与单集接口相同。每个分集子目录必须且只能包含一份 `.xlsx` 或名为 `storyboard.json` / `分镜.json` 的 JSON 分镜。支持图片、视频和音频素材；最多 100 集、10,000 个文件、总量 4 GB，每集最多 200 个媒体文件。分集按文件夹名称自然排序，例如“第2集”排在“第10集”之前。
+- `GET /api/video-agent/series?limit=20`：列出最近整剧任务；`GET /api/video-agent/series/{series_id}`：读取整剧、全部分集、素材建议和逐镜状态。
+- `GET /api/video-agent/series/workflows`：列出自动视频管线支持的 ComfyUI 模板。
+- `POST /api/video-agent/series/{series_id}/start`：一次提交所有分集的确认设置。每个分集必须恰好出现一次，且 `episode_id` 必须属于该整剧。示例：
+
+```json
+{
+  "episodes": [
+    {
+      "episode_id": 41,
+      "settings": {
+        "aspect_ratio": "16:9 (Widescreen)",
+        "megapixels": 1.0,
+        "shots": [
+          {"shot_no": "1", "duration_seconds": 6, "asset_ids": ["a0001"]}
+        ]
+      }
+    }
+  ]
+}
+```
+
+- `POST /api/video-agent/series/{series_id}/cancel`：取消排队或制作中的整剧及当前 ComfyUI 任务。
+- `POST /api/video-agent/series/{series_id}/resume`：从失败分集继续；已完成分集会跳过，后续分集仅在前一集成功后开始。
 
 ---
 

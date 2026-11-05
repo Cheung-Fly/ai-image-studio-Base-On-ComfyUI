@@ -4,6 +4,7 @@ import logging
 import uuid
 from datetime import datetime
 from pathlib import Path
+from time import monotonic
 
 from PIL import Image
 
@@ -17,6 +18,7 @@ from ..services.task_reliability import (
     classify_task_error,
     stop_comfy_prompt,
 )
+from ..services.auto_image_events import add_auto_image_task_event
 from ..services.video_workflow import build_video_workflow
 from ..services.workflow import build_workflow
 from .celery_app import celery_app
@@ -94,6 +96,7 @@ def _parse_loras(raw: str) -> list[dict]:
 def run_generation(self, task_id: int):
     """执行一次生成，并持久化状态变化、失败分类与可观察事件。"""
     db = SessionLocal()
+    started_at = monotonic()
     prompt_id = None
     submission_attempted = False
     saved_files: list[Path] = []
@@ -142,6 +145,12 @@ def run_generation(self, task_id: int):
             "started",
             "开始生成。",
         )
+        add_auto_image_task_event(
+            db,
+            task_id,
+            "image_generation_started",
+            "已开始通过 ComfyUI 生成设定图。",
+        )
         db.commit()
 
         client = ComfyClient()
@@ -188,6 +197,12 @@ def run_generation(self, task_id: int):
                 "submitted",
                 "工作流已提交到 ComfyUI。",
             )
+            add_auto_image_task_event(
+                db,
+                task_id,
+                "comfyui_workflow_submitted",
+                "工作流已提交到 ComfyUI，正在等待输出。",
+            )
             db.commit()
             db.refresh(task)
             submission_attempted = False
@@ -215,6 +230,13 @@ def run_generation(self, task_id: int):
             db.commit()
 
         media_meta = client.wait_for_media(prompt_id, cancel_check=check_cancelled)
+        add_auto_image_task_event(
+            db,
+            task_id,
+            "comfyui_workflow_completed",
+            "ComfyUI 已返回输出，正在下载并保存图片。",
+        )
+        db.commit()
         for meta in media_meta:
             check_cancelled()
             data = client.download_image(
@@ -267,6 +289,13 @@ def run_generation(self, task_id: int):
             task,
             "completed",
             "生成完成。",
+        )
+        add_auto_image_task_event(
+            db,
+            task_id,
+            "image_generation_completed",
+            "设定图已生成并保存。",
+            duration_ms=round((monotonic() - started_at) * 1000),
         )
         db.commit()
         return {"status": "completed", "task_id": task_id, "prompt_id": prompt_id}
@@ -343,6 +372,14 @@ def run_generation(self, task_id: int):
                 "ComfyUI 暂时无响应，任务将在短暂等待后恢复。",
                 error_code=error.code,
             )
+            add_auto_image_task_event(
+                db,
+                task_id,
+                "image_generation_retry",
+                "ComfyUI 暂时无响应，任务将自动重试。",
+                level="warning",
+                duration_ms=round((monotonic() - started_at) * 1000),
+            )
             db.commit()
             logger.warning(
                 "生成任务将自动重试 task_id=%s error_code=%s retry=%s",
@@ -358,6 +395,14 @@ def run_generation(self, task_id: int):
             "failed",
             error.message,
             error_code=error.code,
+        )
+        add_auto_image_task_event(
+            db,
+            task_id,
+            "image_generation_failed",
+            f"ComfyUI 设定图生成失败（{error.code}）：{error.message}",
+            level="error",
+            duration_ms=round((monotonic() - started_at) * 1000),
         )
         db.commit()
         logger.exception("生成任务失败 task_id=%s error_code=%s", task_id, error.code)

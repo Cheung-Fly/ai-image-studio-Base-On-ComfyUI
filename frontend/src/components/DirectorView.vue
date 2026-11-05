@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, onMounted, reactive, ref } from "vue";
 import { apiFetch, apiJson, errorMessage } from "../api";
+import { beginAgentActivity } from "../agentActivity";
 import type { CustomModel, Provider } from "../types";
 
 interface StoryboardShot {
@@ -28,6 +29,14 @@ interface Storyboard {
   shots: StoryboardShot[];
 }
 
+interface DirectorSkill {
+  id: number;
+  name: string;
+  instructions: string;
+  created_at: string;
+  updated_at: string;
+}
+
 const props = defineProps<{
   provider: Provider;
   selectedCustomId: number | null;
@@ -45,6 +54,20 @@ const busy = ref(false);
 const exporting = ref(false);
 const error = ref("");
 const status = ref("");
+const skills = ref<DirectorSkill[]>([]);
+const selectedSkillIds = ref<number[]>([]);
+const skillsLoading = ref(false);
+const skillSaving = ref(false);
+const skillError = ref("");
+const skillFormOpen = ref(false);
+const skillFolderInput = ref<HTMLInputElement | null>(null);
+const skillForm = reactive({
+  id: null as number | null,
+  name: "",
+  instructions: "",
+});
+const maxSelectedSkills = 10;
+const maxSkillInstructionsLength = 10000;
 const shotCount = computed(() => storyboard.value?.shots.length ?? 0);
 const totalDuration = computed(() =>
   (storyboard.value?.shots || []).reduce(
@@ -57,6 +80,168 @@ const providerSelection = computed(() =>
     ? `custom:${props.selectedCustomId ?? ""}`
     : props.provider,
 );
+
+onMounted(() => {
+  void loadSkills();
+});
+
+async function loadSkills(): Promise<void> {
+  skillsLoading.value = true;
+  try {
+    skills.value = await apiJson<DirectorSkill[]>(
+      "/api/director/skills",
+      undefined,
+      "读取分镜 Skill 失败",
+    );
+    const availableIds = new Set(skills.value.map((skill) => skill.id));
+    selectedSkillIds.value = selectedSkillIds.value.filter((id) =>
+      availableIds.has(id),
+    );
+    skillError.value = "";
+  } catch (cause) {
+    skillError.value = "Skill 加载失败：" + errorMessage(cause);
+  } finally {
+    skillsLoading.value = false;
+  }
+}
+
+function openSkillForm(skill?: DirectorSkill): void {
+  skillForm.id = skill?.id ?? null;
+  skillForm.name = skill?.name ?? "";
+  skillForm.instructions = skill?.instructions ?? "";
+  skillError.value = "";
+  skillFormOpen.value = true;
+}
+
+function closeSkillForm(): void {
+  skillFormOpen.value = false;
+  skillForm.id = null;
+  skillForm.name = "";
+  skillForm.instructions = "";
+}
+
+function handleSkillFolderChange(event: Event): void {
+  const input = event.target as HTMLInputElement;
+  const files = input.files;
+  input.value = "";
+  if (!files?.length) return;
+  void importSkillFolder(files);
+}
+
+async function importSkillFolder(fileList: FileList): Promise<void> {
+  skillError.value = "";
+  const files = Array.from(fileList).map((file) => ({
+    file,
+    relativePath: file.webkitRelativePath || file.name,
+  }));
+  const roots = new Set(
+    files.map(({ relativePath }) => relativePath.split(/[\\/]/)[0]),
+  );
+  if (roots.size !== 1) {
+    skillError.value = "请一次选择一个 Skill 文件夹。";
+    return;
+  }
+  const skillFiles = files.filter(
+    ({ relativePath }) =>
+      relativePath.split(/[\\/]/).at(-1)?.toLowerCase() === "skill.md",
+  );
+  if (skillFiles.length !== 1) {
+    skillError.value =
+      skillFiles.length === 0
+        ? "所选文件夹中没有 SKILL.md。"
+        : "所选文件夹中有多个 SKILL.md，请选择单个 Skill 文件夹。";
+    return;
+  }
+  const [{ file, relativePath }] = skillFiles;
+  if (file.size > 256 * 1024) {
+    skillError.value = "SKILL.md 不能超过 256 KB。";
+    return;
+  }
+
+  skillSaving.value = true;
+  try {
+    const form = new FormData();
+    form.append("file", file, relativePath);
+    const skill = await apiJson<DirectorSkill>(
+      "/api/director/skills/import",
+      { method: "POST", body: form },
+      "导入 Skill 失败",
+    );
+    await loadSkills();
+    const autoSelected =
+      selectedSkillIds.value.length < maxSelectedSkills;
+    if (autoSelected) {
+      selectedSkillIds.value = [...selectedSkillIds.value, skill.id];
+    }
+    status.value = autoSelected
+      ? `Skill「${skill.name}」已导入并选中。`
+      : `Skill「${skill.name}」已导入。`;
+  } catch (cause) {
+    skillError.value = "导入 Skill 失败：" + errorMessage(cause);
+  } finally {
+    skillSaving.value = false;
+  }
+}
+
+async function saveSkill(): Promise<void> {
+  skillError.value = "";
+  const name = skillForm.name.trim();
+  const instructions = skillForm.instructions.trim();
+  if (!name || !instructions) {
+    skillError.value = "请填写 Skill 名称和指导内容。";
+    return;
+  }
+  skillSaving.value = true;
+  try {
+    const isNewSkill = skillForm.id === null;
+    const skill = await apiJson<DirectorSkill>(
+      skillForm.id === null
+        ? "/api/director/skills"
+        : `/api/director/skills/${skillForm.id}`,
+      {
+        method: skillForm.id === null ? "POST" : "PUT",
+        body: JSON.stringify({ name, instructions }),
+      },
+      "保存 Skill 失败",
+    );
+    await loadSkills();
+    const autoSelected =
+      isNewSkill && selectedSkillIds.value.length < maxSelectedSkills;
+    if (autoSelected) {
+      selectedSkillIds.value = [...selectedSkillIds.value, skill.id];
+    }
+    closeSkillForm();
+    status.value = autoSelected
+      ? `Skill「${skill.name}」已保存并选中。`
+      : `Skill「${skill.name}」已保存。`;
+  } catch (cause) {
+    skillError.value = "保存 Skill 失败：" + errorMessage(cause);
+  } finally {
+    skillSaving.value = false;
+  }
+}
+
+async function deleteSkill(skill: DirectorSkill): Promise<void> {
+  if (!window.confirm(`删除 Skill「${skill.name}」？`)) return;
+  skillError.value = "";
+  skillSaving.value = true;
+  try {
+    await apiJson(
+      `/api/director/skills/${skill.id}`,
+      { method: "DELETE" },
+      "删除 Skill 失败",
+    );
+    selectedSkillIds.value = selectedSkillIds.value.filter(
+      (id) => id !== skill.id,
+    );
+    if (skillForm.id === skill.id) closeSkillForm();
+    await loadSkills();
+  } catch (cause) {
+    skillError.value = "删除 Skill 失败：" + errorMessage(cause);
+  } finally {
+    skillSaving.value = false;
+  }
+}
 
 function selectModel(event: Event): void {
   const value = (event.target as HTMLSelectElement).value;
@@ -77,11 +262,13 @@ async function createStoryboard(): Promise<void> {
 
   busy.value = true;
   status.value = "导演正在梳理剧情节拍与镜头顺序…";
+  const endActivity = beginAgentActivity();
   try {
     const request: Record<string, unknown> = {
       script: script.value,
       video_title: videoTitle.value.trim(),
       provider: props.provider,
+      skill_ids: selectedSkillIds.value,
     };
     if (props.provider === "custom") {
       request.custom_config_id = props.selectedCustomId;
@@ -97,6 +284,7 @@ async function createStoryboard(): Promise<void> {
     error.value = "分镜生成失败：" + errorMessage(cause);
     status.value = "";
   } finally {
+    endActivity();
     busy.value = false;
   }
 }
@@ -207,6 +395,138 @@ async function downloadWorkbook(): Promise<void> {
           <span>{{ script.length.toLocaleString() }} / 50,000 字符</span>
           <span>生成结果可逐格修改</span>
         </div>
+
+        <section class="skill-panel" aria-label="分镜 Skill">
+          <div class="skill-heading">
+            <div>
+              <span class="field-label">分镜 Skill</span>
+              <p>可组合辅助规则；导入只读取 SKILL.md，不上传或运行其他文件。</p>
+            </div>
+            <div class="skill-add-actions">
+              <button
+                class="skill-add-button"
+                type="button"
+                :disabled="busy || skillSaving"
+                @click="skillFolderInput?.click()"
+              >
+                导入文件夹
+              </button>
+              <button
+                class="skill-add-button"
+                type="button"
+                :disabled="busy || skillSaving"
+                @click="openSkillForm()"
+              >
+                手动添加
+              </button>
+            </div>
+          </div>
+          <input
+            ref="skillFolderInput"
+            class="skill-folder-input"
+            type="file"
+            webkitdirectory
+            directory
+            multiple
+            @change="handleSkillFolderChange"
+          />
+          <p v-if="skillsLoading" class="skill-empty">正在读取 Skill…</p>
+          <div v-else-if="skills.length" class="skill-list">
+            <div
+              v-for="skill in skills"
+              :key="skill.id"
+              class="skill-row"
+            >
+              <label class="skill-option">
+                <input
+                  v-model="selectedSkillIds"
+                  type="checkbox"
+                  :value="skill.id"
+                  :disabled="
+                    busy ||
+                    skillSaving ||
+                    (!selectedSkillIds.includes(skill.id) &&
+                      selectedSkillIds.length >= maxSelectedSkills)
+                  "
+                />
+                <span class="skill-option-copy">
+                  <strong>{{ skill.name }}</strong>
+                  <small>{{ skill.instructions }}</small>
+                </span>
+              </label>
+              <div class="skill-row-actions">
+                <button
+                  type="button"
+                  :disabled="busy || skillSaving"
+                  :aria-label="`编辑 Skill ${skill.name}`"
+                  @click="openSkillForm(skill)"
+                >
+                  编辑
+                </button>
+                <button
+                  type="button"
+                  :disabled="busy || skillSaving"
+                  :aria-label="`删除 Skill ${skill.name}`"
+                  @click="void deleteSkill(skill)"
+                >
+                  删除
+                </button>
+              </div>
+            </div>
+          </div>
+          <p v-else class="skill-empty">
+            还没有 Skill。添加镜头风格或拆分规则，再勾选用于分镜。
+          </p>
+          <p class="skill-count">
+            已选 {{ selectedSkillIds.length }} / {{ maxSelectedSkills }}
+          </p>
+          <form
+            v-if="skillFormOpen"
+            class="skill-form"
+            @submit.prevent="void saveSkill()"
+          >
+            <label>
+              Skill 名称
+              <input
+                v-model="skillForm.name"
+                maxlength="64"
+                required
+                :disabled="skillSaving"
+                placeholder="例如：悬疑节奏"
+              />
+            </label>
+            <label>
+              指导内容
+              <textarea
+                v-model="skillForm.instructions"
+                :maxlength="maxSkillInstructionsLength"
+                required
+                rows="4"
+                :disabled="skillSaving"
+                placeholder="描述拆镜、构图、镜头节奏或提示词方面的要求。"
+              />
+            </label>
+            <div class="skill-form-footer">
+              <span>
+                {{ skillForm.instructions.length.toLocaleString() }} /
+                {{ maxSkillInstructionsLength.toLocaleString() }}
+              </span>
+              <button
+                type="button"
+                :disabled="skillSaving"
+                @click="closeSkillForm"
+              >
+                取消
+              </button>
+              <button type="submit" :disabled="skillSaving">
+                {{ skillSaving ? "保存中…" : "保存 Skill" }}
+              </button>
+            </div>
+          </form>
+          <p v-if="skillError" class="director-error" role="alert">
+            {{ skillError }}
+          </p>
+        </section>
 
         <button
           class="director-submit"
@@ -503,6 +823,177 @@ async function downloadWorkbook(): Promise<void> {
   margin: 8px 0 16px;
   color: var(--director-muted);
   font-size: 11px;
+}
+
+.skill-panel {
+  margin: 0 0 16px;
+  padding: 12px;
+  border: 1px solid var(--director-line);
+  border-radius: 7px;
+  background: #eff3ee;
+}
+
+.skill-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.skill-add-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 4px;
+}
+
+.skill-folder-input {
+  display: none;
+}
+
+.skill-heading p,
+.skill-empty {
+  margin: 4px 0 0;
+  color: var(--director-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.skill-add-button,
+.skill-row-actions button,
+.skill-form-footer button {
+  padding: 5px 8px;
+  border: 1px solid var(--director-line);
+  border-radius: 4px;
+  color: var(--director-ink);
+  background: var(--director-paper);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.skill-add-button:hover:not(:disabled),
+.skill-row-actions button:hover:not(:disabled),
+.skill-form-footer button:hover:not(:disabled) {
+  border-color: var(--director-accent);
+  color: var(--director-accent);
+}
+
+.skill-list {
+  display: grid;
+  max-height: 240px;
+  gap: 4px;
+  overflow: auto;
+  margin-top: 10px;
+}
+
+.skill-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 7px 6px;
+  border-top: 1px solid #d8e0d9;
+}
+
+.skill-option {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 7px;
+  cursor: pointer;
+}
+
+.skill-option input {
+  margin: 3px 0 0;
+  accent-color: var(--director-accent);
+}
+
+.skill-option-copy {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.skill-option-copy strong {
+  overflow: hidden;
+  color: var(--director-ink);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.skill-option-copy small {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--director-muted);
+  font-size: 10px;
+  line-height: 1.4;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.skill-row-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 3px;
+}
+
+.skill-count {
+  margin: 7px 0 0;
+  color: var(--director-muted);
+  font-size: 10px;
+  text-align: right;
+}
+
+.skill-form {
+  display: grid;
+  gap: 9px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--director-line);
+}
+
+.skill-form label {
+  display: grid;
+  gap: 5px;
+  color: var(--director-ink);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.skill-form input,
+.skill-form textarea {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid var(--director-line);
+  border-radius: 4px;
+  color: var(--director-ink);
+  background: var(--director-paper);
+  font: inherit;
+  font-weight: 400;
+}
+
+.skill-form textarea {
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.skill-form-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 5px;
+}
+
+.skill-form-footer span {
+  margin-right: auto;
+  color: var(--director-muted);
+  font-size: 10px;
+}
+
+.skill-panel :focus-visible {
+  outline: 2px solid rgba(182, 78, 61, 0.55);
+  outline-offset: 2px;
 }
 
 .director-submit,

@@ -11,6 +11,7 @@ from app.services.director_agent import (
     DirectorOutputError,
     export_storyboard_xlsx,
     generate_storyboard,
+    parse_skill_markdown,
     parse_storyboard_response,
 )
 from app.services.llm_client import chat
@@ -60,6 +61,16 @@ class DirectorAgentTests(unittest.TestCase):
         with self.assertRaises(DirectorOutputError):
             parse_storyboard_response("我已经看完剧本，但这里不是表格。")
 
+    def test_parse_skill_markdown_frontmatter(self):
+        name, instructions = parse_skill_markdown(
+            b'---\nname: "Suspense"\ndescription: Keep reveals restrained.\n---\n'
+            b'Use reaction shots after discoveries.',
+            "suspense/SKILL.md",
+        )
+        self.assertEqual(name, "Suspense")
+        self.assertIn("Keep reveals restrained.", instructions)
+        self.assertIn("Use reaction shots after discoveries.", instructions)
+
     @patch("app.services.director_agent.llm_chat")
     def test_generation_uses_director_role(self, llm_chat):
         llm_chat.return_value = json.dumps(sample_storyboard(), ensure_ascii=False)
@@ -71,6 +82,20 @@ class DirectorAgentTests(unittest.TestCase):
         self.assertEqual(result.video_title, "第一集·沙暴")
         self.assertEqual(llm_chat.call_args.kwargs["system_prompt"], DIRECTOR_SYSTEM_PROMPT)
         self.assertIn("被黄沙覆盖", llm_chat.call_args.args[0])
+
+    @patch("app.services.director_agent.llm_chat")
+    def test_selected_skills_are_added_as_supplemental_director_guidance(self, llm_chat):
+        llm_chat.return_value = json.dumps(sample_storyboard(), ensure_ascii=False)
+        generate_storyboard(
+            "陆沉走过被黄沙覆盖的街道。",
+            "第一集·沙暴",
+            "openai",
+            skills=[("悬疑节奏", "每个关键动作后留出反应镜头。")],
+        )
+        system_prompt = llm_chat.call_args.kwargs["system_prompt"]
+        self.assertIn("悬疑节奏", system_prompt)
+        self.assertIn("每个关键动作后留出反应镜头。", system_prompt)
+        self.assertIn("始终遵守导演要求中的剧本忠实性", system_prompt)
 
     @patch(
         "app.services.llm_client._resolve",
