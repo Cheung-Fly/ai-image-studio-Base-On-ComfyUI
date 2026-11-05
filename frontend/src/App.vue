@@ -303,12 +303,36 @@ const ragFileInput = ref<HTMLInputElement | null>(null);
 const isRunningHub = computed(
   () => state.generationBackend === "runninghub",
 );
+const activeComfyUiCheck = computed(() =>
+  state.diagnostics?.checks.find((check) => check.id === "comfyui"),
+);
 const activeBackendStatus = computed(() => {
   if (state.apiStatus === "checking") return "连接中";
   if (state.apiStatus === "offline") return "API 服务离线";
-  if (!isRunningHub.value) return "本地 ComfyUI 已就绪";
-  if (state.runningHubConfig?.configured) return "RunningHub 工作流已配置";
-  return "请先配置 RunningHub 工作流";
+  if (isRunningHub.value) {
+    return state.runningHubConfig?.configured
+      ? "RunningHub 工作流已配置"
+      : "请先配置 RunningHub 工作流";
+  }
+  if (state.diagnosticsBusy) return "正在检查 ComfyUI";
+  if (state.diagnosticsError) return "ComfyUI 状态检查失败";
+  if (activeComfyUiCheck.value?.status === "ok") return "ComfyUI 已就绪";
+  if (activeComfyUiCheck.value?.status === "error") return "ComfyUI 不可用";
+  return "ComfyUI 状态未检查";
+});
+const activeBackendStatusTone = computed(() => {
+  if (state.apiStatus === "offline") return "error";
+  if (state.apiStatus === "checking" || state.diagnosticsBusy) {
+    return "pending";
+  }
+  if (isRunningHub.value) {
+    return state.runningHubConfig?.configured ? "configured" : "unknown";
+  }
+  if (state.diagnosticsError || activeComfyUiCheck.value?.status === "error") {
+    return "error";
+  }
+  if (activeComfyUiCheck.value?.status === "ok") return "ready";
+  return "unknown";
 });
 const activeBackendHint = computed(() =>
   isRunningHub.value
@@ -1139,7 +1163,7 @@ onUnmounted(() => {
           <span class="tool-dot violet" />
           RunningHub 工作流
           <span class="tool-state">
-            {{ state.runningHubConfig?.configured ? "已连接" : "设置" }}
+            {{ state.runningHubConfig?.configured ? "已配置" : "设置" }}
           </span>
         </button>
         <button type="button" @click="void togglePanel('memory')">
@@ -1467,7 +1491,12 @@ onUnmounted(() => {
                   <strong>生成引擎</strong>
                   <small>选择创作执行后端</small>
                 </div>
-                <span class="backend-live"><i />{{ activeBackendStatus }}</span>
+                <span
+                  class="backend-live"
+                  :class="`backend-live--${activeBackendStatusTone}`"
+                >
+                  <i />{{ activeBackendStatus }}
+                </span>
               </div>
               <div class="backend-switch">
                 <button

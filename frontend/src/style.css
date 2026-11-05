@@ -2974,6 +2974,40 @@ select:focus-visible {
   background: #5a9a78;
 }
 
+.backend-live--ready {
+  color: #4f8469;
+}
+
+.backend-live--ready i {
+  background: #5a9a78;
+}
+
+.backend-live--error {
+  color: #b24b4b;
+}
+
+.backend-live--error i {
+  background: #c64f4f;
+}
+
+.backend-live--pending {
+  color: #8c7340;
+}
+
+.backend-live--pending i {
+  background: #c19b4d;
+}
+
+.backend-live--unknown,
+.backend-live--configured {
+  color: #718093;
+}
+
+.backend-live--unknown i,
+.backend-live--configured i {
+  background: #8d9aac;
+}
+
 .backend-switch > button {
   border-color: #d8e0e9;
   border-radius: 6px;
