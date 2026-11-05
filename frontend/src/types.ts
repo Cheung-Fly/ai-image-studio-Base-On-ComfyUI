@@ -133,6 +133,7 @@ export interface RagDocument {
 }
 
 export interface InstanceCheck {
+  id: string;
   status: string;
   label: string;
   message: string;

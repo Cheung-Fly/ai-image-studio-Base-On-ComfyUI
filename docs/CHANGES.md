@@ -18,6 +18,13 @@ history, not a roadmap; planned work belongs in `项目技术演进路线图.md`
 
 ## Unreleased
 
+## v11.0.1 - 2026-11-05
+
+### Fixed
+- Corrected backend readiness labels so API health no longer implies ComfyUI is
+  ready; ComfyUI status is shown only after a diagnostic check, and RunningHub
+  is labeled as configured rather than connected.
+
 ## v11.0.0 - 2026-11-05
 
 ### Added
