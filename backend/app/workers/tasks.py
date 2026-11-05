@@ -11,6 +11,7 @@ from PIL import Image
 from ..config import settings
 from ..database import SessionLocal
 from ..models import GenerationTask, ImageAsset, TaskStatus
+from ..services.auto_image_events import add_auto_image_task_event
 from ..services.comfy_client import ComfyClient
 from ..services.task_reliability import (
     TaskCancelled,
@@ -18,7 +19,6 @@ from ..services.task_reliability import (
     classify_task_error,
     stop_comfy_prompt,
 )
-from ..services.auto_image_events import add_auto_image_task_event
 from ..services.video_workflow import build_video_workflow
 from ..services.workflow import build_workflow
 from .celery_app import celery_app
