@@ -5,6 +5,7 @@
 ## 开发环境
 
 - Python 3.13
+- Node.js 22+ and npm (Vue 3, TypeScript, and Vite frontend)
 - Redis（运行 FastAPI/Celery 全链路时需要）
 - ComfyUI（真实生成联调时需要；自动化测试使用模拟服务）
 
@@ -23,11 +24,11 @@ python -m tests.test_runninghub
 ruff check app/api/agent.py app/api/chat.py app/api/instance.py app/api/runninghub.py app/mcp_server app/services/comfy_client.py app/services/llm_client.py app/services/mcp_agent.py app/services/quality_review.py app/services/runninghub.py app/services/agent_memory.py app/workers/tasks.py app/schemas.py app/models.py tests/test_mcp_agent.py tests/test_agent_memory.py tests/test_chat_stream.py tests/test_quality_review.py tests/test_runninghub.py
 ```
 
-以上命令与当前 CI 的后端检查保持一致。MCP Agent、偏好记忆、流式聊天、视觉审查和 RunningHub 客户端测试不要求真实 GPU、LLM、RunningHub 或 ComfyUI；这些外部服务需要真实联调时再单独启动。CI 定义见 `.github/workflows/ci.yml`。
+在 `frontend/` 中运行 `npm ci`、`npm run typecheck` 和 `npm run build`，验证 Vue/TypeScript 类型及生产构建。以上后端命令与当前 CI 检查保持一致。MCP Agent、偏好记忆、流式聊天、视觉审查和 RunningHub 客户端测试不要求真实 GPU、LLM、RunningHub 或 ComfyUI；这些外部服务需要真实联调时再单独启动。CI 定义见 `.github/workflows/ci.yml`。
 
 ## 变更建议
 
-- 保持改动聚焦，遵循现有 Python、FastAPI 和原生 HTML/CSS/JavaScript 写法。
+- 保持改动聚焦，遵循现有 Python、FastAPI 和 Vue/TypeScript/Vite 前端结构。
 - 不要提交 `.env`、API Key、模型权重、生成图片、数据库或本地缓存。
 - 用户可见变更在 `docs/CHANGES.md` 的 `Unreleased` 下记录；API 合约变化同步更新 `docs/API接口文档.md`，架构边界或关键流程变化同步更新 `docs/ARCHITECTURE.md`，用户可见功能或安装方式变化同步更新 `README.md`。
 - 新增自动化行为时，补充可重复运行的测试；避免测试依赖 GPU、外部模型服务或真实 ComfyUI。

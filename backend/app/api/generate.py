@@ -1,13 +1,13 @@
 """提交生成任务。"""
 import json
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..models import GenerationTask, User
 from ..schemas import GenerateRequest, TaskOut
-from ..workers.tasks import run_generation
+from ..services.task_reliability import TaskDispatchError, dispatch_generation
 from .auth import get_current_user
 
 router = APIRouter(tags=["generate"])
@@ -37,7 +37,10 @@ def generate(
     db.commit()
     db.refresh(task)
 
-    run_generation.delay(task.id)
+    try:
+        dispatch_generation(db, task)
+    except TaskDispatchError as exc:
+        raise HTTPException(503, str(exc)) from exc
     # eager（冒烟测试）模式下任务已同步完成，重新读取拿到最新状态；
     # 真实异步模式下任务仍为 pending，此处读到的状态不变
     db.refresh(task)

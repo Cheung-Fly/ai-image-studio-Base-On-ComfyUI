@@ -26,7 +26,7 @@ image or video inference engine:
 
 ```mermaid
 flowchart LR
-    User[User] --> Browser[Browser UI<br/>frontend/index.html]
+    User[User] --> Browser[Vue Browser UI<br/>frontend/src/App.vue]
     Browser -->|HTTP / JSON| API[FastAPI API]
     Browser -->|Open configured web URL| ComfyWeb[ComfyUI web UI]
     API --> DB[(SQLite)]
@@ -45,8 +45,8 @@ flowchart LR
 In the current Docker Compose setup, Redis, API, and worker are containers.
 ComfyUI and an optional local `llama.cpp` server run outside the Compose stack;
 the containers reach host services through their configured URLs. The browser
-UI is a single HTML/CSS/JavaScript page served by FastAPI. It has no frontend
-build step.
+UI is a Vue single-page application written in TypeScript and built by Vite; Docker packages the
+production bundle into the API image, and FastAPI serves it from `/`.
 
 ## 3. Runtime components and responsibilities
 
@@ -61,7 +61,7 @@ build step.
 | MCP agent | Discover tools from the MCP server, expose them to the LLM, execute approved calls | `backend/app/services/mcp_agent.py`, `backend/app/mcp_server/` |
 | Quality review | Review generated images/video frames and run bounded prompt-refinement retries | `backend/app/services/quality_review.py`, `backend/app/services/mcp_agent.py` |
 | Retrieval | Index fixed project documents and dynamic knowledge-base documents for RAG | `backend/app/services/rag.py` |
-| Browser UI | Login, open ComfyUI for manual work, agent automation, and the result gallery | `frontend/index.html` |
+| Browser UI | Open ComfyUI for manual work, agent automation, and the result gallery | `frontend/src/App.vue` |
 
 `backend/app/api/` owns HTTP concerns and delegates application work to
 services or Celery tasks. The worker owns long-running generation and agent
@@ -133,7 +133,34 @@ returned explicitly and are never represented as a passing result. The option
 defaults to false, preserving the existing single-generation flow. Arbitrary
 ComfyUI workflow JSON is not rewritten or automatically retried.
 
-### 4.3 Chat, streaming, and retrieval
+### 4.3 Automatic episode video
+
+1. The client uploads a selected series root folder. Each episode subfolder
+   contains exactly one storyboard (`.xlsx` or `storyboard.json`) and optional
+   image, video, and audio assets.
+2. The API validates relative paths, file and episode counts, total size,
+   media types, and per-file limits; it stages each episode independently,
+   copies supported assets into ComfyUI's input folder, and stores the series,
+   episode ordering, and shot records in SQLite.
+3. The selected LLM receives each storyboard's text and asset filenames, not
+   media contents, and suggests asset IDs for each shot. The client can review
+   all episodes and edit every suggestion and generation setting before
+   starting production.
+4. A Celery worker processes episodes in natural folder-name order, then
+   processes each episode's shots and continuation segments sequentially
+   through the existing ComfyUI video workflow. It persists completed
+   segments; a failure stops later episodes, and resume continues at the
+   failed episode without regenerating completed episodes or shots.
+5. After an episode's shots complete, the worker uses the bundled FFmpeg
+   executable to normalize dimensions, frame rate, and audio, then concatenates
+   the clips into an MP4. Cancellation is checked during generation and
+   assembly and stops the series queue.
+
+The series workflow is a single-instance local-storage feature; its records
+are not a multi-tenant project or shared team workspace. The single-episode
+ZIP endpoints remain available for API compatibility.
+
+### 4.4 Chat, streaming, and retrieval
 
 - `POST /api/chat` returns a JSON response; `POST /api/chat/stream` returns
   server-sent events.
@@ -147,7 +174,7 @@ ComfyUI workflow JSON is not rewritten or automatically retried.
   vector index is a retrieval aid, not the source of truth for application
   records.
 
-### 4.4 Browser interaction model
+### 4.5 Browser interaction model
 
 - **Custom operation** opens the ComfyUI web interface at `COMFYUI_WEB_URL` by
   default. The user can save a browser-local override in the UI; it is scoped
@@ -243,7 +270,7 @@ Harness tests.
   moderation, and AI-content labeling are not currently implemented
   requirements. Evaluate security, privacy, and applicable regulations before
   exposing an instance beyond its trusted network.
-- The Vue/Vite migration and broader multi-client deployment are optional
+- Broader multi-client deployment and migration to a shared component library are optional
   roadmap items, not current runtime components.
 
 ## 9. Commercialization target (proposed, not implemented)

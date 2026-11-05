@@ -1,5 +1,6 @@
 """ComfyUI HTTP 客户端：提交工作流、轮询结果、下载图片。"""
 import time
+from collections.abc import Callable
 from typing import Any
 
 import httpx
@@ -163,11 +164,16 @@ class ComfyClient:
         return media
 
     def wait_for_media(
-        self, prompt_id: str, timeout: float | None = None
+        self,
+        prompt_id: str,
+        timeout: float | None = None,
+        cancel_check: Callable[[], None] | None = None,
     ) -> list[dict[str, str]]:
         """轮询 /history 直到完成，返回所有输出媒体（图片 + 视频）元信息。"""
         deadline = time.monotonic() + (timeout or self.timeout)
         while time.monotonic() < deadline:
+            if cancel_check is not None:
+                cancel_check()
             history = self._get(f"/history/{prompt_id}")
             entry = history.get(prompt_id)
             if entry is not None:

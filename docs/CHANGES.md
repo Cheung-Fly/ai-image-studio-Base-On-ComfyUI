@@ -18,8 +18,42 @@ history, not a roadmap; planned work belongs in `项目技术演进路线图.md`
 
 ## Unreleased
 
+### Added
+
+- Added an automatic video workspace for importing a single-episode ZIP with
+  its storyboard and media assets. The selected LLM suggests shot-to-asset
+  matches from storyboard text and filenames; users can review matches and
+  generation settings before starting the job.
+- Added whole-series folder import with one storyboard-and-assets subfolder per
+  episode, natural episode ordering, review controls for every episode, and
+  serial production that stops on failure so completed episodes are preserved
+  and production can resume from the failed episode.
+- Added folder drag-and-drop alongside the directory picker for whole-series
+  imports.
+- Added serial episode production through the MiniMax H3 Ref2VA ComfyUI
+  workflow, including short-shot trimming, continuation segments for shots
+  longer than 15 seconds, progress, cancellation, resume, and final MP4
+  assembly with normalized dimensions and audio.
+- Added persistent lifecycle events and classified errors for image/video
+  generation tasks, with event-history, retry, and cancellation endpoints.
+  Safe transient failures can be retried automatically up to twice or manually
+  up to three times; tasks with a submitted ComfyUI prompt are resumed rather
+  than submitted again. Cancellation targets only the matching queued/running
+  prompt and reports when stopping it could not be confirmed.
+- Added a standalone Director Agent workspace that turns one episode or script
+  segment into an editable storyboard table and downloads it as an Excel
+  workbook using the supplied production-sheet fields.
+- Added reusable Director Agent skills that can be created in the UI or
+  imported from a folder's `SKILL.md`, then selected for storyboard generation.
+- Added automatic reference-asset planning from multi-episode storyboard
+  workbooks, with background processing logs and per-episode asset generation.
+
 ### Changed
 
+- Rebuilt the browser interface as a Vue 3 and TypeScript single-page
+  application with Vite; the Agent workspace is now the default landing page,
+  development requests use a same-origin API proxy, and FastAPI serves the
+  compiled frontend from the Docker image.
 - Replaced the GitHub Pages project showcase with a 36-second silent animated
   GIF embedded directly in the README. Removed the previous video and cover.
 

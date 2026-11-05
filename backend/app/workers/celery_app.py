@@ -12,7 +12,11 @@ celery_app = Celery(
     "aistudio",
     broker=settings.redis_url,
     backend=settings.redis_url,
-    include=["app.workers.tasks"],
+    include=[
+        "app.workers.tasks",
+        "app.workers.video_episode_tasks",
+        "app.workers.auto_image_tasks",
+    ],
 )
 
 celery_app.conf.update(

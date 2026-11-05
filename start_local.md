@@ -28,3 +28,15 @@ curl http://127.0.0.1:8000/api/tasks/1
 ```
 
 Swagger 文档：http://127.0.0.1:8000/docs
+
+## 启动 Vue 前端
+
+另开 PowerShell 窗口，在仓库根目录执行：
+
+```powershell
+cd frontend
+npm ci
+npm run dev
+```
+
+打开 Vite 显示的地址（默认 `http://127.0.0.1:5173`）。开发服务器会将 `/api` 请求代理到 `http://127.0.0.1:8000`。

@@ -1,3 +1,11 @@
+FROM node:22-alpine AS frontend-build
+
+WORKDIR /frontend
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
+COPY frontend/ ./
+RUN npm run build
+
 FROM python:3.13-slim
 
 WORKDIR /app
@@ -8,11 +16,11 @@ COPY backend/requirements.txt .
 RUN pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch \
     && pip install --no-cache-dir -r requirements.txt
 
-# 拷贝应用代码与运行时需要的静态文件
+# Copy the application and the compiled Vue frontend.
 COPY backend/app ./app
 COPY backend/model_presets.json ./model_presets.json
 COPY workflows /workflows
-COPY frontend /frontend
+COPY --from=frontend-build /frontend/dist /frontend/dist
 
 # RAG 知识库固定文档（镜像内 /app/knowledge）
 COPY docs /app/knowledge/docs

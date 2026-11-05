@@ -11,7 +11,7 @@ from ..config import settings
 from ..database import SessionLocal
 from ..models import GenerationTask, TaskStatus
 from ..services.llm_client import chat
-from ..workers.tasks import run_generation
+from ..services.task_reliability import dispatch_generation
 
 
 class PromptAgent:
@@ -43,9 +43,10 @@ class GenerateAgent:
         db.commit()
         db.refresh(task)
         task_id = task.id
-        db.close()
-
-        run_generation.delay(task_id)
+        try:
+            dispatch_generation(db, task)
+        finally:
+            db.close()
 
         # 轮询等待生成完成（复用现有 Celery 出图，不重复生成逻辑）
         while True:
@@ -62,6 +63,9 @@ class GenerateAgent:
                 err = t.error
                 db.close()
                 raise RuntimeError(f"生成失败：{err}")
+            if t.status == TaskStatus.cancelled:
+                db.close()
+                raise RuntimeError("生成任务已取消")
             db.close()
             time.sleep(5)
 

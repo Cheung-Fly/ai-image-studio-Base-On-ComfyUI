@@ -1,13 +1,13 @@
 """视频生成接口：提交 MiniMax H3 Ref2VA 任务。"""
 import json
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..models import GenerationTask, User
 from ..schemas import GenerateVideoRequest, TaskOut
-from ..workers.tasks import run_generation
+from ..services.task_reliability import TaskDispatchError, dispatch_generation
 from .auth import get_current_user
 
 router = APIRouter(tags=["video"])
@@ -41,6 +41,9 @@ def generate_video(
     db.commit()
     db.refresh(task)
 
-    run_generation.delay(task.id)
+    try:
+        dispatch_generation(db, task)
+    except TaskDispatchError as exc:
+        raise HTTPException(503, str(exc)) from exc
     db.refresh(task)
     return task

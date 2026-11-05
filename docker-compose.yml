@@ -40,7 +40,6 @@ services:
     volumes:
       - ./data:/data
       - ./backend/app:/app/app
-      - ./frontend:/frontend:ro
       - type: bind
         source: ${COMFYUI_LORAS_HOST_DIR:-./data/loras}
         target: /comfyui/loras

@@ -1,4 +1,5 @@
 """Pydantic 请求 / 响应模型。"""
+import math
 from datetime import datetime
 
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -67,12 +68,35 @@ class TaskOut(BaseModel):
     seed: int
     status: str
     error: str | None = None
+    error_code: str | None = None
+    retry_count: int
+    manual_retry_count: int
     comfy_prompt_id: str | None = None
     created_at: datetime
     updated_at: datetime
-    images: list[ImageOut] = []
+    images: list[ImageOut] = Field(default_factory=list)
 
     model_config = {"from_attributes": True}
+
+
+class TaskEventOut(BaseModel):
+    id: int
+    task_id: int
+    event_type: str
+    status: str
+    message: str
+    error_code: str | None = None
+    attempt: int
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class TaskActionOut(BaseModel):
+    task: TaskOut
+    message: str
+    celery_revoke: str
+    comfy_stop: str
 
 
 class GenerateVideoRequest(BaseModel):
@@ -213,6 +237,24 @@ class RunningHubWorkflowNodesRequest(BaseModel):
         return value.strip() if value is not None else None
 
 
+class RunningHubWorkflowSelection(BaseModel):
+    """A module-specific workflow selection using the saved RunningHub API key."""
+
+    workflow_id: str = Field(..., min_length=1, max_length=128, pattern=r"^[A-Za-z0-9_-]+$")
+    prompt_node_id: str = Field(..., min_length=1, max_length=128, pattern=r"^[A-Za-z0-9_-]+$")
+    prompt_field: str = Field(..., min_length=1, max_length=128)
+    negative_prompt_node_id: str | None = Field(
+        None, max_length=128, pattern=r"^[A-Za-z0-9_-]+$"
+    )
+    negative_prompt_field: str | None = Field(None, max_length=128)
+
+    @model_validator(mode="after")
+    def _validate_negative_mapping(self):
+        if bool(self.negative_prompt_node_id) != bool(self.negative_prompt_field):
+            raise ValueError("负向提示词节点 ID 与字段名必须同时填写或同时留空")
+        return self
+
+
 class AgentGenerateRequest(BaseModel):
     """对话式 ComfyUI Agent 请求。"""
 
@@ -240,6 +282,341 @@ class AgentConfirmationRequest(BaseModel):
 
     confirmation_id: str = Field(..., min_length=1, max_length=64)
     confirmed: bool
+
+
+class DirectorStoryboardRequest(BaseModel):
+    """导演 Agent 的单集分镜生成请求。"""
+
+    script: str = Field(..., min_length=1, max_length=50000)
+    video_title: str = Field("", max_length=128)
+    provider: str = Field("openai", pattern="^(openai|llama|custom)$")
+    custom_config_id: int | None = Field(None, gt=0)
+    skill_ids: list[int] = Field(default_factory=list, max_length=10)
+
+    model_config = {"extra": "forbid"}
+
+    @field_validator("script")
+    @classmethod
+    def _strip_director_script(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("请先填写剧本")
+        return value
+
+    @field_validator("video_title")
+    @classmethod
+    def _strip_director_title(cls, value: str) -> str:
+        return value.strip()
+
+    @field_validator("skill_ids")
+    @classmethod
+    def _validate_director_skill_ids(cls, value: list[int]) -> list[int]:
+        if any(skill_id <= 0 for skill_id in value):
+            raise ValueError("Skill ID 必须为正整数")
+        if len(set(value)) != len(value):
+            raise ValueError("Skill 不能重复选择")
+        return value
+
+
+class DirectorSkillIn(BaseModel):
+    """A reusable storyboard skill supplied by the current user."""
+
+    name: str = Field(..., min_length=1, max_length=64)
+    instructions: str = Field(..., min_length=1, max_length=10000)
+
+    @field_validator("name", "instructions")
+    @classmethod
+    def _strip_director_skill_text(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("Skill 名称和指导内容不能为空")
+        return value
+
+    model_config = {"extra": "forbid"}
+
+
+class DirectorSkillOut(BaseModel):
+    """A saved storyboard skill."""
+
+    id: int
+    name: str
+    instructions: str
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class DirectorStoryboardShot(BaseModel):
+    """单个分镜行；字段对应 Excel 样表。"""
+
+    shot_no: str = Field(..., min_length=1, max_length=32)
+    framing: str = Field("", max_length=64)
+    camera_movement: str = Field("", max_length=128)
+    visual_description: str = Field(..., min_length=1, max_length=3000)
+    duration_seconds: float = Field(..., gt=0, le=300)
+    dialogue: str = Field("", max_length=2000)
+    sound_effects: str = Field("", max_length=1000)
+    prompt: str = Field("", max_length=32767)
+    producer: str = Field("", max_length=128)
+    expected_submission_time: str = Field("", max_length=128)
+    reviewer: str = Field("", max_length=128)
+    actual_submission_time: str = Field("", max_length=128)
+
+    @field_validator("shot_no", mode="before")
+    @classmethod
+    def _normalize_shot_no(cls, value: object) -> str:
+        return str(value).strip() if value is not None else ""
+
+    @field_validator("duration_seconds")
+    @classmethod
+    def _finite_duration(cls, value: float) -> float:
+        if not math.isfinite(value):
+            raise ValueError("镜头时长必须是有限数值")
+        return value
+
+    model_config = {"extra": "ignore"}
+
+
+class DirectorStoryboardOut(BaseModel):
+    """导演 Agent 输出的单集分镜表。"""
+
+    video_title: str = Field(..., min_length=1, max_length=128)
+    theme: str = Field("", max_length=1000)
+    shooting_time: str = Field("", max_length=128)
+    deadline: str = Field("", max_length=128)
+    props: str = Field("", max_length=1000)
+    characters: str = Field("", max_length=1000)
+    shots: list[DirectorStoryboardShot] = Field(..., min_length=1, max_length=120)
+
+    model_config = {"extra": "ignore"}
+
+
+class VideoEpisodeAssetOut(BaseModel):
+    id: str
+    filename: str
+    media_type: str
+    size: int
+    file_url: str
+
+
+class VideoEpisodeShotOut(BaseModel):
+    shot_index: int
+    shot_no: str
+    framing: str
+    camera_movement: str
+    visual_description: str
+    duration_seconds: float
+    dialogue: str
+    sound_effects: str
+    prompt: str
+    asset_ids: list[str] = Field(default_factory=list)
+    suggested_asset_ids: list[str] = Field(default_factory=list)
+    match_confidence: float = 0.0
+    match_source: str = "agent"
+    status: str
+    segment_count: int = 0
+    error: str | None = None
+
+
+class VideoEpisodeOut(BaseModel):
+    id: int
+    title: str
+    status: str
+    assets: list[VideoEpisodeAssetOut] = Field(default_factory=list)
+    shots: list[VideoEpisodeShotOut] = Field(default_factory=list)
+    aspect_ratio: str
+    megapixels: float
+    generation_backend: str = "comfyui"
+    workflow_config: dict = Field(default_factory=dict)
+    current_shot_index: int
+    total_shots: int
+    progress_message: str
+    mapping_warning: str | None = None
+    error: str | None = None
+    output_url: str | None = None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class VideoEpisodeSummaryOut(BaseModel):
+    id: int
+    title: str
+    status: str
+    current_shot_index: int
+    total_shots: int
+    progress_message: str
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class VideoEpisodeShotStart(BaseModel):
+    shot_no: str = Field(..., min_length=1, max_length=32)
+    duration_seconds: float = Field(..., gt=0, le=300)
+    asset_ids: list[str] = Field(default_factory=list, max_length=15)
+
+    @field_validator("duration_seconds")
+    @classmethod
+    def _finite_duration(cls, value: float) -> float:
+        if not math.isfinite(value):
+            raise ValueError("镜头时长必须是有限数值")
+        return value
+
+
+class VideoEpisodeStartRequest(BaseModel):
+    aspect_ratio: str = Field("16:9 (Widescreen)")
+    megapixels: float = Field(1.0, ge=0.1, le=16.0)
+    generation_backend: str = Field("comfyui", pattern="^(comfyui|runninghub)$")
+    workflow_file: str = Field("", max_length=255)
+    runninghub: RunningHubWorkflowSelection | None = None
+    shots: list[VideoEpisodeShotStart] = Field(..., min_length=1, max_length=120)
+
+    @field_validator("aspect_ratio")
+    @classmethod
+    def _check_episode_aspect_ratio(cls, value: str) -> str:
+        if value not in ASPECT_RATIO_OPTIONS:
+            raise ValueError(f"非法宽高比: {value}，可选值: {sorted(ASPECT_RATIO_OPTIONS)}")
+        return value
+
+    @field_validator("megapixels")
+    @classmethod
+    def _finite_megapixels(cls, value: float) -> float:
+        if not math.isfinite(value):
+            raise ValueError("百万像素必须是有限数值")
+        return value
+
+    @model_validator(mode="after")
+    def _check_workflow_selection(self):
+        if self.generation_backend == "runninghub" and self.runninghub is None:
+            raise ValueError("RunningHub 制作需要配置兼容的视频工作流")
+        if self.generation_backend == "comfyui" and self.runninghub is not None:
+            raise ValueError("ComfyUI 制作不能携带 RunningHub 工作流配置")
+        return self
+
+
+class AutoImageEpisodeOption(BaseModel):
+    episode_index: int
+    title: str
+    shot_count: int
+
+
+class AutoImageAssetOut(BaseModel):
+    id: int
+    asset_key: str
+    category: str
+    name: str
+    episode_indices: list[int]
+    prompt: str
+    status: str
+    error: str | None = None
+    task_id: int | None = None
+    image_url: str | None = None
+
+
+class AutoImageEventOut(BaseModel):
+    id: int
+    event_type: str
+    level: str
+    message: str
+    duration_ms: int | None = None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class AutoImageBatchOut(BaseModel):
+    id: int
+    title: str
+    source_filename: str
+    episode_count: int
+    selected_episode_index: int
+    status: str
+    episodes: list[AutoImageEpisodeOption]
+    assets: list[AutoImageAssetOut]
+    logs: list[AutoImageEventOut]
+    completed_assets: int
+    total_assets: int
+    created_at: datetime
+    updated_at: datetime
+
+
+class AutoImageStartRequest(BaseModel):
+    episode_index: int = Field(..., ge=1, le=100)
+    generation_backend: str = Field("comfyui", pattern="^(comfyui|runninghub)$")
+    workflow_file: str = Field("", max_length=255)
+    model_preset: str = Field("", max_length=255)
+    aspect_ratio: str = Field("3:2 (Photo)")
+    megapixels: float = Field(1.0, ge=0.1, le=16.0)
+    seed: int = Field(-1, ge=-1)
+    steps: int = Field(8, ge=1, le=100)
+    refine_steps: int = Field(4, ge=1, le=100)
+    runninghub: RunningHubWorkflowSelection | None = None
+
+    @field_validator("aspect_ratio")
+    @classmethod
+    def _check_auto_image_aspect_ratio(cls, value: str) -> str:
+        if value not in ASPECT_RATIO_OPTIONS:
+            raise ValueError(f"非法宽高比: {value}，可选值: {sorted(ASPECT_RATIO_OPTIONS)}")
+        return value
+
+    @field_validator("megapixels")
+    @classmethod
+    def _finite_auto_image_megapixels(cls, value: float) -> float:
+        if not math.isfinite(value):
+            raise ValueError("百万像素必须是有限数值")
+        return value
+
+    @model_validator(mode="after")
+    def _check_auto_image_workflow_selection(self):
+        if self.generation_backend == "runninghub" and self.runninghub is None:
+            raise ValueError("RunningHub 生图需要配置工作流和提示词输入")
+        if self.generation_backend == "comfyui" and self.runninghub is not None:
+            raise ValueError("ComfyUI 生图不能携带 RunningHub 工作流配置")
+        return self
+
+
+class VideoSeriesEpisodeOut(BaseModel):
+    folder_name: str
+    episode: VideoEpisodeOut
+
+
+class VideoSeriesOut(BaseModel):
+    id: int
+    title: str
+    status: str
+    total_episodes: int
+    current_episode_index: int
+    progress_message: str
+    error: str | None = None
+    episodes: list[VideoSeriesEpisodeOut] = Field(default_factory=list)
+    created_at: datetime
+    updated_at: datetime
+
+
+class VideoSeriesSummaryOut(BaseModel):
+    id: int
+    title: str
+    status: str
+    total_episodes: int
+    current_episode_index: int
+    progress_message: str
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class VideoSeriesEpisodeStart(BaseModel):
+    episode_id: int = Field(..., gt=0)
+    settings: VideoEpisodeStartRequest
+
+
+class VideoSeriesStartRequest(BaseModel):
+    episodes: list[VideoSeriesEpisodeStart] = Field(..., min_length=1, max_length=100)
 
 
 class AgentMemoryUpdate(BaseModel):
