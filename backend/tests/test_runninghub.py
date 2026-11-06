@@ -7,6 +7,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import httpx
 from mcp import StdioServerParameters
@@ -17,6 +18,7 @@ from sqlalchemy.pool import StaticPool
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.api.runninghub import get_runninghub_config, save_runninghub_config
+from app.config import settings
 from app.database import Base
 from app.models import RunningHubConfig, User
 from app.schemas import RunningHubConfigIn
@@ -38,13 +40,14 @@ PNG = (
 
 class RunningHubClientTests(unittest.TestCase):
     def test_runninghub_config_is_encrypted_and_redacted(self):
+        test_key = "runninghub-test-key-" + ("x" * 40)
         engine = create_engine(
             "sqlite://",
             connect_args={"check_same_thread": False},
             poolclass=StaticPool,
         )
         Base.metadata.create_all(engine)
-        with Session(engine) as db:
+        with patch.object(settings, "encryption_key", test_key), Session(engine) as db:
             request = RunningHubConfigIn(
                 api_key="test-key",
                 workflow_id="workflow-1",

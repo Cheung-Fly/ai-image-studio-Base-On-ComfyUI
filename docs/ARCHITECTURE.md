@@ -199,7 +199,7 @@ ZIP endpoints remain available for API compatibility.
 |---|---|---|
 | User, task, image metadata, legacy chat conversations, and usage records | SQLite | Shared application database; schema/entities are in `backend/app/models.py`. |
 | Recent MCP Agent conversation | Browser `localStorage` | Stored in the browser; it is not synchronized to the backend. |
-| RunningHub API key and workflow mapping | SQLite | API key is encrypted at rest; configuration responses omit the key. |
+| RunningHub API key and workflow mapping | SQLite | New API keys use versioned authenticated encryption; configuration responses omit the key. |
 | Generated image/video bytes | Local filesystem | The database stores metadata and relative file paths; API endpoints enforce access checks when serving files. |
 | Uploaded reference media | Configured ComfyUI input directory | The upload API returns the filename used by workflows. |
 | Dynamic RAG documents and index | Configured local data directories | Persisted according to the deployment's volume/configuration. |
@@ -208,8 +208,19 @@ ZIP endpoints remain available for API compatibility.
 | Credentials and service URLs | Environment configuration | Keep secrets out of source control and logs. |
 
 The Compose file mounts the application's `/data` directory for persistence.
-Backups must account for both database contents and referenced media/document
-files; copying only the SQLite database does not back up generated media.
+`scripts/backup_data.py` archives the complete directory and restores it while
+preserving the pre-restore directory. Stop the API and Worker before either
+operation so SQLite and media remain consistent. The archive excludes `.env`,
+the Redis queue, ComfyUI models, and any external `COMFYUI_INPUT_DIR`; wait for
+generation work to finish and the current queue to be empty before backup or
+restore. Retain the encryption key separately because stored provider
+credentials cannot be decrypted without it.
+
+New credential ciphertexts use versioned Fernet authenticated encryption.
+`ENCRYPTION_KEY` must be a high-entropy random value; `LEGACY_ENCRYPTION_KEY`
+allows decrypting credentials written with a previous key or cipher. The
+`app.cli.rotate_secrets` command atomically re-encrypts all stored provider keys
+with the active key before the legacy key is removed.
 
 ## 6. API and error boundaries
 

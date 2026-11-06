@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models import CustomModelConfig, User
 from ..schemas import CustomModelIn
-from ..security import encrypt_secret
+from ..security import SecretConfigurationError, encrypt_secret
 from .auth import get_current_user
 
 router = APIRouter(tags=["custom-models"])
@@ -18,12 +18,17 @@ def create_config(
     db: Session = Depends(get_db),
 ):
     """保存一个自定义模型配置，API Key 加密后落库。"""
+    try:
+        encrypted_api_key = encrypt_secret(req.api_key)
+    except SecretConfigurationError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
     cfg = CustomModelConfig(
         user_id=user.id,
         name=req.name,
         base_url=req.base_url.rstrip("/"),
         model=req.model,
-        api_key_encrypted=encrypt_secret(req.api_key),
+        api_key_encrypted=encrypted_api_key,
     )
     db.add(cfg)
     db.commit()

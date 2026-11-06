@@ -447,7 +447,7 @@ data: [DONE]
 }
 ```
 
-API Key 使用应用配置的加密密钥存储，读取接口不会返回密钥。RunningHub 成功输出会下载到 MCP Agent 媒体目录，并可通过 `GET /api/agent/files` 和 `GET /api/agent/files/{filename}` 访问。输出下载只允许 HTTPS 及受信任的 RunningHub 文件域名。
+API Key 使用应用配置的高熵随机 `ENCRYPTION_KEY` 做版本化认证加密存储，读取接口不会返回密钥。新密钥未配置或短于 32 个字符时，保存接口返回 `503`。旧版密文可用原 `ENCRYPTION_KEY` 解密；迁移或轮换时可临时设置 `LEGACY_ENCRYPTION_KEY`，旧版未显式配置密钥的部署需使用当时的示例默认值。使用 `app.cli.rotate_secrets` 迁移后即可移除旧密钥。RunningHub 成功输出会下载到 MCP Agent 媒体目录，并可通过 `GET /api/agent/files` 和 `GET /api/agent/files/{filename}` 访问。输出下载只允许 HTTPS 及受信任的 RunningHub 文件域名。
 
 ### 11.3 查询 Agent 任务结果
 

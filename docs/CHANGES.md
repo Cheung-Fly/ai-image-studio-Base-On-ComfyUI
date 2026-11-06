@@ -18,6 +18,18 @@ history, not a roadmap; planned work belongs in `项目技术演进路线图.md`
 
 ## Unreleased
 
+### Added
+
+- Added a versioned data backup/restore utility for the complete Docker Compose
+  data directory. Restore preserves the existing directory for rollback.
+
+### Security
+
+- Replaced custom API-key encryption with authenticated Fernet encryption.
+  Storing new credentials now requires a high-entropy `ENCRYPTION_KEY`; legacy
+  ciphertexts remain readable for migration, and the insecure Compose default
+  was removed. Added an atomic command to rotate stored provider keys.
+
 ## v11.0.1 - 2026-11-05
 
 ### Fixed

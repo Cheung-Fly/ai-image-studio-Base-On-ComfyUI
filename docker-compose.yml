@@ -36,7 +36,8 @@ services:
       - LLAMA_BASE_URL=${LLAMA_BASE_URL:-http://host.docker.internal:8080/v1}
       - LLAMA_API_KEY=${LLAMA_API_KEY:-not-needed}
       - DEFAULT_LLM_PROVIDER=${DEFAULT_LLM_PROVIDER:-openai}
-      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-change-me-in-production-encryption-key}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-}
+      - LEGACY_ENCRYPTION_KEY=${LEGACY_ENCRYPTION_KEY:-}
     volumes:
       - ./data:/data
       - ./backend/app:/app/app
@@ -66,7 +67,8 @@ services:
       - LLAMA_BASE_URL=${LLAMA_BASE_URL:-http://host.docker.internal:8080/v1}
       - LLAMA_API_KEY=${LLAMA_API_KEY:-not-needed}
       - DEFAULT_LLM_PROVIDER=${DEFAULT_LLM_PROVIDER:-openai}
-      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-change-me-in-production-encryption-key}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-}
+      - LEGACY_ENCRYPTION_KEY=${LEGACY_ENCRYPTION_KEY:-}
     volumes:
       - ./data:/data
       - ./backend/app:/app/app
