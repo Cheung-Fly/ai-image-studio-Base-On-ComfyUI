@@ -23,6 +23,11 @@ history, not a roadmap; planned work belongs in `项目技术演进路线图.md`
 - Added a versioned data backup/restore utility for the complete Docker Compose
   data directory. Restore preserves the existing directory for rollback.
 
+### Fixed
+
+- RunningHub status polling retries up to three transient network failures
+  without submitting the generation task again.
+
 ### Security
 
 - Replaced custom API-key encryption with authenticated Fernet encryption.

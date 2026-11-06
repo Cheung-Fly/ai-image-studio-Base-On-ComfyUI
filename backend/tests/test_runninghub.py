@@ -266,6 +266,42 @@ class RunningHubClientTests(unittest.TestCase):
         finally:
             http.close()
 
+    def test_retries_transient_status_network_errors(self):
+        status_calls = 0
+
+        def handler(request):
+            nonlocal status_calls
+            self.assertEqual(request.url.path, "/task/openapi/status")
+            status_calls += 1
+            if status_calls == 1:
+                raise httpx.ConnectError("temporary network failure", request=request)
+            return httpx.Response(200, json={"code": 0, "data": "SUCCESS"})
+
+        http = httpx.Client(transport=httpx.MockTransport(handler))
+        client = RunningHubClient("test-key", http_client=http, poll_interval=0)
+        try:
+            client.wait_for_completion("task-1")
+            self.assertEqual(status_calls, 2)
+        finally:
+            http.close()
+
+    def test_bounds_retries_for_persistent_status_network_errors(self):
+        status_calls = 0
+
+        def handler(request):
+            nonlocal status_calls
+            status_calls += 1
+            raise httpx.ConnectError("network unavailable", request=request)
+
+        http = httpx.Client(transport=httpx.MockTransport(handler))
+        client = RunningHubClient("test-key", http_client=http, poll_interval=0)
+        try:
+            with self.assertRaises(RunningHubError):
+                client.wait_for_completion("task-1")
+            self.assertEqual(status_calls, 4)
+        finally:
+            http.close()
+
     def test_accepts_known_runninghub_output_hosts(self):
         for host in ("rh-images.xiaoyaoyou.com", "rh-images-tos.xiaoyaoyou.com"):
             with self.subTest(host=host):

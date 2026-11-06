@@ -21,6 +21,7 @@ ALLOWED_OUTPUT_HOSTS = {
 }
 MAX_OUTPUT_BYTES = 100 * 1024 * 1024
 MAX_INPUT_BYTES = 100 * 1024 * 1024
+_MAX_STATUS_NETWORK_RETRIES = 3
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
 VIDEO_EXTENSIONS = {".mp4", ".mov", ".webm", ".mkv"}
 EXTENSION_KIND = {
@@ -342,10 +343,23 @@ class RunningHubClient:
         deadline = started_at + self.task_timeout
         last_status = None
         last_reported_at = 0.0
+        network_retries = 0
         while time.monotonic() < deadline:
             if cancel_check:
                 cancel_check()
-            status = self._task_status(task_id)
+            try:
+                status = self._task_status(task_id)
+            except RunningHubError as exc:
+                if not isinstance(
+                    exc.__cause__, (httpx.NetworkError, httpx.TimeoutException)
+                ):
+                    raise
+                network_retries += 1
+                if network_retries > _MAX_STATUS_NETWORK_RETRIES:
+                    raise
+                time.sleep(min(self.poll_interval, max(0, deadline - time.monotonic())))
+                continue
+            network_retries = 0
             elapsed = time.monotonic() - started_at
             if status_callback and (
                 status != last_status or elapsed - last_reported_at >= 30
