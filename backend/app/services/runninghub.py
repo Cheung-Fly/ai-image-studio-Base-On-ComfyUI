@@ -10,9 +10,12 @@ import time
 import uuid
 from collections.abc import Callable
 from pathlib import Path
+from typing import Any, TypeAlias
 from urllib.parse import unquote, urlparse
 
 import httpx
+
+RunningHubNodeInfo: TypeAlias = dict[str, Any]
 
 BASE_URL = "https://www.runninghub.ai"
 ALLOWED_OUTPUT_HOSTS = {
@@ -127,7 +130,7 @@ def workflow_parameter_node_info(
     refine_steps: int | None = None,
     duration_seconds: float | None = None,
     fps: int = 24,
-) -> list[dict[str, str]]:
+) -> list[RunningHubNodeInfo]:
     """Map recognized generation settings to conventional workflow input names."""
     match = re.match(r"^\s*(\d+(?:\.\d+)?)\s*:\s*(\d+(?:\.\d+)?)", aspect_ratio)
     if not match:
@@ -142,7 +145,7 @@ def workflow_parameter_node_info(
     values: dict[str, str | None] = {
         "width": str(width),
         "height": str(height),
-        "aspect_ratio": ratio_value,
+        "aspect_ratio": aspect_ratio,
         "aspect": ratio_value,
         "ratio": ratio_value,
         "resolution": f"{width}x{height}",
@@ -169,7 +172,7 @@ def workflow_parameter_node_info(
             else None
         ),
     }
-    mapped = []
+    mapped: list[RunningHubNodeInfo] = []
     for node_id, node in workflow.items():
         inputs = node.get("inputs") if isinstance(node, dict) else None
         if not isinstance(inputs, dict):
@@ -183,14 +186,38 @@ def workflow_parameter_node_info(
                 and not isinstance(current_value, bool)
             ):
                 value = f"{ratio:g}"
-            if value is not None and not isinstance(current_value, (list, dict)):
-                mapped.append(
-                    {
-                        "nodeId": str(node_id),
-                        "fieldName": str(field_name),
-                        "fieldValue": value,
-                    }
-                )
+            if value is None or isinstance(current_value, bool):
+                continue
+            if isinstance(current_value, int):
+                try:
+                    numeric_value = float(value)
+                except (TypeError, ValueError) as exc:
+                    raise RunningHubError(
+                        f"RunningHub 工作流输入 {node_id}.{field_name} 需要整数"
+                    ) from exc
+                if not numeric_value.is_integer():
+                    raise RunningHubError(
+                        f"RunningHub 工作流输入 {node_id}.{field_name} 需要整数"
+                    )
+                field_value: str | int | float = int(numeric_value)
+            elif isinstance(current_value, float):
+                try:
+                    field_value = float(value)
+                except (TypeError, ValueError) as exc:
+                    raise RunningHubError(
+                        f"RunningHub 工作流输入 {node_id}.{field_name} 需要数值"
+                    ) from exc
+            elif isinstance(current_value, str):
+                field_value = str(value)
+            else:
+                continue
+            mapped.append(
+                {
+                    "nodeId": str(node_id),
+                    "fieldName": str(field_name),
+                    "fieldValue": field_value,
+                }
+            )
     return mapped
 
 
@@ -355,7 +382,9 @@ class RunningHubClient:
         self._uploaded_media_cache[cache_key] = normalized
         return normalized
 
-    def create_task(self, workflow_id: str, node_info_list: list[dict[str, str]]) -> str:
+    def create_task(
+        self, workflow_id: str, node_info_list: list[RunningHubNodeInfo]
+    ) -> str:
         body = self._post(
             "/task/openapi/create",
             {"workflowId": workflow_id, "nodeInfoList": node_info_list},
@@ -566,7 +595,7 @@ class RunningHubClient:
     def generate(
         self,
         workflow_id: str,
-        node_info_list: list[dict[str, str]],
+        node_info_list: list[RunningHubNodeInfo],
         output_dir: Path,
         cancel_check: Callable[[], None] | None = None,
         status_callback: Callable[[str, float], None] | None = None,

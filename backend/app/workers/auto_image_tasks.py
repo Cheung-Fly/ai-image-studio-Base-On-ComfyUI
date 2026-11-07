@@ -30,6 +30,7 @@ from ..services.llm_client import LLMError
 from ..services.runninghub import (
     RunningHubClient,
     RunningHubError,
+    RunningHubNodeInfo,
     workflow_parameter_node_info,
 )
 from ..services.task_reliability import TaskCancelled, add_task_event
@@ -284,7 +285,7 @@ def run_runninghub_image_task(self, task_id: int):
         db.commit()
         check_cancelled()
 
-        node_info_list = [
+        node_info_list: list[RunningHubNodeInfo] = [
             {
                 "nodeId": prompt_node_id,
                 "fieldName": prompt_field,

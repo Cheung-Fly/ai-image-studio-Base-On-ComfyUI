@@ -206,11 +206,11 @@ class VideoEpisodeServiceTests(unittest.TestCase):
             mapped,
         )
         self.assertIn(
-            {"nodeId": "3", "fieldName": "width", "fieldValue": "1334"},
+            {"nodeId": "3", "fieldName": "width", "fieldValue": 1334},
             mapped,
         )
         self.assertIn(
-            {"nodeId": "3", "fieldName": "duration", "fieldValue": "5"},
+            {"nodeId": "3", "fieldName": "duration", "fieldValue": 5},
             mapped,
         )
 

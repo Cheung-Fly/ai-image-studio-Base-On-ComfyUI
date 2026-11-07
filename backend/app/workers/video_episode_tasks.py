@@ -25,6 +25,7 @@ from ..services.comfy_client import ComfyClient, ComfyError
 from ..services.runninghub import (
     RunningHubClient,
     RunningHubError,
+    RunningHubNodeInfo,
     workflow_media_fields,
     workflow_parameter_node_info,
 )
@@ -84,9 +85,9 @@ def _runninghub_node_info(
     aspect_ratio: str,
     megapixels: float,
     duration_seconds: float,
-) -> list[dict[str, str]]:
+) -> list[RunningHubNodeInfo]:
     workflow = client.get_workflow(workflow_id)
-    node_info_list: list[dict[str, str]] = []
+    node_info_list: list[RunningHubNodeInfo] = []
 
     def add_text_mapping(node_id: str, field_name: str, value: str, label: str) -> None:
         node = workflow.get(node_id)

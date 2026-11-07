@@ -155,11 +155,16 @@ class RunningHubClientTests(unittest.TestCase):
                         "duration": 5,
                         "frames": 121,
                         "seed": 1,
+                        "aspect": 1.0,
                     },
                 },
                 "4": {
                     "class_type": "Sampler",
                     "inputs": {"steps": 20},
+                },
+                "5": {
+                    "class_type": "ResolutionSelector",
+                    "inputs": {"aspect_ratio": "1:1 (Square)"},
                 },
             },
             "16:9 (Widescreen)",
@@ -171,12 +176,18 @@ class RunningHubClientTests(unittest.TestCase):
         self.assertEqual(
             mapped,
             [
-                {"nodeId": "3", "fieldName": "width", "fieldValue": "1334"},
-                {"nodeId": "3", "fieldName": "height", "fieldValue": "750"},
-                {"nodeId": "3", "fieldName": "duration", "fieldValue": "5"},
-                {"nodeId": "3", "fieldName": "frames", "fieldValue": "120"},
-                {"nodeId": "3", "fieldName": "seed", "fieldValue": "-1"},
-                {"nodeId": "4", "fieldName": "steps", "fieldValue": "8"},
+                {"nodeId": "3", "fieldName": "width", "fieldValue": 1334},
+                {"nodeId": "3", "fieldName": "height", "fieldValue": 750},
+                {"nodeId": "3", "fieldName": "duration", "fieldValue": 5},
+                {"nodeId": "3", "fieldName": "frames", "fieldValue": 120},
+                {"nodeId": "3", "fieldName": "seed", "fieldValue": -1},
+                {"nodeId": "3", "fieldName": "aspect", "fieldValue": 1.77778},
+                {"nodeId": "4", "fieldName": "steps", "fieldValue": 8},
+                {
+                    "nodeId": "5",
+                    "fieldName": "aspect_ratio",
+                    "fieldValue": "16:9 (Widescreen)",
+                },
             ],
         )
 

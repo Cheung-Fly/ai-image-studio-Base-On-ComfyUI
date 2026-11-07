@@ -25,6 +25,8 @@ history, not a roadmap; planned work belongs in `项目技术演进路线图.md`
 
 ### Fixed
 
+- RunningHub workflow overrides now preserve the `ResolutionSelector` option
+  label and match numeric values to the input types in the workflow JSON.
 - RunningHub status polling retries up to three transient network failures
   without submitting the generation task again.
 
