@@ -18,6 +18,8 @@ history, not a roadmap; planned work belongs in `项目技术演进路线图.md`
 
 ## Unreleased
 
+## v11.1.0 - 2026-11-07
+
 ### Added
 
 - Added a versioned data backup/restore utility for the complete Docker Compose
