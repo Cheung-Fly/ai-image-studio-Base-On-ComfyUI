@@ -63,8 +63,13 @@ class RunningHubClientTests(unittest.TestCase):
         engine.dispose()
 
     def test_discovers_text_fields_without_returning_workflow_values(self):
+        requests = 0
+
         def handler(request):
+            nonlocal requests
+            requests += 1
             self.assertEqual(request.headers["host"], "www.runninghub.ai")
+            self.assertEqual(request.headers["authorization"], "test-key")
             self.assertEqual(json.loads(request.content)["apiKey"], "test-key")
             return httpx.Response(
                 200,
@@ -90,9 +95,11 @@ class RunningHubClientTests(unittest.TestCase):
         client = RunningHubClient("test-key", http_client=http)
         try:
             fields = client.get_workflow_text_fields("workflow-1")
+            client.get_workflow("workflow-1")
         finally:
             http.close()
 
+        self.assertEqual(requests, 1)
         self.assertEqual(
             fields,
             [
@@ -174,7 +181,11 @@ class RunningHubClientTests(unittest.TestCase):
         )
 
     def test_uploads_reference_media_with_authorization_header(self):
+        uploads = 0
+
         def handler(request):
+            nonlocal uploads
+            uploads += 1
             self.assertEqual(
                 request.url,
                 httpx.URL(
@@ -196,34 +207,43 @@ class RunningHubClientTests(unittest.TestCase):
             client = RunningHubClient("test-key", http_client=http)
             try:
                 self.assertEqual(client.upload_media(path), "input/ref.png")
+                self.assertEqual(client.upload_media(path), "input/ref.png")
             finally:
                 http.close()
+        self.assertEqual(uploads, 1)
 
     def test_generates_and_downloads_output(self):
-        status_calls = 0
+        query_calls = 0
         create_body = {}
+        saved_task_ids = []
 
         def handler(request):
-            nonlocal status_calls
+            nonlocal query_calls
             if request.url.path == "/task/openapi/create":
                 self.assertEqual(request.headers["host"], "www.runninghub.ai")
+                self.assertEqual(request.headers["authorization"], "test-key")
                 create_body.update(json.loads(request.content))
                 return httpx.Response(200, json={"code": 0, "data": {"taskId": "task-1"}})
-            if request.url.path == "/task/openapi/status":
-                status_calls += 1
-                status = "RUNNING" if status_calls == 1 else "SUCCESS"
-                return httpx.Response(200, json={"code": 0, "data": status})
-            if request.url.path == "/task/openapi/outputs":
+            if request.url.path == "/openapi/v2/query":
+                self.assertEqual(request.headers["authorization"], "test-key")
+                self.assertEqual(json.loads(request.content), {"taskId": "task-1"})
+                query_calls += 1
+                status = "RUNNING" if query_calls == 1 else "SUCCESS"
                 return httpx.Response(
                     200,
                     json={
-                        "code": 0,
-                        "data": [
-                            {
-                                "fileUrl": "https://rh-images-tos.xiaoyaoyou.com/output.png",
-                                "fileType": "image",
-                            }
-                        ],
+                        "taskId": "task-1",
+                        "status": status,
+                        "results": (
+                            []
+                            if status == "RUNNING"
+                            else [
+                                {
+                                    "url": "https://rh-images-tos.xiaoyaoyou.com/output.png",
+                                    "outputType": "image",
+                                }
+                            ]
+                        ),
                     },
                 )
             if request.url.host == "rh-images-tos.xiaoyaoyou.com":
@@ -248,6 +268,7 @@ class RunningHubClientTests(unittest.TestCase):
                     status_callback=lambda status, elapsed: status_updates.append(
                         (status, elapsed)
                     ),
+                    task_id_callback=saved_task_ids.append,
                 )
                 output_path = Path(result["files"][0]["path"])
                 self.assertEqual(output_path.read_bytes(), PNG)
@@ -259,6 +280,7 @@ class RunningHubClientTests(unittest.TestCase):
                 [{"nodeId": "4", "fieldName": "text", "fieldValue": "a red fox"}],
             )
             self.assertEqual(create_body["apiKey"], "test-key")
+            self.assertEqual(saved_task_ids, ["task-1"])
             self.assertEqual(
                 [status for status, _ in status_updates],
                 ["RUNNING", "SUCCESS"],
@@ -266,31 +288,151 @@ class RunningHubClientTests(unittest.TestCase):
         finally:
             http.close()
 
+    def test_resumes_existing_remote_task_without_creating_a_duplicate(self):
+        def handler(request):
+            if request.url.path == "/openapi/v2/query":
+                return httpx.Response(
+                    200,
+                    json={
+                        "taskId": "task-existing",
+                        "status": "SUCCESS",
+                        "results": [
+                            {
+                                "url": "https://rh-images-1252422369.cos.ap-beijing.myqcloud.com/output.png",
+                                "outputType": "image",
+                            }
+                        ],
+                    },
+                )
+            if request.url.host == "rh-images-1252422369.cos.ap-beijing.myqcloud.com":
+                return httpx.Response(
+                    200,
+                    headers={"content-type": "image/png"},
+                    content=PNG,
+                )
+            raise AssertionError(f"Unexpected request: {request.method} {request.url}")
+
+        http = httpx.Client(transport=httpx.MockTransport(handler))
+        client = RunningHubClient("test-key", http_client=http, poll_interval=0)
+        try:
+            with tempfile.TemporaryDirectory() as temp_dir:
+                result = client.generate(
+                    "workflow-1",
+                    [],
+                    Path(temp_dir),
+                    existing_task_id="task-existing",
+                )
+                self.assertEqual(Path(result["files"][0]["path"]).read_bytes(), PNG)
+            self.assertEqual(result["task_id"], "task-existing")
+        finally:
+            http.close()
+
+    def test_terminal_failure_clears_persisted_task_id(self):
+        def handler(request):
+            if request.url.path == "/task/openapi/create":
+                return httpx.Response(
+                    200,
+                    json={"code": 0, "data": {"taskId": "task-1"}},
+                )
+            if request.url.path == "/openapi/v2/query":
+                return httpx.Response(
+                    200,
+                    json={
+                        "taskId": "task-1",
+                        "status": "FAILED",
+                        "errorCode": "WORKFLOW_ERROR",
+                        "errorMessage": "workflow failed",
+                    },
+                )
+            raise AssertionError(f"Unexpected request: {request.method} {request.url}")
+
+        http = httpx.Client(transport=httpx.MockTransport(handler))
+        client = RunningHubClient("test-key", http_client=http, poll_interval=0)
+        saved_task_ids = []
+        try:
+            with (
+                tempfile.TemporaryDirectory() as temp_dir,
+                self.assertRaisesRegex(RunningHubError, "workflow failed"),
+            ):
+                client.generate(
+                    "workflow-1",
+                    [],
+                    Path(temp_dir),
+                    task_id_callback=saved_task_ids.append,
+                )
+            self.assertEqual(saved_task_ids, ["task-1", None])
+        finally:
+            http.close()
+
+    def test_create_timeout_warns_that_remote_task_may_exist(self):
+        def handler(request):
+            raise httpx.ReadTimeout("response timed out", request=request)
+
+        http = httpx.Client(transport=httpx.MockTransport(handler))
+        client = RunningHubClient("test-key", http_client=http)
+        try:
+            with self.assertRaisesRegex(RunningHubError, "远端任务可能已创建"):
+                client.create_task("workflow-1", [])
+        finally:
+            http.close()
+
     def test_retries_transient_status_network_errors(self):
-        status_calls = 0
+        query_calls = 0
 
         def handler(request):
-            nonlocal status_calls
-            self.assertEqual(request.url.path, "/task/openapi/status")
-            status_calls += 1
-            if status_calls == 1:
+            nonlocal query_calls
+            self.assertEqual(request.url.path, "/openapi/v2/query")
+            query_calls += 1
+            if query_calls == 1:
                 raise httpx.ConnectError("temporary network failure", request=request)
-            return httpx.Response(200, json={"code": 0, "data": "SUCCESS"})
+            return httpx.Response(
+                200,
+                json={"taskId": "task-1", "status": "SUCCESS", "results": []},
+            )
 
         http = httpx.Client(transport=httpx.MockTransport(handler))
         client = RunningHubClient("test-key", http_client=http, poll_interval=0)
         try:
             client.wait_for_completion("task-1")
-            self.assertEqual(status_calls, 2)
+            self.assertEqual(query_calls, 2)
+        finally:
+            http.close()
+
+    def test_increases_poll_interval_up_to_configured_ceiling(self):
+        query_calls = 0
+
+        def handler(request):
+            nonlocal query_calls
+            query_calls += 1
+            status = "SUCCESS" if query_calls == 5 else "RUNNING"
+            return httpx.Response(
+                200,
+                json={"taskId": "task-1", "status": status, "results": []},
+            )
+
+        http = httpx.Client(transport=httpx.MockTransport(handler))
+        client = RunningHubClient(
+            "test-key",
+            http_client=http,
+            poll_interval=3,
+            max_poll_interval=15,
+        )
+        try:
+            with patch("app.services.runninghub.time.sleep") as sleep:
+                client.wait_for_completion("task-1")
+            self.assertEqual(
+                [call.args[0] for call in sleep.call_args_list],
+                [3, 6, 12, 15],
+            )
         finally:
             http.close()
 
     def test_bounds_retries_for_persistent_status_network_errors(self):
-        status_calls = 0
+        query_calls = 0
 
         def handler(request):
-            nonlocal status_calls
-            status_calls += 1
+            nonlocal query_calls
+            query_calls += 1
             raise httpx.ConnectError("network unavailable", request=request)
 
         http = httpx.Client(transport=httpx.MockTransport(handler))
@@ -298,12 +440,16 @@ class RunningHubClientTests(unittest.TestCase):
         try:
             with self.assertRaises(RunningHubError):
                 client.wait_for_completion("task-1")
-            self.assertEqual(status_calls, 4)
+            self.assertEqual(query_calls, 4)
         finally:
             http.close()
 
     def test_accepts_known_runninghub_output_hosts(self):
-        for host in ("rh-images.xiaoyaoyou.com", "rh-images-tos.xiaoyaoyou.com"):
+        for host in (
+            "rh-images.xiaoyaoyou.com",
+            "rh-images-tos.xiaoyaoyou.com",
+            "rh-images-1252422369.cos.ap-beijing.myqcloud.com",
+        ):
             with self.subTest(host=host):
                 url = f"https://{host}/output.png"
                 self.assertEqual(RunningHubClient._validated_output_url(url), url)

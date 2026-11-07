@@ -1,6 +1,8 @@
 import asyncio
 import json
 import tempfile
+import threading
+import time
 import unittest
 import zipfile
 from io import BytesIO
@@ -16,7 +18,13 @@ from starlette.datastructures import UploadFile
 
 from app.api.video_agent import _episode_folder_sort_key, import_series
 from app.database import Base
-from app.models import User, VideoEpisode, VideoSeries, VideoSeriesEpisode
+from app.models import (
+    User,
+    VideoEpisode,
+    VideoEpisodeShot,
+    VideoSeries,
+    VideoSeriesEpisode,
+)
 from app.schemas import DirectorStoryboardOut
 from app.services.llm_client import LLMError
 from app.services.video_episode import (
@@ -28,7 +36,9 @@ from app.services.video_episode import (
     parse_series_storyboards,
 )
 from app.workers.video_episode_tasks import (
+    _generate_runninghub_segment,
     _output_size,
+    _run_runninghub_episode_shots,
     _runninghub_node_info,
     run_video_series,
 )
@@ -203,6 +213,240 @@ class VideoEpisodeServiceTests(unittest.TestCase):
             {"nodeId": "3", "fieldName": "duration", "fieldValue": "5"},
             mapped,
         )
+
+    def test_runninghub_video_segment_persists_remote_task_id(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            media_dir = root / "media"
+            engine = create_engine(
+                "sqlite://",
+                connect_args={"check_same_thread": False},
+                poolclass=StaticPool,
+            )
+            Base.metadata.create_all(engine)
+            session_factory = sessionmaker(engine, expire_on_commit=False)
+            with session_factory() as db:
+                user = User(username="runninghub-task-id-test", password_hash="test")
+                db.add(user)
+                db.flush()
+                episode = VideoEpisode(
+                    user_id=user.id,
+                    title="任务 ID 测试",
+                    status="processing",
+                    storyboard_json="{}",
+                    assets_json="[]",
+                )
+                db.add(episode)
+                db.flush()
+                db.add(
+                    VideoEpisodeShot(
+                        episode_id=episode.id,
+                        shot_index=0,
+                        shot_no="1",
+                        data_json="{}",
+                    )
+                )
+                db.commit()
+                episode_id = episode.id
+
+                class FakeRunningHub:
+                    def generate(
+                        self,
+                        _workflow_id,
+                        _node_info_list,
+                        output_dir,
+                        *,
+                        task_id_callback=None,
+                        **_kwargs,
+                    ):
+                        if task_id_callback:
+                            task_id_callback("rh-task-1")
+                        output = Path(output_dir) / "output.mp4"
+                        output.write_bytes(b"video")
+                        return {
+                            "files": [
+                                {
+                                    "kind": "video",
+                                    "path": str(output),
+                                    "filename": "output.mp4",
+                                }
+                            ]
+                        }
+
+                fake_client = FakeRunningHub()
+                test_settings = SimpleNamespace(image_dir=media_dir)
+                with (
+                    patch("app.workers.video_episode_tasks.settings", test_settings),
+                    patch(
+                        "app.workers.video_episode_tasks._runninghub_node_info",
+                        return_value=[],
+                    ),
+                ):
+                    episode = db.get(VideoEpisode, episode_id)
+                    relative_path = _generate_runninghub_segment(
+                        db,
+                        fake_client,
+                        episode,
+                        "workflow",
+                        {},
+                        "prompt",
+                        [],
+                        [],
+                        [],
+                        0,
+                        0,
+                        "16:9 (Widescreen)",
+                        1.0,
+                        5.0,
+                    )
+
+                shot = (
+                    db.query(VideoEpisodeShot)
+                    .filter(
+                        VideoEpisodeShot.episode_id == episode_id,
+                        VideoEpisodeShot.shot_index == 0,
+                    )
+                    .first()
+                )
+                self.assertEqual(
+                    json.loads(shot.runninghub_tasks_json),
+                    ["rh-task-1"],
+                )
+                self.assertTrue((media_dir / relative_path).is_file())
+            engine.dispose()
+
+    def test_runninghub_parallelizes_independent_shots_but_keeps_segments_ordered(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            media_dir = root / "media"
+            engine = create_engine(
+                f"sqlite:///{(root / 'episode.db').as_posix()}",
+                connect_args={"check_same_thread": False},
+            )
+            Base.metadata.create_all(engine)
+            session_factory = sessionmaker(engine, expire_on_commit=False)
+            with session_factory() as db:
+                user = User(username="runninghub-parallel-test", password_hash="test")
+                db.add(user)
+                db.flush()
+                episode = VideoEpisode(
+                    user_id=user.id,
+                    title="并行测试",
+                    status="processing",
+                    storyboard_json="{}",
+                    assets_json="[]",
+                    generation_backend="runninghub",
+                    total_shots=3,
+                )
+                db.add(episode)
+                db.flush()
+                episode_id = episode.id
+                for index, duration in enumerate((16, 4, 4)):
+                    db.add(
+                        VideoEpisodeShot(
+                            episode_id=episode_id,
+                            shot_index=index,
+                            shot_no=str(index + 1),
+                            data_json=json.dumps(
+                                {
+                                    "duration_seconds": duration,
+                                    "visual_description": f"shot {index + 1}",
+                                    "aspect_ratio": "16:9 (Widescreen)",
+                                    "megapixels": 1.0,
+                                    "asset_ids": [],
+                                }
+                            ),
+                        )
+                    )
+                db.commit()
+
+            lock = threading.Lock()
+            both_workers_started = threading.Barrier(2)
+            active = 0
+            max_active = 0
+            active_by_shot: dict[int, int] = {}
+            max_active_by_shot: dict[int, int] = {}
+
+            def fake_generate_segment(
+                _db,
+                _client,
+                episode,
+                _workflow_id,
+                _selection,
+                _prompt,
+                _ref_images,
+                _ref_videos,
+                _ref_audios,
+                shot_index,
+                segment_index,
+                _aspect_ratio,
+                _megapixels,
+                _duration_seconds,
+            ):
+                nonlocal active, max_active
+                with lock:
+                    active += 1
+                    max_active = max(max_active, active)
+                    active_by_shot[shot_index] = active_by_shot.get(shot_index, 0) + 1
+                    max_active_by_shot[shot_index] = max(
+                        max_active_by_shot.get(shot_index, 0),
+                        active_by_shot[shot_index],
+                    )
+                try:
+                    if shot_index < 2 and segment_index == 0:
+                        both_workers_started.wait(timeout=5)
+                    time.sleep(0.02)
+                    target = (
+                        media_dir
+                        / "episodes"
+                        / str(episode.id)
+                        / "clips"
+                        / f"shot-{shot_index + 1:03d}-segment-{segment_index + 1:03d}.mp4"
+                    )
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    target.write_bytes(b"clip")
+                    return target.relative_to(media_dir).as_posix()
+                finally:
+                    with lock:
+                        active -= 1
+                        active_by_shot[shot_index] -= 1
+
+            test_settings = SimpleNamespace(
+                image_dir=media_dir,
+                comfyui_input_path=None,
+                runninghub_max_parallel_shots=2,
+            )
+            try:
+                with (
+                    patch(
+                        "app.workers.video_episode_tasks.SessionLocal",
+                        session_factory,
+                    ),
+                    patch("app.workers.video_episode_tasks.settings", test_settings),
+                    patch(
+                        "app.workers.video_episode_tasks._generate_runninghub_segment",
+                        side_effect=fake_generate_segment,
+                    ),
+                ):
+                    _run_runninghub_episode_shots(
+                        episode_id,
+                        object(),
+                        "workflow",
+                        {},
+                    )
+
+                with session_factory() as db:
+                    episode = db.get(VideoEpisode, episode_id)
+                    shots = sorted(episode.shots, key=lambda shot: shot.shot_index)
+                    self.assertEqual([shot.status for shot in shots], ["completed"] * 3)
+                    self.assertEqual(
+                        [len(json.loads(shot.segments_json)) for shot in shots],
+                        [2, 1, 1],
+                    )
+                self.assertEqual(max_active, 2)
+                self.assertEqual(max(max_active_by_shot.values()), 1)
+            finally:
+                engine.dispose()
 
     def test_inherits_duration_for_decimal_shot_rows_with_merged_cells(self):
         workbook = load_workbook(BytesIO(storyboard_xlsx()))

@@ -1,6 +1,7 @@
 """全局配置：环境变量优先，未设置时使用项目内默认值。"""
 from pathlib import Path
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # backend/ 目录（config.py 位于 backend/app/config.py）
@@ -34,6 +35,8 @@ class Settings(BaseSettings):
     default_model_preset: str = ""
     # 单次生成超时（秒）
     comfy_timeout: int = 900
+    # RunningHub 单集中独镜头的并发上限；同一镜头的续接片段仍按序执行
+    runninghub_max_parallel_shots: int = Field(default=2, ge=1, le=8)
     # ComfyUI 输出轮询间隔（秒）
     comfy_poll_interval: float = 2.0
     # LLM 对话服务：多 provider 支持，运行时由请求指定（前端下拉框切换）

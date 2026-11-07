@@ -69,7 +69,7 @@ ai-image-studio/
 │   │   └── workers/
 │   │       ├── celery_app.py    # Celery 实例（含软/硬超时配置）
 │   │       ├── tasks.py         # 生成任务执行体（状态机 + 自动重试）
-│   │       └── video_episode_tasks.py # 单集串行生成与成片合成
+│   │       └── video_episode_tasks.py # 单集分镜生成与成片合成
 │   ├── tests/smoke_test.py      # 无需 ComfyUI/Redis 的端到端冒烟测试
 │   ├── requirements.txt
 │   ├── Dockerfile
@@ -243,15 +243,17 @@ Swagger：<http://127.0.0.1:8000/docs>
 - **V8**：为个人助手增加可查看/编辑/清除的持久偏好记忆，并让 MCP Agent 在生成时使用这些默认偏好。
 - **V9（已发布，2026-10-28）**：为通用聊天 API 增加 SSE 流式响应，同时保留 JSON 对话接口。
 - **V10（已发布，2026-11-03）**：完善 Agent 自动化、对话式视频生成、RunningHub 后端和可选视觉质量审查；单实例部署提供自检。
-- **V11（开发中）**：已加入任务可靠性、认证加密密钥存储及数据备份/恢复基线；仍需完成真实 ComfyUI/RunningHub 工作流回归。
+- **V11（开发中）**：已加入任务可靠性、认证加密密钥存储及数据备份/恢复基线；RunningHub 使用 V2 合并查询、退避轮询、远端任务恢复和有界分镜并发；仍需完成真实 ComfyUI/RunningHub 工作流回归。
 - **V12（已发布，2026-11-03）**：加入 Vue 3、TypeScript 和 Vite 创作工作区，以及导演 Agent 的单集分镜生成、编辑与 Excel 导出。
-- **V13（开发中）**：加入自动视频 Agent，导入单集分镜与素材包后逐镜串行生成、续段适配并合成整集 MP4。
+- **V13（开发中）**：加入自动视频 Agent，导入单集分镜与素材包后生成各镜头、顺序续段并合成整集 MP4；RunningHub 采用有界并行，ComfyUI 保持串行。
 
 ### MCP Agent 使用方式
 
 在“Agent 自动化”区选择模型并输入自然语言指令（例如“先看下状态，再画一只太空柯基”或“生成一段黄昏海边的短视频”）。在“自定义操作”区可直接打开 ComfyUI 网页。也可以直接调用 Agent API：
 
 生成后端与 LLM 模型相互独立。在 Agent 区选择 **RunningHub** 后，先打开 **RunningHub 设置**，填写 API Key 和 Workflow ID，加载工作流文本输入并选择正向（以及可选的负向）提示词节点后保存。API Key 只会加密保存在服务端，读取配置时不会返回明文。
+
+RunningHub 任务通过 V2 查询接口同时获取状态与输出，轮询间隔从 3 秒逐步退避到 15 秒；远端 `taskId` 会在本地保存，Worker 重启或任务重试时优先恢复原任务，避免重复提交。视频单集默认最多并行生成 2 个独立镜头，同一镜头的续接片段仍按顺序生成，可通过 `RUNNINGHUB_MAX_PARALLEL_SHOTS` 调整为 1–8。工作流定义和重复参考素材仅在当前任务客户端生命周期内缓存。默认部署不启用 webhook（服务端通常仅本机可达），也不启用依赖账号类型且可能产生额外费用的 `retainSeconds`。
 
 1. 提交自然语言指令：
 
@@ -310,6 +312,7 @@ Agent 通过后端 MCP 工具直接连接 `COMFYUI_BASE_URL`，不需要浏览�
 | `WORKFLOW_FILE`        | `Krea2-极清生图流+SeedVR2-int8图像放大.json`  | 工作流模板文件名               |
 | `COMFY_TIMEOUT`        | `900`                                | 单次生成超时（秒）              |
 | `COMFY_POLL_INTERVAL`  | `2.0`                                | ComfyUI 输出轮询间隔（秒）      |
+| `RUNNINGHUB_MAX_PARALLEL_SHOTS` | `2`                          | RunningHub 单集中并行镜头数（1–8；续接片段仍串行） |
 | `OPENAI_BASE_URL`      | `https://api.openai.com/v1`          | OpenAI 兼容服务地址（Docker Compose 从根目录 `.env` 传给 API 和 Worker） |
 | `OPENAI_API_KEY`       | (空)                                  | OpenAI 兼容服务密钥；只存于被忽略的本机 `.env`，不要提交或发到聊天中 |
 | `OPENAI_MODEL`         | `gpt-4o-mini`                        | OpenAI 兼容模型名           |

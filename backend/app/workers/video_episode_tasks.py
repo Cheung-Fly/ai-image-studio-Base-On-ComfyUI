@@ -7,6 +7,7 @@ import shutil
 import subprocess
 import tempfile
 import time
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from datetime import datetime
 from pathlib import Path
 
@@ -149,7 +150,10 @@ def _runninghub_node_info(
 
 def _generate_runninghub_segment(
     db,
+    client: RunningHubClient,
     episode: VideoEpisode,
+    workflow_id: str,
+    selection: dict,
     prompt: str,
     ref_images: list[Path],
     ref_videos: list[Path],
@@ -160,19 +164,6 @@ def _generate_runninghub_segment(
     megapixels: float,
     duration_seconds: float,
 ) -> str:
-    config = db.get(RunningHubConfig, 1)
-    if config is None:
-        raise EpisodeVideoError("请先配置 RunningHub API Key")
-    try:
-        api_key = decrypt_secret(config.api_key_encrypted)
-    except ValueError as exc:
-        raise EpisodeVideoError("RunningHub API Key 解密失败") from exc
-    workflow_config = json.loads(episode.workflow_config_json or "{}")
-    selection = workflow_config.get("runninghub") or {}
-    workflow_id = str(selection.get("workflow_id") or "")
-    if not workflow_id:
-        raise EpisodeVideoError("当前单集没有配置 RunningHub 视频工作流")
-
     settings.image_dir.mkdir(parents=True, exist_ok=True)
     temp_dir = Path(
         tempfile.mkdtemp(
@@ -180,8 +171,8 @@ def _generate_runninghub_segment(
             dir=settings.image_dir,
         )
     )
-    client = RunningHubClient(api_key)
     try:
+        db.commit()
         node_info_list = _runninghub_node_info(
             client,
             workflow_id,
@@ -194,11 +185,50 @@ def _generate_runninghub_segment(
             megapixels,
             duration_seconds,
         )
+        db.commit()
+        shot = (
+            db.query(VideoEpisodeShot)
+            .filter(
+                VideoEpisodeShot.episode_id == episode.id,
+                VideoEpisodeShot.shot_index == shot_index,
+            )
+            .first()
+        )
+        if shot is None:
+            raise EpisodeVideoError("分镜任务记录已不存在")
+        task_ids = json.loads(shot.runninghub_tasks_json or "[]")
+        existing_task_id = (
+            task_ids[segment_index]
+            if segment_index < len(task_ids)
+            else None
+        )
+        db.commit()
+
+        def persist_task_id(remote_task_id: str | None) -> None:
+            current_shot = (
+                db.query(VideoEpisodeShot)
+                .filter(
+                    VideoEpisodeShot.episode_id == episode.id,
+                    VideoEpisodeShot.shot_index == shot_index,
+                )
+                .first()
+            )
+            if current_shot is None:
+                raise EpisodeVideoError("分镜任务记录已不存在")
+            current_task_ids = json.loads(current_shot.runninghub_tasks_json or "[]")
+            while len(current_task_ids) <= segment_index:
+                current_task_ids.append(None)
+            current_task_ids[segment_index] = remote_task_id
+            current_shot.runninghub_tasks_json = json.dumps(current_task_ids)
+            db.commit()
+
         result = client.generate(
             workflow_id,
             node_info_list,
             temp_dir,
             cancel_check=lambda: _check_episode_cancelled(episode.id),
+            existing_task_id=existing_task_id,
+            task_id_callback=persist_task_id,
         )
         videos = [item for item in result["files"] if item.get("kind") == "video"]
         if not videos:
@@ -213,7 +243,6 @@ def _generate_runninghub_segment(
             content,
         )
     finally:
-        client.close()
         try:
             shutil.rmtree(temp_dir)
         except OSError:
@@ -223,6 +252,244 @@ def _generate_runninghub_segment(
                 shot_index,
                 segment_index,
             )
+
+
+def _run_runninghub_episode_shots(
+    episode_id: int,
+    client: RunningHubClient,
+    workflow_id: str,
+    selection: dict,
+) -> None:
+    """Generate independent RunningHub shots concurrently, keeping each shot's segments ordered."""
+    with SessionLocal() as db:
+        episode = db.get(VideoEpisode, episode_id)
+        if episode is None:
+            raise EpisodeVideoError("单集记录已不存在")
+        jobs = [
+            {"shot_index": shot.shot_index, "shot_no": shot.shot_no}
+            for shot in sorted(episode.shots, key=lambda item: item.shot_index)
+            if shot.status != "completed"
+        ]
+        completed_count = sum(shot.status == "completed" for shot in episode.shots)
+        total_shots = episode.total_shots
+
+    def generate_shot(job: dict[str, int | str]) -> None:
+        shot_index = int(job["shot_index"])
+        with SessionLocal() as db:
+            try:
+                episode = db.get(VideoEpisode, episode_id)
+                shot = (
+                    db.query(VideoEpisodeShot)
+                    .filter(
+                        VideoEpisodeShot.episode_id == episode_id,
+                        VideoEpisodeShot.shot_index == shot_index,
+                    )
+                    .first()
+                )
+                if episode is None or shot is None:
+                    raise EpisodeVideoError("分镜任务记录已不存在")
+                if episode.status == "cancelled":
+                    raise EpisodeCancelled()
+
+                data = json.loads(shot.data_json)
+                planned_segments = duration_segments(
+                    float(data["duration_seconds"])
+                )
+                generated_segments = json.loads(shot.segments_json or "[]")
+                ref_images, ref_videos, ref_audios = _asset_references(episode, data)
+                input_dir = settings.comfyui_input_path
+                if (ref_images or ref_videos or ref_audios) and input_dir is None:
+                    raise EpisodeVideoError("未配置 RunningHub 参考素材目录")
+                ref_image_paths = [
+                    input_dir / filename for filename in ref_images
+                ] if input_dir is not None else []
+                ref_video_paths = [
+                    input_dir / filename for filename in ref_videos
+                ] if input_dir is not None else []
+                ref_audio_paths = [
+                    input_dir / filename for filename in ref_audios
+                ] if input_dir is not None else []
+
+                shot.status = "processing"
+                shot.error = None
+                episode.current_shot_index = shot_index
+                episode.progress_message = (
+                    f"RunningHub 并行生成中：第 {shot_index + 1}/{total_shots} 镜"
+                )
+                db.commit()
+
+                for segment_index, (generation_duration, target_duration) in enumerate(
+                    planned_segments
+                ):
+                    if segment_index < len(generated_segments):
+                        previous_file = (
+                            settings.image_dir
+                            / generated_segments[segment_index]["filepath"]
+                        )
+                        if not previous_file.is_file():
+                            raise EpisodeVideoError(
+                                f"镜头 {shot.shot_no} 的生成片段已丢失"
+                            )
+                        continue
+
+                    _check_episode_cancelled(episode_id)
+                    prompt = data.get("prompt") or data["visual_description"]
+                    segment_video_paths = list(ref_video_paths)
+                    if segment_index > 0:
+                        previous = (
+                            settings.image_dir
+                            / generated_segments[segment_index - 1]["filepath"]
+                        )
+                        segment_video_paths = [previous, *ref_video_paths[:2]]
+                        prompt += (
+                            "\nContinue the same shot from the supplied reference video's "
+                            "final moment. Preserve the same characters, scene, lighting, "
+                            "and camera motion."
+                        )
+
+                    relative_path = _generate_runninghub_segment(
+                        db,
+                        client,
+                        episode,
+                        workflow_id,
+                        selection,
+                        prompt,
+                        ref_image_paths,
+                        segment_video_paths,
+                        ref_audio_paths,
+                        shot_index,
+                        segment_index,
+                        data["aspect_ratio"],
+                        float(data["megapixels"]),
+                        generation_duration,
+                    )
+                    generated_segments.append(
+                        {
+                            "filepath": relative_path,
+                            "target_duration": target_duration,
+                        }
+                    )
+                    current_episode = db.get(VideoEpisode, episode_id)
+                    current_shot = (
+                        db.query(VideoEpisodeShot)
+                        .filter(
+                            VideoEpisodeShot.episode_id == episode_id,
+                            VideoEpisodeShot.shot_index == shot_index,
+                        )
+                        .first()
+                    )
+                    if current_episode is None or current_shot is None:
+                        raise EpisodeVideoError("分镜任务记录已不存在")
+                    current_shot.segments_json = json.dumps(
+                        generated_segments,
+                        ensure_ascii=False,
+                    )
+                    task_ids = json.loads(current_shot.runninghub_tasks_json or "[]")
+                    if segment_index < len(task_ids):
+                        task_ids[segment_index] = None
+                        current_shot.runninghub_tasks_json = json.dumps(task_ids)
+                    current_episode.current_segment_index = segment_index + 1
+                    db.commit()
+
+                shot = (
+                    db.query(VideoEpisodeShot)
+                    .filter(
+                        VideoEpisodeShot.episode_id == episode_id,
+                        VideoEpisodeShot.shot_index == shot_index,
+                    )
+                    .first()
+                )
+                episode = db.get(VideoEpisode, episode_id)
+                if shot is None or episode is None:
+                    raise EpisodeVideoError("分镜任务记录已不存在")
+                shot.status = "completed"
+                shot.error = None
+                episode.progress_message = (
+                    f"RunningHub 已完成第 {shot_index + 1}/{total_shots} 镜"
+                )
+                db.commit()
+            except EpisodeCancelled:
+                db.rollback()
+                shot = (
+                    db.query(VideoEpisodeShot)
+                    .filter(
+                        VideoEpisodeShot.episode_id == episode_id,
+                        VideoEpisodeShot.shot_index == shot_index,
+                    )
+                    .first()
+                )
+                if shot is not None and shot.status == "processing":
+                    shot.status = "cancelled"
+                    db.commit()
+                raise
+            except Exception as exc:
+                db.rollback()
+                shot = (
+                    db.query(VideoEpisodeShot)
+                    .filter(
+                        VideoEpisodeShot.episode_id == episode_id,
+                        VideoEpisodeShot.shot_index == shot_index,
+                    )
+                    .first()
+                )
+                if shot is not None:
+                    shot.status = "failed"
+                    shot.error = str(exc)[:1000]
+                    db.commit()
+                raise
+
+    max_workers = settings.runninghub_max_parallel_shots
+    job_iter = iter(jobs)
+    active = {}
+    first_failure: tuple[dict[str, int | str], Exception] | None = None
+    cancelled = False
+
+    with ThreadPoolExecutor(
+        max_workers=max_workers,
+        thread_name_prefix=f"runninghub-episode-{episode_id}",
+    ) as executor:
+        def submit_next() -> bool:
+            try:
+                job = next(job_iter)
+            except StopIteration:
+                return False
+            active[executor.submit(generate_shot, job)] = job
+            return True
+
+        while len(active) < max_workers and submit_next():
+            pass
+
+        while active:
+            done, _ = wait(active, return_when=FIRST_COMPLETED)
+            for future in done:
+                job = active.pop(future)
+                try:
+                    future.result()
+                except EpisodeCancelled:
+                    cancelled = True
+                except Exception as exc:
+                    if first_failure is None:
+                        first_failure = (job, exc)
+                else:
+                    completed_count += 1
+                    with SessionLocal() as db:
+                        episode = db.get(VideoEpisode, episode_id)
+                        if episode is not None and episode.status != "cancelled":
+                            episode.progress_message = (
+                                f"RunningHub 镜头进度：{completed_count}/{total_shots} 已完成"
+                            )
+                            db.commit()
+            if first_failure is None and not cancelled:
+                while len(active) < max_workers and submit_next():
+                    pass
+
+    if cancelled:
+        raise EpisodeCancelled()
+    if first_failure is not None:
+        job, exc = first_failure
+        raise EpisodeVideoError(
+            f"RunningHub 第 {job['shot_no']} 镜制作失败：{str(exc)[:500]}"
+        ) from exc
 
 
 def _save_clip(
@@ -440,9 +707,12 @@ def run_video_episode(self, episode_id: int):
 
 
 def _run_video_episode(episode_id: int):
-    """Generate each shot in order, then normalize and concatenate the episode."""
+    """Generate the episode with backend-specific scheduling, then assemble it."""
     db = SessionLocal()
     current_shot_index: int | None = None
+    runninghub_client: RunningHubClient | None = None
+    runninghub_workflow_id = ""
+    runninghub_selection: dict = {}
     try:
         episode = db.get(VideoEpisode, episode_id)
         if episode is None:
@@ -458,8 +728,38 @@ def _run_video_episode(episode_id: int):
         generation_backend = episode.generation_backend or "comfyui"
         if generation_backend not in {"comfyui", "runninghub"}:
             raise EpisodeVideoError("单集使用了不支持的生成后端")
+        if generation_backend == "runninghub":
+            config = db.get(RunningHubConfig, 1)
+            if config is None:
+                raise EpisodeVideoError("请先配置 RunningHub API Key")
+            try:
+                api_key = decrypt_secret(config.api_key_encrypted)
+            except ValueError as exc:
+                raise EpisodeVideoError("RunningHub API Key 解密失败") from exc
+            workflow_config = json.loads(episode.workflow_config_json or "{}")
+            runninghub_selection = workflow_config.get("runninghub") or {}
+            runninghub_workflow_id = str(
+                runninghub_selection.get("workflow_id") or ""
+            )
+            if not runninghub_workflow_id:
+                raise EpisodeVideoError("当前单集没有配置 RunningHub 视频工作流")
+            runninghub_client = RunningHubClient(api_key)
         client = ComfyClient() if generation_backend == "comfyui" else None
-        for shot in sorted(episode.shots, key=lambda item: item.shot_index):
+        db.commit()
+        if generation_backend == "runninghub":
+            if runninghub_client is None:
+                raise EpisodeVideoError("RunningHub 客户端未初始化")
+            _run_runninghub_episode_shots(
+                episode_id,
+                runninghub_client,
+                runninghub_workflow_id,
+                runninghub_selection,
+            )
+        for shot in (
+            sorted(episode.shots, key=lambda item: item.shot_index)
+            if generation_backend == "comfyui"
+            else []
+        ):
             db.expire_all()
             episode = db.get(VideoEpisode, episode_id)
             if episode is None:
@@ -492,15 +792,6 @@ def _run_video_episode(episode_id: int):
             input_dir = settings.comfyui_input_path
             if (ref_images or ref_videos or ref_audios) and input_dir is None:
                 raise EpisodeVideoError("未配置 ComfyUI 素材输入目录")
-            ref_image_paths = [
-                input_dir / filename for filename in ref_images
-            ] if input_dir is not None else []
-            ref_video_paths = [
-                input_dir / filename for filename in ref_videos
-            ] if input_dir is not None else []
-            ref_audio_paths = [
-                input_dir / filename for filename in ref_audios
-            ] if input_dir is not None else []
             for segment_index, (generation_duration, target_duration) in enumerate(
                 planned_segments
             ):
@@ -514,7 +805,6 @@ def _run_video_episode(episode_id: int):
                     continue
                 _check_episode_cancelled(episode_id)
                 prompt = data.get("prompt") or data["visual_description"]
-                segment_video_paths = list(ref_video_paths)
                 videos_for_segment = list(ref_videos)
                 if segment_index > 0:
                     previous = (
@@ -531,8 +821,6 @@ def _run_video_episode(episode_id: int):
                         )
                         shutil.copyfile(previous, input_dir / continuation_name)
                         videos_for_segment = [continuation_name, *ref_videos[:2]]
-                    else:
-                        segment_video_paths = [previous, *ref_video_paths[:2]]
                     prompt += (
                         "\nContinue the same shot from the supplied reference video's "
                         "final moment. Preserve the same characters, scene, lighting, "
@@ -592,20 +880,6 @@ def _run_video_episode(episode_id: int):
                         segment_index,
                         meta["filename"],
                         content,
-                    )
-                else:
-                    relative_path = _generate_runninghub_segment(
-                        db,
-                        episode,
-                        prompt,
-                        ref_image_paths,
-                        segment_video_paths,
-                        ref_audio_paths,
-                        shot.shot_index,
-                        segment_index,
-                        data["aspect_ratio"],
-                        float(data["megapixels"]),
-                        generation_duration,
                     )
                 generated_segments.append(
                     {
@@ -667,6 +941,8 @@ def _run_video_episode(episode_id: int):
             "error": str(exc)[:500],
         }
     finally:
+        if runninghub_client is not None:
+            runninghub_client.close()
         db.close()
 
 

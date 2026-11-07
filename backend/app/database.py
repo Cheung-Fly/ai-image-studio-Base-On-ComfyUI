@@ -68,12 +68,14 @@ def _migrate_missing_columns() -> None:
         ("tasks", "refine_steps", "INTEGER NOT NULL DEFAULT 4"),
         ("tasks", "loras", "TEXT NOT NULL DEFAULT '[]'"),
         ("tasks", "error_code", "VARCHAR(64)"),
+        ("tasks", "runninghub_task_id", "VARCHAR(128)"),
         ("tasks", "celery_task_id", "VARCHAR(255)"),
         ("tasks", "retry_count", "INTEGER NOT NULL DEFAULT 0"),
         ("tasks", "manual_retry_count", "INTEGER NOT NULL DEFAULT 0"),
         ("images", "media_type", "VARCHAR(16) NOT NULL DEFAULT 'image'"),
         ("video_episodes", "generation_backend", "VARCHAR(16) NOT NULL DEFAULT 'comfyui'"),
         ("video_episodes", "workflow_config_json", "TEXT NOT NULL DEFAULT '{}'"),
+        ("video_episode_shots", "runninghub_tasks_json", "TEXT NOT NULL DEFAULT '[]'"),
     ]
     inspector = inspect(engine)
     with engine.begin() as conn:
