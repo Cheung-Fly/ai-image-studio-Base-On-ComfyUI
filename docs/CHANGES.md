@@ -28,6 +28,12 @@ history, not a roadmap; planned work belongs in `项目技术演进路线图.md`
 - RunningHub status polling retries up to three transient network failures
   without submitting the generation task again.
 
+### Changed
+
+- RunningHub image and video tasks use V2 combined status/result queries,
+  adaptive polling, remote-task recovery, and bounded per-shot concurrency to
+  reduce polling overhead and avoid duplicate submissions after worker restarts.
+
 ### Security
 
 - Replaced custom API-key encryption with authenticated Fernet encryption.
