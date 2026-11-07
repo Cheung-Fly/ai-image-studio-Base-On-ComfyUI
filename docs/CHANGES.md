@@ -25,8 +25,9 @@ history, not a roadmap; planned work belongs in `项目技术演进路线图.md`
 
 ### Fixed
 
-- RunningHub workflow overrides now preserve the `ResolutionSelector` option
-  label and match numeric values to the input types in the workflow JSON.
+- RunningHub workflow overrides preserve the `ResolutionSelector` option label,
+  match numeric values to workflow input types, and leave the random-seed
+  sentinel unset so the platform generates a valid seed.
 - RunningHub status polling retries up to three transient network failures
   without submitting the generation task again.
 

@@ -180,7 +180,6 @@ class RunningHubClientTests(unittest.TestCase):
                 {"nodeId": "3", "fieldName": "height", "fieldValue": 750},
                 {"nodeId": "3", "fieldName": "duration", "fieldValue": 5},
                 {"nodeId": "3", "fieldName": "frames", "fieldValue": 120},
-                {"nodeId": "3", "fieldName": "seed", "fieldValue": -1},
                 {"nodeId": "3", "fieldName": "aspect", "fieldValue": 1.77778},
                 {"nodeId": "4", "fieldName": "steps", "fieldValue": 8},
                 {
@@ -188,6 +187,35 @@ class RunningHubClientTests(unittest.TestCase):
                     "fieldName": "aspect_ratio",
                     "fieldValue": "16:9 (Widescreen)",
                 },
+            ],
+        )
+
+    def test_runninghub_random_seed_omits_seed_override(self):
+        workflow = {
+            "3": {
+                "class_type": "Sampler",
+                "inputs": {"seed": 1, "noise_seed": 1},
+            }
+        }
+        random_seed_mappings = workflow_parameter_node_info(
+            workflow,
+            "16:9 (Widescreen)",
+            1.0,
+            seed=-1,
+        )
+        self.assertEqual(random_seed_mappings, [])
+
+        fixed_seed_mappings = workflow_parameter_node_info(
+            workflow,
+            "16:9 (Widescreen)",
+            1.0,
+            seed=123,
+        )
+        self.assertEqual(
+            fixed_seed_mappings,
+            [
+                {"nodeId": "3", "fieldName": "seed", "fieldValue": 123},
+                {"nodeId": "3", "fieldName": "noise_seed", "fieldValue": 123},
             ],
         )
 
