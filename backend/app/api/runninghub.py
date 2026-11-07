@@ -6,11 +6,26 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models import RunningHubConfig, User
 from ..schemas import RunningHubConfigIn, RunningHubWorkflowNodesRequest
-from ..security import decrypt_secret, encrypt_secret
+from ..security import SecretConfigurationError, decrypt_secret, encrypt_secret
 from ..services.runninghub import RunningHubClient, RunningHubError
 from .auth import get_current_user
 
 router = APIRouter(tags=["runninghub"])
+
+
+def _saved_api_key(config: RunningHubConfig | None) -> str:
+    if config is None:
+        return ""
+    try:
+        return decrypt_secret(config.api_key_encrypted)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "无法解密已保存的 RunningHub API Key；请检查 ENCRYPTION_KEY "
+                "和迁移用的 LEGACY_ENCRYPTION_KEY。"
+            ),
+        ) from exc
 
 
 @router.get("/runninghub/config")
@@ -38,9 +53,7 @@ def save_runninghub_config(
     db: Session = Depends(get_db),
 ):
     config = db.get(RunningHubConfig, 1)
-    api_key = req.api_key or (
-        decrypt_secret(config.api_key_encrypted) if config is not None else ""
-    )
+    api_key = req.api_key or _saved_api_key(config)
     if not api_key:
         raise HTTPException(400, "请填写 RunningHub API Key")
 
@@ -52,7 +65,10 @@ def save_runninghub_config(
     config.prompt_field = req.prompt_field
     config.negative_prompt_node_id = req.negative_prompt_node_id
     config.negative_prompt_field = req.negative_prompt_field
-    config.api_key_encrypted = encrypt_secret(api_key)
+    try:
+        config.api_key_encrypted = encrypt_secret(api_key)
+    except SecretConfigurationError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     db.commit()
     return {"configured": True, "workflow_id": config.workflow_id}
 
@@ -64,9 +80,7 @@ def list_runninghub_workflow_nodes(
     db: Session = Depends(get_db),
 ):
     config = db.get(RunningHubConfig, 1)
-    api_key = req.api_key or (
-        decrypt_secret(config.api_key_encrypted) if config is not None else ""
-    )
+    api_key = req.api_key or _saved_api_key(config)
     workflow_id = req.workflow_id or (config.workflow_id if config is not None else "")
     if not api_key:
         raise HTTPException(400, "请先填写 RunningHub API Key")

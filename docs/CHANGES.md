@@ -18,6 +18,34 @@ history, not a roadmap; planned work belongs in `项目技术演进路线图.md`
 
 ## Unreleased
 
+### Added
+
+- Added a versioned data backup/restore utility for the complete Docker Compose
+  data directory. Restore preserves the existing directory for rollback.
+
+### Fixed
+
+- RunningHub workflow overrides preserve the `ResolutionSelector` option label,
+  match numeric values to workflow input types, and leave the random-seed
+  sentinel unset so the platform generates a valid seed.
+- RunningHub output downloads accept the exact regional media host returned by
+  the provider while retaining HTTPS host validation.
+- RunningHub status polling retries up to three transient network failures
+  without submitting the generation task again.
+
+### Changed
+
+- RunningHub image and video tasks use V2 combined status/result queries,
+  adaptive polling, remote-task recovery, and bounded per-shot concurrency to
+  reduce polling overhead and avoid duplicate submissions after worker restarts.
+
+### Security
+
+- Replaced custom API-key encryption with authenticated Fernet encryption.
+  Storing new credentials now requires a high-entropy `ENCRYPTION_KEY`; legacy
+  ciphertexts remain readable for migration, and the insecure Compose default
+  was removed. Added an atomic command to rotate stored provider keys.
+
 ## v11.0.1 - 2026-11-05
 
 ### Fixed

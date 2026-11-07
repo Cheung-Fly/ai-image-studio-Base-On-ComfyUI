@@ -68,6 +68,7 @@ class GenerationTask(Base):
     error = Column(Text, nullable=True)
     error_code = Column(String(64), nullable=True)
     comfy_prompt_id = Column(String(64), nullable=True)  # ComfyUI 返回的 prompt_id
+    runninghub_task_id = Column(String(128), nullable=True)
     celery_task_id = Column(String(255), nullable=True, index=True)
     retry_count = Column(Integer, default=0, nullable=False)
     manual_retry_count = Column(Integer, default=0, nullable=False)
@@ -128,7 +129,7 @@ class ImageAsset(Base):
 
 
 class VideoEpisode(Base):
-    """一个导入、审核并串行制作的视频单集。"""
+    """一个导入、审核并生成的视频单集。"""
 
     __tablename__ = "video_episodes"
 
@@ -174,6 +175,7 @@ class VideoEpisodeShot(Base):
     data_json = Column(Text, nullable=False)
     status = Column(String(16), default="pending", nullable=False)
     segments_json = Column(Text, default="[]", nullable=False)
+    runninghub_tasks_json = Column(Text, default="[]", nullable=False)
     error = Column(Text, nullable=True)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

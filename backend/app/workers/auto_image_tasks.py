@@ -30,6 +30,7 @@ from ..services.llm_client import LLMError
 from ..services.runninghub import (
     RunningHubClient,
     RunningHubError,
+    RunningHubNodeInfo,
     workflow_parameter_node_info,
 )
 from ..services.task_reliability import TaskCancelled, add_task_event
@@ -284,7 +285,7 @@ def run_runninghub_image_task(self, task_id: int):
         db.commit()
         check_cancelled()
 
-        node_info_list = [
+        node_info_list: list[RunningHubNodeInfo] = [
             {
                 "nodeId": prompt_node_id,
                 "fieldName": prompt_field,
@@ -334,12 +335,22 @@ def run_runninghub_image_task(self, task_id: int):
                     )
                     db.commit()
 
+                def persist_runninghub_task_id(remote_task_id: str | None) -> None:
+                    current_task = db.get(GenerationTask, task_id)
+                    if current_task is None:
+                        raise RunningHubError("RunningHub 本地任务记录已不存在")
+                    current_task.runninghub_task_id = remote_task_id
+                    current_task.updated_at = datetime.utcnow()
+                    db.commit()
+
                 result = client.generate(
                     workflow_id,
                     node_info_list,
                     temp_dir,
                     cancel_check=check_cancelled,
                     status_callback=report_runninghub_status,
+                    existing_task_id=task.runninghub_task_id,
+                    task_id_callback=persist_runninghub_task_id,
                 )
                 add_auto_image_event(
                     db,
@@ -384,6 +395,7 @@ def run_runninghub_image_task(self, task_id: int):
             if task is None or task.status == TaskStatus.cancelled:
                 raise TaskCancelled()
             task.status = TaskStatus.completed
+            task.runninghub_task_id = None
             task.error = None
             task.error_code = None
             task.updated_at = datetime.utcnow()

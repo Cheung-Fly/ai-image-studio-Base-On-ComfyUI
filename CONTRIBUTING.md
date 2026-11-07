@@ -21,7 +21,10 @@ python -m tests.test_agent_memory
 python -m tests.test_chat_stream
 python -m pytest -q tests/test_quality_review.py
 python -m tests.test_runninghub
-ruff check app/api/agent.py app/api/chat.py app/api/instance.py app/api/runninghub.py app/mcp_server app/services/comfy_client.py app/services/llm_client.py app/services/mcp_agent.py app/services/quality_review.py app/services/runninghub.py app/services/agent_memory.py app/workers/tasks.py app/schemas.py app/models.py tests/test_mcp_agent.py tests/test_agent_memory.py tests/test_chat_stream.py tests/test_quality_review.py tests/test_runninghub.py
+python -m unittest tests.test_task_reliability
+python -m unittest tests.test_director_agent
+python -m unittest tests.test_video_episode
+ruff check app/api/agent.py app/api/chat.py app/api/instance.py app/api/runninghub.py app/api/tasks.py app/api/video.py app/mcp_server app/services/comfy_client.py app/services/director_agent.py app/services/task_reliability.py app/services/agents.py app/services/llm_client.py app/services/mcp_agent.py app/services/quality_review.py app/services/runninghub.py app/services/agent_memory.py app/workers/tasks.py app/workers/auto_image_tasks.py app/workers/video_episode_tasks.py app/schemas.py app/models.py app/database.py tests/test_mcp_agent.py tests/test_agent_memory.py tests/test_chat_stream.py tests/test_quality_review.py tests/test_runninghub.py tests/test_director_agent.py tests/test_task_reliability.py tests/test_video_episode.py
 ```
 
 在 `frontend/` 中运行 `npm ci`、`npm run typecheck` 和 `npm run build`，验证 Vue/TypeScript 类型及生产构建。以上后端命令与当前 CI 检查保持一致。MCP Agent、偏好记忆、流式聊天、视觉审查和 RunningHub 客户端测试不要求真实 GPU、LLM、RunningHub 或 ComfyUI；这些外部服务需要真实联调时再单独启动。CI 定义见 `.github/workflows/ci.yml`。

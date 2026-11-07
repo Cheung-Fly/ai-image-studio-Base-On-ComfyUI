@@ -69,11 +69,12 @@ ai-image-studio/
 │   │   └── workers/
 │   │       ├── celery_app.py    # Celery 实例（含软/硬超时配置）
 │   │       ├── tasks.py         # 生成任务执行体（状态机 + 自动重试）
-│   │       └── video_episode_tasks.py # 单集串行生成与成片合成
+│   │       └── video_episode_tasks.py # 单集分镜生成与成片合成
 │   ├── tests/smoke_test.py      # 无需 ComfyUI/Redis 的端到端冒烟测试
 │   ├── requirements.txt
 │   ├── Dockerfile
 │   └── ruff.toml
+├── scripts/backup_data.py       # Docker Compose 数据备份与恢复
 ├── workflows/
 │   └── Krea2-极清生图流+SeedVR2-int8图像放大.json   # 文生图工作流（ComfyUI API 格式）
 ├── frontend/
@@ -122,6 +123,8 @@ cd D:\Study-Plan\ai-image-studio\backend
 python tests\smoke_test.py
 
 # 预期最后一行：SMOKE TEST PASSED（9/9）
+python tests\test_v11_security_backup.py
+python tests\test_runninghub.py
 ```
 
 ### 第 3 步：启动 API 服务（终端窗口 A，保持开着）
@@ -240,15 +243,17 @@ Swagger：<http://127.0.0.1:8000/docs>
 - **V8**：为个人助手增加可查看/编辑/清除的持久偏好记忆，并让 MCP Agent 在生成时使用这些默认偏好。
 - **V9（已发布，2026-10-28）**：为通用聊天 API 增加 SSE 流式响应，同时保留 JSON 对话接口。
 - **V10（已发布，2026-11-03）**：完善 Agent 自动化、对话式视频生成、RunningHub 后端和可选视觉质量审查；单实例部署提供自检。
-- **V11（开发中）**：已加入持久任务事件、错误分类、最多 3 次手动重试和排队/运行任务取消；仍需完成密钥与备份基线及真实工作流回归。
+- **V11（开发中）**：已加入任务可靠性、认证加密密钥存储及数据备份/恢复基线；RunningHub 使用 V2 合并查询、退避轮询、远端任务恢复和有界分镜并发；仍需完成真实 ComfyUI/RunningHub 工作流回归。
 - **V12（已发布，2026-11-03）**：加入 Vue 3、TypeScript 和 Vite 创作工作区，以及导演 Agent 的单集分镜生成、编辑与 Excel 导出。
-- **V13（开发中）**：加入自动视频 Agent，导入单集分镜与素材包后逐镜串行生成、续段适配并合成整集 MP4。
+- **V13（开发中）**：加入自动视频 Agent，导入单集分镜与素材包后生成各镜头、顺序续段并合成整集 MP4；RunningHub 采用有界并行，ComfyUI 保持串行。
 
 ### MCP Agent 使用方式
 
 在“Agent 自动化”区选择模型并输入自然语言指令（例如“先看下状态，再画一只太空柯基”或“生成一段黄昏海边的短视频”）。在“自定义操作”区可直接打开 ComfyUI 网页。也可以直接调用 Agent API：
 
 生成后端与 LLM 模型相互独立。在 Agent 区选择 **RunningHub** 后，先打开 **RunningHub 设置**，填写 API Key 和 Workflow ID，加载工作流文本输入并选择正向（以及可选的负向）提示词节点后保存。API Key 只会加密保存在服务端，读取配置时不会返回明文。
+
+RunningHub 任务通过 V2 查询接口同时获取状态与输出，轮询间隔从 3 秒逐步退避到 15 秒；远端 `taskId` 会在本地保存，Worker 重启或任务重试时优先恢复原任务，避免重复提交。视频单集默认最多并行生成 2 个独立镜头，同一镜头的续接片段仍按顺序生成，可通过 `RUNNINGHUB_MAX_PARALLEL_SHOTS` 调整为 1–8。工作流定义和重复参考素材仅在当前任务客户端生命周期内缓存。默认部署不启用 webhook（服务端通常仅本机可达），也不启用依赖账号类型且可能产生额外费用的 `retainSeconds`。
 
 1. 提交自然语言指令：
 
@@ -294,7 +299,7 @@ GET /api/agent/result/{task_id}
 
 Agent 通过后端 MCP 工具直接连接 `COMFYUI_BASE_URL`，不需要浏览器自动化。网页入口的地址只影响用户浏览器打开的目标，不会改变 Agent 的 API 连接地址。
 
-## 环境变量（均有默认值，一般不用改）
+## 环境变量
 
 | 变量                     | 默认值                                  | 说明                     |
 | ---------------------- | ------------------------------------ | ---------------------- |
@@ -307,6 +312,7 @@ Agent 通过后端 MCP 工具直接连接 `COMFYUI_BASE_URL`，不需要浏览�
 | `WORKFLOW_FILE`        | `Krea2-极清生图流+SeedVR2-int8图像放大.json`  | 工作流模板文件名               |
 | `COMFY_TIMEOUT`        | `900`                                | 单次生成超时（秒）              |
 | `COMFY_POLL_INTERVAL`  | `2.0`                                | ComfyUI 输出轮询间隔（秒）      |
+| `RUNNINGHUB_MAX_PARALLEL_SHOTS` | `2`                          | RunningHub 单集中并行镜头数（1–8；续接片段仍串行） |
 | `OPENAI_BASE_URL`      | `https://api.openai.com/v1`          | OpenAI 兼容服务地址（Docker Compose 从根目录 `.env` 传给 API 和 Worker） |
 | `OPENAI_API_KEY`       | (空)                                  | OpenAI 兼容服务密钥；只存于被忽略的本机 `.env`，不要提交或发到聊天中 |
 | `OPENAI_MODEL`         | `gpt-4o-mini`                        | OpenAI 兼容模型名           |
@@ -315,10 +321,23 @@ Agent 通过后端 MCP 工具直接连接 `COMFYUI_BASE_URL`，不需要浏览�
 | `LLAMA_MODEL`          | `llama-3.1-8b`                       | llama.cpp 模型名          |
 | `LLAMA_MAX_TOKENS`     | `1024`                               | llama.cpp 最大生成 token   |
 | `DEFAULT_LLM_PROVIDER` | `openai`                             | 默认 LLM provider        |
+| `ENCRYPTION_KEY`       | (必须显式设置)                         | 至少 32 个字符的随机密钥，用于加密保存的 API Key；丢失后无法解密已有凭据 |
+| `LEGACY_ENCRYPTION_KEY`| (空)                                  | 仅在读取旧密文时临时设置原密钥；新密文始终使用 `ENCRYPTION_KEY` |
 | `DAILY_CHAT_QUOTA`     | `100`                                | 每用户每日 LLM 额度（-1 不限）    |
 | `CORS_ORIGINS`         | `*`                                  | CORS 允许来源（逗号分隔）        |
 
-> 完整模板见 `.env.example`。生产环境务必覆盖 `ENCRYPTION_KEY` 与各 LLM API Key。
+> 完整模板见 `.env.example`。保存自定义模型或 RunningHub 凭据前，必须先设置高熵随机 `ENCRYPTION_KEY`。可用 `python -c "import secrets; print(secrets.token_urlsafe(32))"` 生成；请将密钥安全保存在密码管理器中，不要提交 `.env`。更换密钥时，旧密文需通过 `LEGACY_ENCRYPTION_KEY` 保留读取能力。升级旧部署时，若之前没有显式设置密钥，需将旧版示例默认值 `change-me-in-production-encryption-key` 临时设为 `LEGACY_ENCRYPTION_KEY`；若原先配置了自定义值，则使用原值。
+
+轮换密钥时先停止 API 和 Worker，将新值设为 `ENCRYPTION_KEY`、旧值设为 `LEGACY_ENCRYPTION_KEY`，然后运行 `docker compose run --rm --no-deps api python -m app.cli.rotate_secrets`。命令会在单个数据库事务中迁移所有自定义模型和 RunningHub 密钥；成功后移除 `LEGACY_ENCRYPTION_KEY` 并用 `docker compose up -d --force-recreate api worker` 重建服务。迁移失败会回滚，不要提前删除旧密钥。
+
+V11 回归测试默认只使用模拟服务。配置并希望验证真实 ComfyUI 时，可在 `backend` 目录运行：
+
+```powershell
+$env:AISTUDIO_COMFYUI_INTEGRATION = "1"
+python -m unittest tests.test_real_workflow_regression.RealComfyUIWorkflowTests
+```
+
+RunningHub 回归测试也可通过 `AISTUDIO_RUNNINGHUB_INTEGRATION=1` 显式启用；它会用已保存的工作流提交一次远程生成，可能产生费用。ComfyUI 测试遇到已有排队任务时会跳过，不会干扰现有任务。
 
 使用 OpenRouter 时，将 `OPENAI_BASE_URL` 设为 `https://openrouter.ai/api/v1`，`OPENAI_MODEL` 设为 OpenRouter 提供的模型 ID，并把新 API Key 放在本机 `.env` 中；Docker Compose 会将这些设置传给 API 和 Worker。也可在 Agent 区选择 OpenAI 兼容 provider。
 
@@ -378,7 +397,37 @@ docker compose up -d --build
   ssh -N -L 18000:127.0.0.1:8000 user@server
   ```
 
-  然后在本机浏览器打开 `http://127.0.0.1:18000`。该单实例应用无需登录。首次部署前应在项目根目录创建 `.env`，并将 `ENCRYPTION_KEY` 替换为随机值；不要提交 `.env`。
+  然后在本机浏览器打开 `http://127.0.0.1:18000`。该单实例应用无需登录。首次部署前应在项目根目录创建 `.env`，填入 `.env.example` 中生成的随机 `ENCRYPTION_KEY`；不要提交 `.env`。
+
+### 数据备份与恢复
+
+备份包含 Compose 挂载的整个 `data` 目录（SQLite、生成媒体及动态知识库），不会包含 `.env`、Redis 队列、ComfyUI 模型或位于外部目录的 ComfyUI 输入素材。备份或恢复前都要等生成任务结束并确认当前队列为空，避免恢复后执行与数据库不一致的旧任务。必须单独安全保管 `ENCRYPTION_KEY`；备份中已保存的凭据依赖原密钥解密。
+
+备份前停止 API 和 Worker，避免数据库或媒体文件在归档期间发生变化：
+
+```powershell
+docker compose stop api worker
+try {
+  python scripts\backup_data.py backup
+}
+finally {
+  docker compose start api worker
+}
+```
+
+恢复时同样先停止服务。脚本会保留现有目录为 `data.pre-restore-<时间>`，确认恢复结果正常前不要删除：
+
+```powershell
+docker compose stop api worker
+try {
+  python scripts\backup_data.py restore .\backups\ai-image-studio-data-<时间>.zip
+}
+finally {
+  docker compose start api worker
+}
+```
+
+非 Docker Compose 部署须先自行停止所有写入进程、按实际位置传入 `--data-dir`，再添加 `--skip-service-check`（本地默认数据目录可传 `.\backend\data`）。外置的 `COMFYUI_INPUT_DIR` 内容需另行备份。
 
 ### 启动宿主机服务（ComfyUI + llama）
 

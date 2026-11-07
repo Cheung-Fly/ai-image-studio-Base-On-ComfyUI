@@ -90,6 +90,8 @@ jobs:
           backend/app/services/runninghub.py
           backend/app/services/agent_memory.py
           backend/app/workers/tasks.py
+          backend/app/workers/auto_image_tasks.py
+          backend/app/workers/video_episode_tasks.py
           backend/app/schemas.py
           backend/app/models.py
           backend/app/database.py
@@ -100,6 +102,7 @@ jobs:
           backend/tests/test_runninghub.py
           backend/tests/test_director_agent.py
           backend/tests/test_task_reliability.py
+          backend/tests/test_video_episode.py
 
       - name: Test MCP Agent with mocked ComfyUI
         working-directory: backend
@@ -128,3 +131,7 @@ jobs:
       - name: Test Director Agent
         working-directory: backend
         run: python -m unittest tests.test_director_agent
+
+      - name: Test video episode workflow
+        working-directory: backend
+        run: python -m unittest tests.test_video_episode

@@ -307,6 +307,9 @@ class TaskReliabilityTests(unittest.TestCase):
         with engine.begin() as connection:
             connection.exec_driver_sql("CREATE TABLE tasks (id INTEGER PRIMARY KEY)")
             connection.exec_driver_sql("CREATE TABLE images (id INTEGER PRIMARY KEY)")
+            connection.exec_driver_sql(
+                "CREATE TABLE video_episode_shots (id INTEGER PRIMARY KEY)"
+            )
         Base.metadata.create_all(bind=engine)
 
         with (
@@ -319,11 +322,17 @@ class TaskReliabilityTests(unittest.TestCase):
         self.assertTrue(
             {
                 "error_code",
+                "runninghub_task_id",
                 "celery_task_id",
                 "retry_count",
                 "manual_retry_count",
             }.issubset(columns)
         )
+        shot_columns = {
+            column["name"]
+            for column in inspect(engine).get_columns("video_episode_shots")
+        }
+        self.assertIn("runninghub_tasks_json", shot_columns)
         engine.dispose()
 
     def test_worker_resumes_existing_prompt_without_submitting_duplicate(self):
