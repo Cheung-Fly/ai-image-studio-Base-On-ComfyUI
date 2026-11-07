@@ -10,12 +10,12 @@ import time
 import uuid
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any, TypeAlias
+from typing import Any
 from urllib.parse import unquote, urlparse
 
 import httpx
 
-RunningHubNodeInfo: TypeAlias = dict[str, Any]
+type RunningHubNodeInfo = dict[str, Any]
 
 BASE_URL = "https://www.runninghub.ai"
 ALLOWED_OUTPUT_HOSTS = {
