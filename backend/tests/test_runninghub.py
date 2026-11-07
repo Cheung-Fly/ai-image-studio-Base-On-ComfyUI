@@ -488,6 +488,7 @@ class RunningHubClientTests(unittest.TestCase):
             "rh-images.xiaoyaoyou.com",
             "rh-images-tos.xiaoyaoyou.com",
             "rh-images-1252422369.cos.ap-beijing.myqcloud.com",
+            "rh-comfyui01.tos-cn-beijing.volces.com",
         ):
             with self.subTest(host=host):
                 url = f"https://{host}/output.png"

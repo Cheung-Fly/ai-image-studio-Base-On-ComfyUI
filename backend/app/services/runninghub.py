@@ -24,6 +24,7 @@ ALLOWED_OUTPUT_HOSTS = {
     "rh-images.xiaoyaoyou.com",
     "rh-images-tos.xiaoyaoyou.com",
     "rh-images-1252422369.cos.ap-beijing.myqcloud.com",
+    "rh-comfyui01.tos-cn-beijing.volces.com",
 }
 MAX_OUTPUT_BYTES = 100 * 1024 * 1024
 MAX_INPUT_BYTES = 100 * 1024 * 1024
