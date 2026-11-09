@@ -18,6 +18,8 @@ history, not a roadmap; planned work belongs in `项目技术演进路线图.md`
 
 ## Unreleased
 
+## v11.2.0 - 2026-11-09
+
 ### Added
 
 - Added a creator workbench with Agent 1–5 navigation, a personal asset library,
