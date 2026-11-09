@@ -245,7 +245,7 @@ Swagger：<http://127.0.0.1:8000/docs>
 - **V10（已发布，2026-11-03）**：完善 Agent 自动化、对话式视频生成、RunningHub 后端和可选视觉质量审查；单实例部署提供自检。
 - **V11（开发中）**：已加入任务可靠性、认证加密密钥存储及数据备份/恢复基线；RunningHub 使用 V2 合并查询、退避轮询、远端任务恢复和有界分镜并发；仍需完成真实 ComfyUI/RunningHub 工作流回归。
 - **V12（已发布，2026-11-03）**：加入 Vue 3、TypeScript 和 Vite 创作工作区，以及导演 Agent 的单集分镜生成、编辑与 Excel 导出。
-- **V13（开发中）**：加入自动视频 Agent，导入单集分镜与素材包后生成各镜头、顺序续段并合成整集 MP4；RunningHub 采用有界并行，ComfyUI 保持串行。
+- **V13（开发中）**：加入自动视频 Agent，导入单集分镜与素材包后生成各镜头、顺序续段并合成整集 MP4；RunningHub 采用有界并行，ComfyUI 保持串行。创作工作台提供 Agent 1–5 导航、个人资产库及 ComfyUI、RunningHub、模型和 Skills 配置；Agent 4/5 后端尚未接入，界面会明确标示未就绪。
 
 ### MCP Agent 使用方式
 

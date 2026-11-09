@@ -127,6 +127,18 @@ function runningHubMappingValue(nodeId: string, fieldName: string): string {
   return JSON.stringify({ node_id: nodeId, field_name: fieldName });
 }
 
+type StudioView =
+  | "overview"
+  | "agent"
+  | "director"
+  | "images"
+  | "video"
+  | "roughcut"
+  | "pipeline"
+  | "library"
+  | "settings";
+type SettingsTab = "comfyui" | "runninghub" | "models" | "skills";
+
 function toolLabel(tool: string): string {
   const labels: Record<string, string> = {
     comfy_status: "查询 ComfyUI 状态",
@@ -243,8 +255,9 @@ function generatedFiles(steps: AgentStep[]): AgentFile[] {
 }
 
 const state = reactive({
-  activeView: "agent" as "agent" | "director" | "images" | "video" | "comfyui",
-  activePanel: null as "runninghub" | "memory" | "rag" | null,
+  activeView: "overview" as StudioView,
+  settingsTab: "comfyui" as SettingsTab,
+  activePanel: null as "memory" | "rag" | null,
   apiStatus: "checking" as "checking" | "online" | "offline",
   history: readHistory(),
   messages: [] as AgentMessage[],
@@ -293,6 +306,7 @@ const state = reactive({
   memoryBusy: false,
   memoryStatus: "",
   workflows: [] as WorkflowOption[],
+  workflowStatus: "",
   modelPresets: [] as ModelPresetOption[],
   ragDocs: [] as RagDocument[],
   ragBusy: false,
@@ -339,10 +353,40 @@ const activeBackendHint = computed(() =>
     ? "远程任务由 RunningHub 执行；视觉审查重试可能再次提交任务并产生费用。"
     : "通过 MCP 直接控制本地 ComfyUI；有影响的操作会先请求确认。",
 );
+const librarySearch = ref("");
+const libraryKind = ref<"all" | "image" | "video">("all");
 const apiStatusLabel = computed(() => {
   if (state.apiStatus === "checking") return "连接中";
   return state.apiStatus === "online" ? "服务在线" : "服务离线";
 });
+const viewLabels: Record<StudioView, string> = {
+  overview: "制作总览",
+  agent: "自由创作 Agent",
+  director: "Agent 1 · 分镜脚本",
+  images: "Agent 2 · 图片资产",
+  video: "Agent 3 · 视频生成",
+  roughcut: "Agent 4 · 视频粗剪",
+  pipeline: "Agent 5 · 一键出片",
+  library: "个人资产库",
+  settings: "工作流配置",
+};
+const activeViewLabel = computed(() => viewLabels[state.activeView]);
+const filteredGallery = computed(() => {
+  const query = librarySearch.value.trim().toLocaleLowerCase();
+  return state.gallery.filter((entry) => {
+    const matchesKind =
+      libraryKind.value === "all" || entry.kind === libraryKind.value;
+    const matchesQuery =
+      !query || entry.label.toLocaleLowerCase().includes(query);
+    return matchesKind && matchesQuery;
+  });
+});
+const galleryImageCount = computed(
+  () => state.gallery.filter((entry) => entry.kind === "image").length,
+);
+const galleryVideoCount = computed(
+  () => state.gallery.filter((entry) => entry.kind === "video").length,
+);
 
 watch(
   () => state.history,
@@ -472,6 +516,23 @@ async function loadGallery(): Promise<void> {
     state.galleryError = "结果库加载失败：" + errorMessage(error);
   } finally {
     state.galleryLoading = false;
+  }
+}
+
+async function loadAvailableWorkflows(): Promise<void> {
+  state.workflowStatus = "正在读取工作流…";
+  try {
+    state.workflows = await apiJson<WorkflowOption[]>(
+      "/api/workflows",
+      undefined,
+      "读取 ComfyUI 工作流失败",
+    );
+    state.workflowStatus = state.workflows.length
+      ? `已发现 ${state.workflows.length} 个工作流`
+      : "未发现可用工作流，请先在 ComfyUI 中保存工作流。";
+  } catch (error) {
+    state.workflows = [];
+    state.workflowStatus = "工作流读取失败：" + errorMessage(error);
   }
 }
 
@@ -628,6 +689,29 @@ async function resetComfyUIUrl(): Promise<void> {
   }
 }
 
+async function openSettingsTab(tab: SettingsTab): Promise<void> {
+  state.activeView = "settings";
+  state.activePanel = null;
+  state.settingsTab = tab;
+  if (tab === "runninghub") {
+    state.runningHubStatus = "正在读取配置…";
+    try {
+      const config = await loadRunningHubConfig();
+      if (config.configured && config.workflow_id) {
+        await loadRunningHubNodes(config.workflow_id, config);
+      } else {
+        state.runningHubStatus = "尚未配置 API Key 和工作流。";
+      }
+    } catch (error) {
+      state.runningHubStatus = "读取失败：" + errorMessage(error);
+    }
+  } else if (tab === "comfyui") {
+    void loadAvailableWorkflows();
+  } else if (tab === "models") {
+    await loadCustomModels();
+  }
+}
+
 function selectProvider(provider: Provider, customId: number | null = null): void {
   if (state.chatBusy) return;
   state.providerSelectionMade = true;
@@ -680,24 +764,16 @@ async function deleteCustomModel(model: CustomModel): Promise<void> {
 }
 
 async function togglePanel(panel: "runninghub" | "memory" | "rag"): Promise<void> {
+  if (panel === "runninghub") {
+    await openSettingsTab("runninghub");
+    return;
+  }
   if (state.activePanel === panel) {
     state.activePanel = null;
     return;
   }
   state.activePanel = panel;
-  if (panel === "runninghub") {
-    state.runningHubStatus = "正在读取配置…";
-    try {
-      const config = await loadRunningHubConfig();
-      if (config.configured && config.workflow_id) {
-        await loadRunningHubNodes(config.workflow_id, config);
-      } else {
-        state.runningHubStatus = "尚未配置 API Key 和工作流。";
-      }
-    } catch (error) {
-      state.runningHubStatus = "读取失败：" + errorMessage(error);
-    }
-  } else if (panel === "memory") {
+  if (panel === "memory") {
     await loadAgentMemory();
   } else {
     await loadRagDocs();
@@ -944,11 +1020,12 @@ async function sendChat(): Promise<void> {
       const config = await loadRunningHubConfig();
       if (!config.configured) {
         pushNotice("请先打开“RunningHub 设置”并完成 API Key 与工作流配置。");
-        state.activePanel = "runninghub";
+        void openSettingsTab("runninghub");
         return;
       }
     } catch (error) {
       pushNotice("读取 RunningHub 配置失败：" + errorMessage(error));
+      void openSettingsTab("runninghub");
       return;
     }
   }
@@ -1076,7 +1153,7 @@ onUnmounted(() => {
 <template>
   <div class="studio-shell">
     <aside class="sidebar">
-      <a class="brand" href="#" @click.prevent="state.activeView = 'agent'">
+      <a class="brand" href="#" @click.prevent="state.activeView = 'overview'">
         <span class="brand-mark">
           <svg viewBox="0 0 32 32" aria-hidden="true">
             <path d="m9.5 16 12-8m-12 8 12 8" />
@@ -1091,81 +1168,125 @@ onUnmounted(() => {
         </span>
       </a>
 
-      <div class="sidebar-label">工作区</div>
-      <nav class="side-nav" aria-label="工作区导航">
+      <div class="sidebar-label">制作工作台</div>
+      <nav class="side-nav" aria-label="制作工作台导航">
         <button
           class="side-nav-item"
-          :class="{ active: state.activeView === 'agent' }"
+          :class="{ active: state.activeView === 'overview' }"
           type="button"
-          @click="state.activeView = 'agent'"
+          :aria-current="state.activeView === 'overview' ? 'page' : undefined"
+          @click="state.activeView = 'overview'"
         >
           <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M12 3.2 14.7 9.3 21 12l-6.3 2.7L12 21l-2.7-6.3L3 12l6.3-2.7L12 3.2Z" />
+            <path d="m3.5 10 8.5-6.5 8.5 6.5v10h-6v-6h-5v6h-6z" />
           </svg>
-          <span>创作 Agent</span>
-          <span class="nav-indicator" />
+          <span>制作总览</span>
         </button>
         <button
           class="side-nav-item"
           :class="{ active: state.activeView === 'director' }"
           type="button"
+          :aria-current="state.activeView === 'director' ? 'page' : undefined"
           @click="state.activeView = 'director'"
         >
           <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M4 5.5h16v13H4zM8 5.5v13m8-13v13M2.5 9h3m13 0h3m-19 6h3m13 0h3" />
+            <path d="M5 3.5h9l5 5V20H5zM14 3.5v5h5M8 12h8m-8 4h8" />
           </svg>
-          <span>导演分镜</span>
-          <span class="nav-indicator" />
+          <span>Agent 1 · 分镜脚本</span>
         </button>
         <button
           class="side-nav-item"
           :class="{ active: state.activeView === 'images' }"
           type="button"
+          :aria-current="state.activeView === 'images' ? 'page' : undefined"
           @click="state.activeView = 'images'"
         >
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M4 5.5h16v13H4zM5 17l5-5 3 3 2-2 4 4" />
             <circle cx="15.5" cy="9" r="1.5" />
           </svg>
-          <span>自动图片</span>
-          <span class="nav-indicator" />
+          <span>Agent 2 · 图片资产</span>
         </button>
         <button
           class="side-nav-item"
           :class="{ active: state.activeView === 'video' }"
           type="button"
+          :aria-current="state.activeView === 'video' ? 'page' : undefined"
           @click="state.activeView = 'video'"
         >
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M4 5.5h11.5v13H4zM15.5 10l5-3v10l-5-3" />
             <path d="M7 8.5h5.5M7 12h5.5M7 15.5h3" />
           </svg>
-          <span>自动视频</span>
-          <span class="nav-indicator" />
+          <span>Agent 3 · 视频生成</span>
         </button>
         <button
           class="side-nav-item"
-          :class="{ active: state.activeView === 'comfyui' }"
+          :class="{ active: state.activeView === 'roughcut' }"
           type="button"
-          @click="state.activeView = 'comfyui'"
+          :aria-current="state.activeView === 'roughcut' ? 'page' : undefined"
+          @click="state.activeView = 'roughcut'"
         >
           <svg viewBox="0 0 24 24" aria-hidden="true">
-            <rect x="3.5" y="4" width="17" height="16" rx="3" />
-            <path d="M8 8h8M8 12h3m-3 4h8m1-5v2" />
+            <path d="M4 6h16M4 12h16M4 18h16M8 4v4m8 2v4m-5 2v4" />
           </svg>
-          <span>ComfyUI 工作台</span>
+          <span>Agent 4 · 视频粗剪</span>
+          <span class="nav-stage-state">未就绪</span>
+        </button>
+        <button
+          class="side-nav-item"
+          :class="{ active: state.activeView === 'pipeline' }"
+          type="button"
+          :aria-current="state.activeView === 'pipeline' ? 'page' : undefined"
+          @click="state.activeView = 'pipeline'"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4 5h5v5H4zM15 14h5v5h-5zM9 7.5h3a3 3 0 0 1 3 3V14M6.5 10v7H15" />
+          </svg>
+          <span>Agent 5 · 一键出片</span>
+          <span class="nav-stage-state">未就绪</span>
+        </button>
+        <button
+          class="side-nav-item"
+          :class="{ active: state.activeView === 'library' }"
+          type="button"
+          :aria-current="state.activeView === 'library' ? 'page' : undefined"
+          @click="state.activeView = 'library'"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4 6h6l2 2h8v11H4zM4 9h16" />
+          </svg>
+          <span>个人资产库</span>
+        </button>
+        <button
+          class="side-nav-item"
+          :class="{ active: state.activeView === 'settings' }"
+          type="button"
+          :aria-current="state.activeView === 'settings' ? 'page' : undefined"
+          @click="void openSettingsTab('comfyui')"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="3" />
+            <path d="m19.4 15 .1.1 1.4 1.1-1.6 2.8-1.7-.7c-.5.4-1.1.7-1.8.9l-.2 1.8h-3.2l-.2-1.8a7 7 0 0 1-1.8-.9l-1.7.7-1.6-2.8 1.4-1.1a7 7 0 0 1 0-2l-1.4-1.1 1.6-2.8 1.7.7c.5-.4 1.1-.7 1.8-.9l.2-1.8h3.2l.2 1.8c.7.2 1.3.5 1.8.9l1.7-.7 1.6 2.8-1.4 1.1a7 7 0 0 1 0 2Z" />
+          </svg>
+          <span>工作流配置</span>
+        </button>
+        <button
+          class="side-nav-item"
+          :class="{ active: state.activeView === 'agent' }"
+          type="button"
+          :aria-current="state.activeView === 'agent' ? 'page' : undefined"
+          @click="state.activeView = 'agent'"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 3.2 14.7 9.3 21 12l-6.3 2.7L12 21l-2.7-6.3L3 12l6.3-2.7L12 3.2Z" />
+          </svg>
+          <span>自由创作</span>
         </button>
       </nav>
 
-      <div class="sidebar-label sidebar-label-spaced">创作工具</div>
+      <div class="sidebar-label sidebar-label-spaced">管理与工具</div>
       <div class="side-tools">
-        <button type="button" @click="void togglePanel('runninghub')">
-          <span class="tool-dot violet" />
-          RunningHub 工作流
-          <span class="tool-state">
-            {{ state.runningHubConfig?.configured ? "已配置" : "设置" }}
-          </span>
-        </button>
         <button type="button" @click="void togglePanel('memory')">
           <span class="tool-dot blue" />
           个人创作偏好
@@ -1196,19 +1317,7 @@ onUnmounted(() => {
         <div class="breadcrumb">
           <span>工作区</span>
           <span class="breadcrumb-divider">/</span>
-          <strong>
-            {{
-              state.activeView === "agent"
-                ? "创作 Agent"
-                : state.activeView === "director"
-                  ? "导演分镜"
-                  : state.activeView === "images"
-                    ? "自动图片"
-                    : state.activeView === "video"
-                      ? "自动视频"
-                      : "ComfyUI 工作台"
-            }}
-          </strong>
+          <strong>{{ activeViewLabel }}</strong>
         </div>
         <div class="topbar-actions">
           <span class="connection-pill" :class="`connection-${state.apiStatus}`">
@@ -1243,6 +1352,166 @@ onUnmounted(() => {
           </a>
         </div>
       </header>
+
+      <section v-if="state.activeView === 'overview'" class="creator-page">
+        <div class="creator-heading">
+          <div>
+            <p class="creator-kicker">制作工作台</p>
+            <h1>把故事，一步步交付为分集粗剪。</h1>
+            <p class="creator-intro">
+              从分集分镜到图片、逐镜头视频，再按集组接。每一步都使用真实任务和产物。
+            </p>
+          </div>
+          <button
+            class="small-primary-button"
+            type="button"
+            @click="state.activeView = 'director'"
+          >
+            开始制作分镜
+          </button>
+        </div>
+
+        <section class="creator-flow" aria-label="Agent 1 至 Agent 5 制作流程">
+          <div class="creator-section-heading">
+            <div>
+              <h2>制作流程</h2>
+              <p>先完成单阶段制作，再接入分集粗剪与一键编排。</p>
+            </div>
+            <span class="creator-flow-note">当前 Agent 1–3 已接入现有功能</span>
+          </div>
+          <div class="creator-flow-steps">
+            <button
+              class="creator-flow-step is-available"
+              type="button"
+              @click="state.activeView = 'director'"
+            >
+              <span class="creator-step-number">01</span>
+              <strong>分镜脚本</strong>
+              <small>输入剧本，生成并编辑分镜</small>
+            </button>
+            <span class="creator-flow-connector" aria-hidden="true" />
+            <button
+              class="creator-flow-step is-available"
+              type="button"
+              @click="state.activeView = 'images'"
+            >
+              <span class="creator-step-number">02</span>
+              <strong>图片资产</strong>
+              <small>{{ galleryImageCount }} 个图片结果已归档</small>
+            </button>
+            <span class="creator-flow-connector" aria-hidden="true" />
+            <button
+              class="creator-flow-step is-available"
+              type="button"
+              @click="state.activeView = 'video'"
+            >
+              <span class="creator-step-number">03</span>
+              <strong>视频生成</strong>
+              <small>{{ galleryVideoCount }} 个视频结果已归档</small>
+            </button>
+            <span class="creator-flow-connector is-pending" aria-hidden="true" />
+            <button
+              class="creator-flow-step is-pending"
+              type="button"
+              @click="state.activeView = 'roughcut'"
+            >
+              <span class="creator-step-number">04</span>
+              <strong>视频粗剪</strong>
+              <small>后端组接任务尚未接入</small>
+            </button>
+            <span class="creator-flow-connector is-pending" aria-hidden="true" />
+            <button
+              class="creator-flow-step is-pending"
+              type="button"
+              @click="state.activeView = 'pipeline'"
+            >
+              <span class="creator-step-number">05</span>
+              <strong>一键出片</strong>
+              <small>可恢复编排任务尚未接入</small>
+            </button>
+          </div>
+        </section>
+
+        <div class="creator-overview-grid">
+          <section class="creator-panel creator-assets-summary">
+            <div class="creator-section-heading">
+              <div>
+                <h2>现有创作产物</h2>
+                <p>从当前 API 结果中读取，不展示演示数据。</p>
+              </div>
+              <button
+                class="text-action"
+                type="button"
+                @click="state.activeView = 'library'"
+              >
+                打开资产库
+              </button>
+            </div>
+            <div class="creator-asset-counts">
+              <button
+                type="button"
+                class="creator-asset-count"
+                @click="
+                  libraryKind = 'image';
+                  state.activeView = 'library';
+                "
+              >
+                <span class="creator-asset-icon image-mark">图</span>
+                <span><strong>{{ galleryImageCount }}</strong><small>图片</small></span>
+              </button>
+              <button
+                type="button"
+                class="creator-asset-count"
+                @click="
+                  libraryKind = 'video';
+                  state.activeView = 'library';
+                "
+              >
+                <span class="creator-asset-icon video-mark">影</span>
+                <span><strong>{{ galleryVideoCount }}</strong><small>视频</small></span>
+              </button>
+              <div class="creator-asset-count is-unavailable">
+                <span class="creator-asset-icon script-mark">分</span>
+                <span><strong>未接入</strong><small>统一分镜资产</small></span>
+              </div>
+              <div class="creator-asset-count is-unavailable">
+                <span class="creator-asset-icon cut-mark">剪</span>
+                <span><strong>未接入</strong><small>分集粗剪资产</small></span>
+              </div>
+            </div>
+          </section>
+
+          <section class="creator-panel creator-runtime-summary">
+            <div class="creator-section-heading">
+              <div>
+                <h2>运行连接</h2>
+                <p>任务使用的当前后端与工作区状态。</p>
+              </div>
+              <button
+                class="text-action"
+                type="button"
+                @click="void openSettingsTab('comfyui')"
+              >
+                配置
+              </button>
+            </div>
+            <div class="creator-runtime-row">
+              <span class="creator-runtime-indicator" :class="`tone-${state.apiStatus}`" />
+              <span>工作区 API</span>
+              <strong>{{ apiStatusLabel }}</strong>
+            </div>
+            <div class="creator-runtime-row">
+              <span
+                class="creator-runtime-indicator"
+                :class="`tone-${activeBackendStatusTone}`"
+              />
+              <span>{{ state.generationBackend === "runninghub" ? "RunningHub" : "ComfyUI" }}</span>
+              <strong>{{ activeBackendStatus }}</strong>
+            </div>
+            <p class="creator-runtime-hint">{{ activeBackendHint }}</p>
+          </section>
+        </div>
+      </section>
 
       <section v-if="state.activeView === 'agent'" class="workspace">
         <div class="page-heading">
@@ -1703,9 +1972,9 @@ onUnmounted(() => {
                 v-if="state.gallery.length"
                 class="text-action gallery-view-all"
                 type="button"
-                @click="void loadGallery()"
+                @click="state.activeView = 'library'"
               >
-                查看最近作品 <span>↗</span>
+                查看资产库 <span>↗</span>
               </button>
             </section>
 
@@ -1747,97 +2016,511 @@ onUnmounted(() => {
         />
       </KeepAlive>
 
-      <section v-if="state.activeView === 'comfyui'" class="comfy-page">
-        <div class="page-heading compact-heading">
+      <section v-if="state.activeView === 'roughcut'" class="creator-page">
+        <div class="creator-heading">
           <div>
-            <div class="eyebrow"><span class="eyebrow-line" /> ComfyUI 工作台</div>
-            <h1>ComfyUI 工作台</h1>
-            <p>继续使用原生节点画布与自定义工作流。Agent 的生成连接由服务端独立管理。</p>
+            <p class="creator-kicker">Agent 4</p>
+            <h1>按集组接镜头视频。</h1>
+            <p class="creator-intro">
+              每集按分镜顺序校验镜头数、视频映射和可读性，再输出独立粗剪。
+            </p>
+          </div>
+          <span class="creator-readiness is-pending">尚未接入</span>
+        </div>
+        <section class="creator-not-ready">
+          <h2>粗剪任务尚未接入</h2>
+          <p>
+            当前版本还没有统一的镜头 ID / 视频资产映射和分集渲染任务。本页面不会把 Agent 3 的结果伪装成粗剪成片。
+          </p>
+          <ul>
+            <li>逐集检查期望镜头数、镜头顺序和片段可读性</li>
+            <li>缺片时标出集次与镜头 ID，不静默跳过</li>
+            <li>完整集独立输出 MP4，并保留剪辑计划与源片段</li>
+          </ul>
+          <button
+            class="button-secondary"
+            type="button"
+            @click="state.activeView = 'video'"
+          >
+            查看 Agent 3 视频任务
+          </button>
+        </section>
+      </section>
+
+      <section v-if="state.activeView === 'pipeline'" class="creator-page">
+        <div class="creator-heading">
+          <div>
+            <p class="creator-kicker">Agent 5</p>
+            <h1>从剧本开始，顺序交付每集粗剪。</h1>
+            <p class="creator-intro">
+              一键流程需要可恢复的总任务状态，并复用 Agent 1–4 的阶段产物。
+            </p>
+          </div>
+          <span class="creator-readiness is-pending">尚未接入</span>
+        </div>
+        <section class="creator-not-ready">
+          <h2>一键编排任务尚未接入</h2>
+          <p>
+            当前没有持久化的流水线任务、阶段快照与失败恢复接口，因此暂不提供会产生外部生成费用的假启动按钮。
+          </p>
+          <ol>
+            <li>预检剧本、模型、Skills 和图片/视频工作流</li>
+            <li>依次执行 Agent 1 → 2 → 3 → 4，前一阶段成功后再继续</li>
+            <li>保留已完成产物，失败后从中断阶段恢复</li>
+          </ol>
+          <button
+            class="button-secondary"
+            type="button"
+            @click="void openSettingsTab('comfyui')"
+          >
+            检查工作流配置
+          </button>
+        </section>
+      </section>
+
+      <section v-if="state.activeView === 'library'" class="creator-page">
+        <div class="creator-heading">
+          <div>
+            <p class="creator-kicker">资产管理</p>
+            <h1>个人资产库</h1>
+            <p class="creator-intro">
+              浏览当前工作区 API 已保存的图片与视频结果。
+            </p>
+          </div>
+          <button
+            class="button-secondary"
+            type="button"
+            :disabled="state.galleryLoading"
+            @click="void loadGallery()"
+          >
+            {{ state.galleryLoading ? "刷新中…" : "刷新资产" }}
+          </button>
+        </div>
+
+        <p class="creator-scope-note">
+          当前数据源只包含已有图片和视频结果；统一分镜、逐镜头视频、粗剪资产及多账号隔离尚未接入。
+        </p>
+        <div class="creator-library-toolbar">
+          <div class="creator-filter-group" role="group" aria-label="按资产类型筛选">
+            <button
+              type="button"
+              :class="{ 'is-active': libraryKind === 'all' }"
+              :aria-pressed="libraryKind === 'all'"
+              @click="libraryKind = 'all'"
+            >
+              全部 <span>{{ state.gallery.length }}</span>
+            </button>
+            <button
+              type="button"
+              :class="{ 'is-active': libraryKind === 'image' }"
+              :aria-pressed="libraryKind === 'image'"
+              @click="libraryKind = 'image'"
+            >
+              图片 <span>{{ galleryImageCount }}</span>
+            </button>
+            <button
+              type="button"
+              :class="{ 'is-active': libraryKind === 'video' }"
+              :aria-pressed="libraryKind === 'video'"
+              @click="libraryKind = 'video'"
+            >
+              视频 <span>{{ galleryVideoCount }}</span>
+            </button>
+          </div>
+          <label class="creator-search">
+            <span class="visually-hidden">搜索资产名称</span>
+            <svg viewBox="0 0 20 20" aria-hidden="true">
+              <circle cx="8.5" cy="8.5" r="5.5" />
+              <path d="m13 13 4 4" />
+            </svg>
+            <input
+              v-model="librarySearch"
+              type="search"
+              placeholder="搜索当前结果"
+            />
+          </label>
+        </div>
+
+        <p v-if="state.galleryError" class="creator-library-state is-error">
+          {{ state.galleryError }}
+        </p>
+        <p
+          v-else-if="state.galleryLoading && !state.gallery.length"
+          class="creator-library-state"
+        >
+          正在读取资产…
+        </p>
+        <div v-else-if="!filteredGallery.length" class="creator-library-empty">
+          <strong>{{ state.gallery.length ? "没有匹配结果" : "还没有可显示的资产" }}</strong>
+          <p>
+            {{
+              state.gallery.length
+                ? "调整类型或搜索词后重试。"
+                : "完成图片或视频生成后，已保存结果会显示在这里。"
+            }}
+          </p>
+        </div>
+        <div v-else class="creator-library-grid">
+          <article
+            v-for="entry in filteredGallery"
+            :key="`${entry.kind}:${entry.url}`"
+            class="creator-library-item"
+          >
+            <button
+              class="creator-library-preview"
+              type="button"
+              :aria-label="`预览${entry.kind === 'video' ? '视频' : '图片'}：${entry.label}`"
+              @click="openLightbox(entry)"
+            >
+              <video
+                v-if="entry.kind === 'video'"
+                :src="entry.url"
+                muted
+                preload="metadata"
+              />
+              <img v-else :src="entry.url" :alt="entry.label" loading="lazy" />
+              <span>{{ entry.kind === "video" ? "视频" : "图片" }}</span>
+            </button>
+            <div class="creator-library-copy">
+              <strong :title="entry.label">{{ entry.label }}</strong>
+              <a :href="entry.url" :download="entry.label">下载</a>
+            </div>
+          </article>
+        </div>
+        <p v-if="state.galleryWarning" class="creator-scope-note">
+          {{ state.galleryWarning }}
+        </p>
+      </section>
+
+      <section v-if="state.activeView === 'settings'" class="creator-page">
+        <div class="creator-heading">
+          <div>
+            <p class="creator-kicker">配置</p>
+            <h1>工作流与模型连接</h1>
+            <p class="creator-intro">
+              使用你自己的 ComfyUI、RunningHub 和模型服务；网页不提供模型或代付服务。
+            </p>
           </div>
         </div>
-        <section class="comfy-card">
-          <div class="comfy-card-icon">C</div>
-          <div class="comfy-card-content">
-            <div class="comfy-card-eyebrow">ComfyUI 原生节点画布</div>
-            <h2>打开你的 ComfyUI 工作流</h2>
-            <p>{{ state.comfyUiStatus }}</p>
-            <a
-              v-if="state.comfyUiUrl"
-              class="primary-link"
-              :href="state.comfyUiUrl"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              打开 ComfyUI <span>↗</span>
-            </a>
-          </div>
-          <div class="comfy-card-decoration">C</div>
-        </section>
+        <p class="creator-scope-note">
+          当前配置仍属于本地单用户工作区。登录后的用户级隔离，以及 RunningHub 图片/视频独立工作流配置，尚未接入。
+        </p>
+        <nav class="creator-settings-tabs" aria-label="配置类别">
+          <button
+            type="button"
+            :class="{ 'is-active': state.settingsTab === 'comfyui' }"
+            :aria-current="state.settingsTab === 'comfyui' ? 'page' : undefined"
+            @click="void openSettingsTab('comfyui')"
+          >
+            ComfyUI
+          </button>
+          <button
+            type="button"
+            :class="{ 'is-active': state.settingsTab === 'runninghub' }"
+            :aria-current="state.settingsTab === 'runninghub' ? 'page' : undefined"
+            @click="void openSettingsTab('runninghub')"
+          >
+            RunningHub
+          </button>
+          <button
+            type="button"
+            :class="{ 'is-active': state.settingsTab === 'models' }"
+            :aria-current="state.settingsTab === 'models' ? 'page' : undefined"
+            @click="void openSettingsTab('models')"
+          >
+            模型服务
+          </button>
+          <button
+            type="button"
+            :class="{ 'is-active': state.settingsTab === 'skills' }"
+            :aria-current="state.settingsTab === 'skills' ? 'page' : undefined"
+            @click="void openSettingsTab('skills')"
+          >
+            Skills
+          </button>
+        </nav>
 
-        <section class="settings-card">
-          <div class="settings-title">
-            <span class="rail-icon blue-icon">⌘</span>
-            <div>
-              <strong>连接与自检</strong>
-              <small>设置浏览器可访问的 ComfyUI 网页地址，或检查服务端依赖。</small>
+        <div v-if="state.settingsTab === 'comfyui'" class="creator-settings-content">
+          <section class="creator-settings-card">
+            <div class="creator-section-heading">
+              <div>
+                <h2>ComfyUI 连接</h2>
+                <p>{{ state.comfyUiStatus }}</p>
+              </div>
+              <a
+                v-if="state.comfyUiUrl"
+                class="button-secondary creator-open-link"
+                :href="state.comfyUiUrl"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                打开 ComfyUI
+              </a>
             </div>
-          </div>
-          <label for="comfyui-url">ComfyUI 网页地址</label>
-          <div class="url-edit-row">
+            <label for="comfyui-url">浏览器访问地址</label>
+            <div class="creator-config-row">
+              <input
+                id="comfyui-url"
+                v-model="state.comfyUiInput"
+                type="url"
+                placeholder="http://127.0.0.1:8188"
+              />
+              <button class="small-primary-button" type="button" @click="saveComfyUIUrl">
+                保存地址
+              </button>
+              <button class="button-secondary" type="button" @click="void resetComfyUIUrl()">
+                恢复默认
+              </button>
+            </div>
+            <p class="creator-help-text">
+              该地址只用于打开 ComfyUI 网页；生成 API 与 MCP 连接由服务端配置管理。
+            </p>
+            <div class="creator-settings-subsection">
+              <div class="creator-section-heading">
+                <div>
+                  <h3>服务自检</h3>
+                  <p>检查 API 与 ComfyUI 依赖，不会调用模型。</p>
+                </div>
+                <button
+                  class="button-secondary"
+                  type="button"
+                  :disabled="state.diagnosticsBusy"
+                  @click="void checkDiagnostics()"
+                >
+                  {{ state.diagnosticsBusy ? "检查中…" : "运行自检" }}
+                </button>
+              </div>
+              <p v-if="state.diagnosticsError" class="creator-inline-error">
+                自检失败：{{ state.diagnosticsError }}
+              </p>
+              <div v-if="state.diagnostics" class="creator-diagnostics">
+                <div
+                  v-for="(check, index) in state.diagnostics.checks"
+                  :key="`${check.label}-${index}`"
+                  class="creator-diagnostic-row"
+                >
+                  <span class="diagnostic-status" :class="`state-${check.status}`">
+                    {{ check.status }}
+                  </span>
+                  <strong>{{ check.label }}</strong>
+                  <span>{{ check.message }}</span>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section class="creator-settings-card">
+            <div class="creator-section-heading">
+              <div>
+                <h2>可用工作流</h2>
+                <p>{{ state.workflowStatus || "供 Agent 2 与 Agent 3 选择的 ComfyUI 工作流文件。" }}</p>
+              </div>
+              <button
+                class="button-secondary"
+                type="button"
+                @click="void loadAvailableWorkflows()"
+              >
+                刷新
+              </button>
+            </div>
+            <ul v-if="state.workflows.length" class="creator-workflow-list">
+              <li v-for="workflow in state.workflows" :key="workflow.file">
+                <span>{{ workflow.file }}</span>
+                <span>ComfyUI</span>
+              </li>
+            </ul>
+            <p v-else class="creator-empty-note">
+              {{ state.workflowStatus || "尚未读取工作流列表。" }}
+            </p>
+          </section>
+        </div>
+
+        <div v-else-if="state.settingsTab === 'runninghub'" class="creator-settings-content">
+          <section class="creator-settings-card">
+            <div class="creator-section-heading">
+              <div>
+                <h2>RunningHub 连接</h2>
+                <p>API Key 在服务端加密保存，读取时不会回传。</p>
+              </div>
+              <span
+                class="creator-readiness"
+                :class="state.runningHubConfig?.configured ? 'is-ready' : 'is-pending'"
+              >
+                {{ state.runningHubConfig?.configured ? "已配置" : "未配置" }}
+              </span>
+            </div>
+            <p class="creator-scope-note">
+              当前后端仅保存一套默认工作流映射，图片工作流和视频工作流尚不能分别配置。
+            </p>
+            <label for="runninghub-key">RunningHub API Key</label>
             <input
-              id="comfyui-url"
-              v-model="state.comfyUiInput"
-              type="url"
-              placeholder="http://127.0.0.1:8188"
+              id="runninghub-key"
+              v-model="state.runningHubApiKey"
+              type="password"
+              autocomplete="new-password"
+              placeholder="首次配置必填；留空保留已保存密钥"
             />
-            <button type="button" @click="saveComfyUIUrl">保存地址</button>
-            <button class="button-secondary" type="button" @click="void resetComfyUIUrl()">
-              恢复默认
-            </button>
-          </div>
-          <p class="settings-hint">
-            此地址仅用于浏览器打开 ComfyUI 页面；Agent 通过后端 COMFYUI_BASE_URL 调用 API。
-          </p>
-          <div class="diagnostics-toolbar">
+            <label for="runninghub-workflow">Workflow ID</label>
+            <input
+              id="runninghub-workflow"
+              v-model="state.runningHubWorkflowId"
+              placeholder="RunningHub 工作流 ID"
+              @change="
+                () => {
+                  state.runningHubFields = [];
+                  state.runningHubPromptMapping = '';
+                  state.runningHubNegativeMapping = '';
+                }
+              "
+            />
+            <div class="creator-mapping-fields">
+              <label for="runninghub-prompt">正向提示词输入</label>
+              <select id="runninghub-prompt" v-model="state.runningHubPromptMapping">
+                <option value="">选择正向提示词输入</option>
+                <option
+                  v-for="field in state.runningHubFields"
+                  :key="runningHubMappingValue(field.node_id, field.field_name)"
+                  :value="runningHubMappingValue(field.node_id, field.field_name)"
+                >
+                  {{ field.node_id }} · {{ field.node_title }} · {{ field.field_name }}
+                </option>
+              </select>
+              <label for="runninghub-negative">负向提示词输入（可选）</label>
+              <select
+                id="runninghub-negative"
+                v-model="state.runningHubNegativeMapping"
+              >
+                <option value="">不映射</option>
+                <option
+                  v-for="field in state.runningHubFields"
+                  :key="runningHubMappingValue(field.node_id, field.field_name)"
+                  :value="runningHubMappingValue(field.node_id, field.field_name)"
+                >
+                  {{ field.node_id }} · {{ field.node_title }} · {{ field.field_name }}
+                </option>
+              </select>
+            </div>
+            <div class="creator-config-actions">
+              <button
+                class="button-secondary"
+                type="button"
+                :disabled="state.runningHubBusy"
+                @click="void discoverRunningHubFields()"
+              >
+                {{ state.runningHubBusy ? "读取中…" : "加载工作流输入" }}
+              </button>
+              <button
+                class="small-primary-button"
+                type="button"
+                :disabled="state.runningHubBusy"
+                @click="void saveRunningHubConfig()"
+              >
+                保存配置
+              </button>
+            </div>
+            <p class="creator-config-status" aria-live="polite">
+              {{ state.runningHubStatus }}
+            </p>
+          </section>
+        </div>
+
+        <div v-else-if="state.settingsTab === 'models'" class="creator-settings-content">
+          <section class="creator-settings-card">
+            <div class="creator-section-heading">
+              <div>
+                <h2>用户自有模型</h2>
+                <p>只添加你可访问的 OpenAI 兼容模型服务，不提供模型目录或默认账号。</p>
+              </div>
+              <button
+                class="button-secondary"
+                type="button"
+                @click="state.customFormOpen = !state.customFormOpen"
+              >
+                {{ state.customFormOpen ? "取消添加" : "添加模型" }}
+              </button>
+            </div>
+            <form
+              v-if="state.customFormOpen"
+              class="creator-model-form"
+              @submit.prevent="void saveCustomModel()"
+            >
+              <label>
+                模型配置名称
+                <input v-model="state.customForm.name" placeholder="名称（可选）" />
+              </label>
+              <label>
+                Base URL
+                <input
+                  v-model="state.customForm.baseUrl"
+                  type="url"
+                  placeholder="https://api.example.com/v1"
+                />
+              </label>
+              <label>
+                模型标识
+                <input v-model="state.customForm.model" placeholder="model-name" />
+              </label>
+              <label>
+                API Key
+                <input
+                  v-model="state.customForm.apiKey"
+                  type="password"
+                  autocomplete="new-password"
+                  placeholder="输入密钥"
+                />
+              </label>
+              <p v-if="state.customFormError" class="creator-inline-error">
+                {{ state.customFormError }}
+              </p>
+              <button
+                class="small-primary-button"
+                type="submit"
+                :disabled="state.customFormBusy"
+              >
+                {{ state.customFormBusy ? "保存中…" : "保存模型" }}
+              </button>
+            </form>
+            <p v-if="state.customModelsError" class="creator-inline-error">
+              {{ state.customModelsError }}
+            </p>
+            <ul v-if="state.customModels.length" class="creator-model-list">
+              <li v-for="model in state.customModels" :key="model.id">
+                <span>
+                  <strong>{{ model.name }}</strong>
+                  <small>{{ model.model }} · {{ model.base_url }}</small>
+                </span>
+                <button
+                  class="button-secondary"
+                  type="button"
+                  @click="void deleteCustomModel(model)"
+                >
+                  删除
+                </button>
+              </li>
+            </ul>
+            <p v-else-if="!state.customModelsError" class="creator-empty-note">
+              尚未保存自定义模型。
+            </p>
+          </section>
+        </div>
+
+        <div v-else class="creator-settings-content">
+          <section class="creator-settings-card creator-skills-card">
             <div>
-              <strong>服务状态</strong>
-              <span>不会调用 LLM 或显示任何 API Key。</span>
+              <h2>Skills 管理</h2>
+              <p>
+                当前 SKILL.md 导入、编辑和选择功能位于 Agent 1 分镜页面；在此不会复制一套不同的 Skill 数据。
+              </p>
             </div>
             <button
-              class="small-primary-button"
+              class="button-secondary"
               type="button"
-              :disabled="state.diagnosticsBusy"
-              @click="void checkDiagnostics()"
+              @click="state.activeView = 'director'"
             >
-              {{ state.diagnosticsBusy ? "检查中…" : "运行自检" }}
+              打开 Agent 1 管理 Skills
             </button>
-          </div>
-          <div v-if="state.diagnosticsError" class="form-error">
-            无法完成自检：{{ state.diagnosticsError }}
-          </div>
-          <div v-if="state.diagnostics" class="diagnostics-result">
-            <strong
-              :class="state.diagnostics.status === 'ready' ? 'success-text' : 'form-error'"
-            >
-              {{
-                state.diagnostics.status === "ready"
-                  ? "本地生成环境已就绪"
-                  : "环境未完全就绪，请处理异常项"
-              }}
-            </strong>
-            <div
-              v-for="(check, index) in state.diagnostics.checks"
-              :key="`${check.label}-${index}`"
-              class="diagnostic-row"
-            >
-              <span class="diagnostic-status" :class="`state-${check.status}`">
-                {{ check.status }}
-              </span>
-              <strong>{{ check.label }}</strong>
-              <span>{{ check.message }}</span>
-            </div>
-          </div>
-        </section>
+          </section>
+        </div>
       </section>
 
       <footer class="main-footer">
@@ -1856,13 +2539,7 @@ onUnmounted(() => {
           <div>
             <span class="drawer-eyebrow">工作区设置</span>
             <h2>
-              {{
-                state.activePanel === "runninghub"
-                  ? "RunningHub 工作流"
-                  : state.activePanel === "memory"
-                    ? "个人创作偏好"
-                    : "项目知识库"
-              }}
+              {{ state.activePanel === "memory" ? "个人创作偏好" : "项目知识库" }}
             </h2>
           </div>
           <button
@@ -1875,80 +2552,7 @@ onUnmounted(() => {
           </button>
         </header>
 
-        <div v-if="state.activePanel === 'runninghub'" class="drawer-content">
-          <p class="drawer-description">
-            API Key 仅在服务端加密保存，读取时不会返回。加载工作流输入后，选择正向提示词（及可选负向提示词）映射。
-          </p>
-          <label for="runninghub-key">RunningHub API Key</label>
-          <input
-            id="runninghub-key"
-            v-model="state.runningHubApiKey"
-            type="password"
-            autocomplete="new-password"
-            placeholder="首次配置必填；留空保留已保存密钥"
-          />
-          <label for="runninghub-workflow">Workflow ID</label>
-          <input
-            id="runninghub-workflow"
-            v-model="state.runningHubWorkflowId"
-            placeholder="RunningHub 工作流 ID"
-            @change="
-              () => {
-                state.runningHubFields = [];
-                state.runningHubPromptMapping = '';
-                state.runningHubNegativeMapping = '';
-              }
-            "
-          />
-          <div class="mapping-fields">
-            <label for="runninghub-prompt">正向提示词输入</label>
-            <select id="runninghub-prompt" v-model="state.runningHubPromptMapping">
-              <option value="">选择正向提示词输入</option>
-              <option
-                v-for="field in state.runningHubFields"
-                :key="runningHubMappingValue(field.node_id, field.field_name)"
-                :value="runningHubMappingValue(field.node_id, field.field_name)"
-              >
-                {{ field.node_id }} · {{ field.node_title }} · {{ field.field_name }}
-              </option>
-            </select>
-            <label for="runninghub-negative">负向提示词输入（可选）</label>
-            <select
-              id="runninghub-negative"
-              v-model="state.runningHubNegativeMapping"
-            >
-              <option value="">不映射</option>
-              <option
-                v-for="field in state.runningHubFields"
-                :key="runningHubMappingValue(field.node_id, field.field_name)"
-                :value="runningHubMappingValue(field.node_id, field.field_name)"
-              >
-                {{ field.node_id }} · {{ field.node_title }} · {{ field.field_name }}
-              </option>
-            </select>
-          </div>
-          <div class="drawer-actions">
-            <button
-              class="button-secondary"
-              type="button"
-              :disabled="state.runningHubBusy"
-              @click="void discoverRunningHubFields()"
-            >
-              {{ state.runningHubBusy ? "处理中…" : "加载工作流输入" }}
-            </button>
-            <button
-              class="small-primary-button"
-              type="button"
-              :disabled="state.runningHubBusy"
-              @click="void saveRunningHubConfig()"
-            >
-              保存配置
-            </button>
-          </div>
-          <p class="drawer-status" aria-live="polite">{{ state.runningHubStatus }}</p>
-        </div>
-
-        <div v-else-if="state.activePanel === 'memory'" class="drawer-content">
+        <div v-if="state.activePanel === 'memory'" class="drawer-content">
           <p class="drawer-description">
             保存常用画风、工作流和生成习惯，Agent 会把它们作为默认偏好。
           </p>
