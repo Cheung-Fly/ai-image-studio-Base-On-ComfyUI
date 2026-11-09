@@ -545,6 +545,7 @@ Agent 请求中断生成、清理队列、删除排队任务/输入素材或释�
 - `POST /api/auto-image/plan`：以 `multipart/form-data` 上传整剧 `.xlsx` 分镜表并建立资产清单。字段包括 `file`、`episode_index`（默认 1，作为首个试跑分集）、`provider` 和可选的 `custom_config_id`。接口解析全部工作表后将资产规划提交给 Celery Worker，并立即返回 `planning` 批次；只规划资产，不提交生图任务。
 - `GET /api/auto-image/batches?limit=20` 和 `GET /api/auto-image/batches/{batch_id}`：读取最近资产清单、任务状态和按时间排列的 `logs`。规划事件包含工作簿解析、后台排队、LLM 请求成功/失败与耗时、资产清单保存；后续也记录设定图生成阶段和节流后的 RunningHub 状态变化。LLM 规划仍使用 300 秒请求超时，超时详情会保存在批次日志中。
 - `POST /api/auto-image/batches/{batch_id}/start`：只启动指定的一集。请求包含 `episode_index`、`generation_backend`（`comfyui` / `runninghub`）、`workflow_file`、`aspect_ratio`、`megapixels`、`seed`、`steps` 和 `refine_steps`。RunningHub 后端还需提供 `runninghub` 工作流 ID 与正向提示词节点/字段；API Key 使用已保存的加密配置。
+- `POST /api/auto-image/batches/{batch_id}/assets/{asset_id}/retry`：重新生成指定失败资产，请求使用与 `start` 相同的生成设置；只接受属于所选分集且仍为失败状态的资产，每项最多手动重试 3 次。批次响应中的资产包含 `error`、`error_code` 和 `retry_available`，可用于展示失败详情和可重试状态。
 - RunningHub 自动映射工作流中名为 `width`、`height`、`aspect_ratio`、`resolution`、`megapixels`、`seed`、`steps` 等标准输入，并要求任务返回图片。ComfyUI 后端使用所选图片工作流。
 - `GET /api/auto-image/batches/{batch_id}/episodes/{episode_index}.zip`：本集全部设定图完成后下载素材包，包含 `storyboard.json`、`assets/` 和 `assets_manifest.json`，可交给自动视频栏目继续制作。
 
