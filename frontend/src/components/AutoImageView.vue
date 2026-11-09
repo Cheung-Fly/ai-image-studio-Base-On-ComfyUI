@@ -3,6 +3,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { apiFetch, apiJson, errorMessage } from "../api";
 import { beginAgentActivity } from "../agentActivity";
 import type {
+  AutoImageAsset,
   AutoImageBatch,
   CustomModel,
   Provider,
@@ -44,6 +45,8 @@ const generationBackend = ref<"comfyui" | "runninghub">("comfyui");
 const aspectRatio = ref("3:2 (Photo)");
 const megapixels = ref(1);
 const busy = ref(false);
+const retryingAssetId = ref<number | null>(null);
+const expandedFailureId = ref<number | null>(null);
 const loading = ref(false);
 const elapsedNow = ref(Date.now());
 const error = ref("");
@@ -88,6 +91,9 @@ const completeCount = computed(
 );
 const pendingCount = computed(
   () => episodeAssets.value.filter((asset) => ["pending", "processing"].includes(asset.status)).length,
+);
+const failedAssets = computed(
+  () => episodeAssets.value.filter((asset) => asset.status === "failed"),
 );
 const canDownload = computed(
   () => episodeAssets.value.length > 0 && completeCount.value === episodeAssets.value.length,
@@ -237,21 +243,8 @@ async function startEpisode(): Promise<void> {
   busy.value = true;
   error.value = "";
   notice.value = `正在提交第 ${selectedEpisode.value} 集的设定图任务…`;
+  const request = generationRequest(selectedEpisode.value);
   try {
-    const request: Record<string, unknown> = {
-      episode_index: selectedEpisode.value,
-      generation_backend: generationBackend.value,
-      workflow_file: generationBackend.value === "comfyui" ? workflowFile.value : "",
-      model_preset: "",
-      aspect_ratio: aspectRatio.value,
-      megapixels: megapixels.value,
-      seed: -1,
-      steps: 8,
-      refine_steps: 4,
-    };
-    if (generationBackend.value === "runninghub") {
-      request.runninghub = runningHubSelection.value;
-    }
     batch.value = await apiJson<AutoImageBatch>(
       `/api/auto-image/batches/${batch.value.id}/start`,
       { method: "POST", body: JSON.stringify(request) },
@@ -264,6 +257,65 @@ async function startEpisode(): Promise<void> {
   } finally {
     busy.value = false;
   }
+}
+
+function generationRequest(episodeIndex: number): Record<string, unknown> {
+  const request: Record<string, unknown> = {
+    episode_index: episodeIndex,
+    generation_backend: generationBackend.value,
+    workflow_file: generationBackend.value === "comfyui" ? workflowFile.value : "",
+    model_preset: "",
+    aspect_ratio: aspectRatio.value,
+    megapixels: megapixels.value,
+    seed: -1,
+    steps: 8,
+    refine_steps: 4,
+  };
+  if (generationBackend.value === "runninghub") {
+    request.runninghub = runningHubSelection.value;
+  }
+  return request;
+}
+
+async function retryAsset(asset: AutoImageAsset): Promise<void> {
+  if (!batch.value || !asset.retry_available || busy.value) return;
+  if (generationBackend.value === "runninghub" && !runningHubSelection.value) {
+    error.value = "请先在「RunningHub 工作流」中配置可用的图片工作流。";
+    return;
+  }
+  busy.value = true;
+  retryingAssetId.value = asset.id;
+  error.value = "";
+  notice.value = "";
+  try {
+    const updated = await apiJson<AutoImageBatch>(
+      `/api/auto-image/batches/${batch.value.id}/assets/${asset.id}/retry`,
+      {
+        method: "POST",
+        body: JSON.stringify(generationRequest(selectedEpisode.value)),
+      },
+      "重新生成失败",
+    );
+    batch.value = updated;
+    const retriedAsset = updated.assets.find((item) => item.id === asset.id);
+    if (retriedAsset?.status === "failed") {
+      expandedFailureId.value = asset.id;
+      error.value = `重新生成“${asset.name}”未成功：${retriedAsset.error || "任务未能加入生成队列"}`;
+    } else {
+      notice.value = `已单独重新提交“${asset.name}”；其他已完成资产不会重跑。`;
+    }
+  } catch (cause) {
+    expandedFailureId.value = asset.id;
+    error.value = `重新生成“${asset.name}”失败：${errorMessage(cause)}`;
+  } finally {
+    retryingAssetId.value = null;
+    busy.value = false;
+  }
+}
+
+function toggleFailureDetails(assetId: number): void {
+  expandedFailureId.value =
+    expandedFailureId.value === assetId ? null : assetId;
 }
 
 async function downloadEpisode(): Promise<void> {
@@ -571,6 +623,10 @@ onUnmounted(() => {
             >
               下载本集素材包
             </button>
+            <p v-if="failedAssets.length" class="asset-package-blocked" role="status">
+              本集有 {{ failedAssets.length }} 项设定图失败。全部图片完成前不会生成素材包；
+              请查看失败项详情并单独重新生成。
+            </p>
           </div>
 
           <div v-if="!isPlanning && batch.status !== 'planning_failed' && !episodeAssets.length" class="asset-empty">
@@ -603,10 +659,51 @@ onUnmounted(() => {
                 <small>关联第 {{ asset.episode_indices.join("、") }} 集</small>
               </div>
               <div class="asset-state" :class="`asset-state-${asset.status}`">
-                <span class="state-dot" />
-                {{ statusLabel(asset.status) }}
-                <small v-if="asset.error">{{ asset.error }}</small>
+                <span class="asset-state-label">
+                  <span class="state-dot" />
+                  {{ statusLabel(asset.status) }}
+                </span>
+                <button
+                  v-if="asset.status === 'failed'"
+                  class="asset-detail-toggle"
+                  type="button"
+                  :aria-expanded="expandedFailureId === asset.id"
+                  :aria-controls="`asset-failure-${asset.id}`"
+                  @click="toggleFailureDetails(asset.id)"
+                >
+                  {{ expandedFailureId === asset.id ? "收起详情" : "查看详情" }}
+                </button>
               </div>
+              <section
+                v-if="asset.status === 'failed'"
+                :id="`asset-failure-${asset.id}`"
+                v-show="expandedFailureId === asset.id"
+                class="asset-failure-details"
+                role="region"
+                :aria-label="`${asset.name}生成失败详情`"
+              >
+                <p v-if="asset.error_code" class="asset-failure-code">
+                  错误代码：{{ asset.error_code }}
+                </p>
+                <p class="asset-failure-message">
+                  {{ asset.error || "服务未返回具体错误信息，请检查生成服务后重试。" }}
+                </p>
+                <div class="asset-failure-actions">
+                  <button
+                    v-if="asset.retry_available"
+                    class="asset-button primary"
+                    type="button"
+                    :disabled="busy || retryingAssetId === asset.id"
+                    @click="void retryAsset(asset)"
+                  >
+                    {{ retryingAssetId === asset.id ? "重新提交中…" : "重新生成" }}
+                  </button>
+                  <p v-else class="asset-retry-limit">
+                    已达到最多 3 次手动重试。调整生成服务或工作流后，再重新启动本集任务。
+                  </p>
+                  <small>只重试这项素材，已完成的设定图会保留。</small>
+                </div>
+              </section>
             </article>
           </section>
         </template>
@@ -1069,6 +1166,17 @@ onUnmounted(() => {
   margin: 0;
 }
 
+.asset-package-blocked {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 9px 11px;
+  border-left: 3px solid var(--rust);
+  color: #81372e;
+  background: #fae9e5;
+  font-size: 11px;
+  line-height: 1.55;
+}
+
 .asset-group + .asset-group {
   margin-top: 27px;
 }
@@ -1162,10 +1270,77 @@ onUnmounted(() => {
   text-align: right;
 }
 
-.asset-state small {
-  flex-basis: 100%;
-  color: var(--rust);
+.asset-state-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.asset-detail-toggle {
+  padding: 1px 0;
+  border: 0;
+  color: var(--moss);
+  background: transparent;
+  font-size: 11px;
+  font-weight: 650;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.asset-detail-toggle:hover {
+  color: var(--pine);
+}
+
+.asset-failure-details {
+  grid-column: 2 / -1;
+  display: grid;
+  gap: 7px;
+  padding: 12px 14px;
+  border-left: 3px solid var(--rust);
+  color: #81372e;
+  background: #fae9e5;
+  font-size: 12px;
+}
+
+.asset-failure-code,
+.asset-failure-message {
+  margin: 0;
   overflow-wrap: anywhere;
+}
+
+.asset-failure-code {
+  font-weight: 700;
+}
+
+.asset-failure-message {
+  white-space: pre-wrap;
+  line-height: 1.6;
+}
+
+.asset-failure-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.asset-failure-actions .asset-button {
+  width: auto;
+  min-width: 112px;
+  margin: 0;
+}
+
+.asset-failure-actions small,
+.asset-retry-limit {
+  margin: 0;
+  color: #6e5a56;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.asset-failure-actions small {
+  flex-basis: 100%;
+  text-align: right;
 }
 
 .state-dot {
@@ -1289,6 +1464,23 @@ onUnmounted(() => {
   .asset-state {
     grid-column: 2;
     justify-content: flex-start;
+    text-align: left;
+  }
+
+  .asset-detail-toggle {
+    text-align: left;
+  }
+
+  .asset-failure-details {
+    grid-column: 2;
+  }
+
+  .asset-failure-actions {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .asset-failure-actions small {
     text-align: left;
   }
 }

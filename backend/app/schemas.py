@@ -513,6 +513,8 @@ class AutoImageAssetOut(BaseModel):
     prompt: str
     status: str
     error: str | None = None
+    error_code: str | None = None
+    retry_available: bool = False
     task_id: int | None = None
     image_url: str | None = None
 

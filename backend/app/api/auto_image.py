@@ -39,7 +39,12 @@ from ..security import decrypt_secret
 from ..services.auto_image_agent import safe_asset_filename
 from ..services.auto_image_events import add_auto_image_event
 from ..services.runninghub import RunningHubClient, RunningHubError
-from ..services.task_reliability import TaskDispatchError, add_task_event, dispatch_generation
+from ..services.task_reliability import (
+    MAX_MANUAL_RETRIES,
+    TaskDispatchError,
+    add_task_event,
+    dispatch_generation,
+)
 from ..services.video_episode import (
     MAX_STORYBOARD_BYTES,
     EpisodePackageError,
@@ -129,6 +134,22 @@ def _validate_runninghub_selection(
         raise HTTPException(422, "所选负向提示词输入不属于该 RunningHub 工作流")
 
 
+def _validate_generation_request(
+    batch: AutoImageBatch,
+    request: AutoImageStartRequest,
+    db: Session,
+) -> None:
+    if batch.status in {"planning", "planning_failed"}:
+        raise HTTPException(409, "资产清单尚未准备好，暂时无法开始图片生成")
+    if request.episode_index > batch.episode_count:
+        raise HTTPException(422, "所选集号不存在")
+    if request.generation_backend == "comfyui":
+        if request.workflow_file and request.workflow_file not in list_workflows():
+            raise HTTPException(422, "所选 ComfyUI 图片工作流不存在")
+    elif request.runninghub:
+        _validate_runninghub_selection(db, request.runninghub)
+
+
 def _episode_options(batch: AutoImageBatch) -> list[AutoImageEpisodeOption]:
     stored = json.loads(batch.storyboards_json)
     return [
@@ -178,6 +199,12 @@ def _batch_response(batch: AutoImageBatch, db: Session) -> AutoImageBatchOut:
                 prompt=item.prompt,
                 status=status,
                 error=error,
+                error_code=task.error_code if task else None,
+                retry_available=(
+                    status == "failed"
+                    and task is not None
+                    and (task.manual_retry_count or 0) < MAX_MANUAL_RETRIES
+                ),
                 task_id=task.id if task else None,
                 image_url=image.file_url if image else None,
             )
@@ -338,15 +365,7 @@ def start_episode_assets(
     db: Session = Depends(get_db),
 ):
     batch = _get_batch(db, user, batch_id)
-    if batch.status in {"planning", "planning_failed"}:
-        raise HTTPException(409, "资产清单尚未准备好，暂时无法开始图片生成")
-    if request.episode_index > batch.episode_count:
-        raise HTTPException(422, "所选集号不存在")
-    if request.generation_backend == "comfyui":
-        if request.workflow_file and request.workflow_file not in list_workflows():
-            raise HTTPException(422, "所选 ComfyUI 图片工作流不存在")
-    elif request.runninghub:
-        _validate_runninghub_selection(db, request.runninghub)
+    _validate_generation_request(batch, request, db)
 
     batch.selected_episode_index = request.episode_index
     selected = [
@@ -442,6 +461,178 @@ def start_episode_assets(
     return _batch_response(batch, db)
 
 
+@router.post(
+    "/batches/{batch_id}/assets/{asset_id}/retry",
+    response_model=AutoImageBatchOut,
+    status_code=202,
+)
+def retry_asset_generation(
+    batch_id: int,
+    asset_id: int,
+    request: AutoImageStartRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Retry one failed asset while preserving the task's event history."""
+    batch = _get_batch(db, user, batch_id)
+    _validate_generation_request(batch, request, db)
+    item = (
+        db.query(AutoImageAsset)
+        .filter(AutoImageAsset.id == asset_id, AutoImageAsset.batch_id == batch.id)
+        .first()
+    )
+    if item is None:
+        raise HTTPException(404, "设定图不存在")
+    if request.episode_index not in json.loads(item.episode_indices_json):
+        raise HTTPException(404, "该设定图不属于所选分集")
+    task = db.get(GenerationTask, item.task_id) if item.task_id else None
+    if task is None:
+        raise HTTPException(409, "设定图任务不存在，请重新启动本集生成")
+    if task.status != TaskStatus.failed:
+        raise HTTPException(409, "只有生成失败的设定图可以重新生成")
+    if (task.manual_retry_count or 0) >= MAX_MANUAL_RETRIES:
+        raise HTTPException(
+            409,
+            f"已达到手动重试上限（{MAX_MANUAL_RETRIES} 次），请调整配置后重新生成",
+        )
+
+    runninghub_config = (
+        request.runninghub.model_dump()
+        if request.runninghub is not None
+        else None
+    )
+    task_updates = {
+        GenerationTask.status: TaskStatus.pending,
+        GenerationTask.error: None,
+        GenerationTask.error_code: None,
+        GenerationTask.workflow: (
+            request.workflow_file if request.generation_backend == "comfyui" else ""
+        ),
+        GenerationTask.model_preset: (
+            request.model_preset if request.generation_backend == "comfyui" else ""
+        ),
+        GenerationTask.aspect_ratio: request.aspect_ratio,
+        GenerationTask.megapixels: request.megapixels,
+        GenerationTask.seed: request.seed,
+        GenerationTask.steps: request.steps,
+        GenerationTask.refine_steps: request.refine_steps,
+        GenerationTask.comfy_prompt_id: None,
+        GenerationTask.runninghub_task_id: None,
+        GenerationTask.celery_task_id: None,
+        GenerationTask.manual_retry_count: GenerationTask.manual_retry_count + 1,
+        GenerationTask.updated_at: datetime.utcnow(),
+    }
+    updated = (
+        db.query(GenerationTask)
+        .filter(
+            GenerationTask.id == task.id,
+            GenerationTask.user_id == user.id,
+            GenerationTask.status == TaskStatus.failed,
+            GenerationTask.manual_retry_count < MAX_MANUAL_RETRIES,
+        )
+        .update(task_updates, synchronize_session=False)
+    )
+    if not updated:
+        db.rollback()
+        raise HTTPException(409, "任务状态已变化或已达到重试上限，请刷新后重试")
+
+    updated_asset = (
+        db.query(AutoImageAsset)
+        .filter(
+            AutoImageAsset.id == item.id,
+            AutoImageAsset.batch_id == batch.id,
+            AutoImageAsset.task_id == task.id,
+        )
+        .update(
+            {
+                AutoImageAsset.generation_config_json: json.dumps(
+                    {
+                        "backend": request.generation_backend,
+                        "runninghub": runninghub_config,
+                    },
+                    ensure_ascii=False,
+                ),
+                AutoImageAsset.updated_at: datetime.utcnow(),
+            },
+            synchronize_session=False,
+        )
+    )
+    if not updated_asset:
+        db.rollback()
+        raise HTTPException(409, "设定图任务已变化，请刷新后重试")
+
+    batch.selected_episode_index = request.episode_index
+    db.refresh(task)
+    add_task_event(
+        db,
+        task,
+        "manual_retry_requested",
+        (
+            f"已请求重新生成设定图“{item.name}”（"
+            f"第 {task.manual_retry_count}/{MAX_MANUAL_RETRIES} 次）。"
+        ),
+    )
+    add_auto_image_event(
+        db,
+        batch.id,
+        "asset_generation_retry_requested",
+        f"已请求重新生成设定图“{item.name}”。",
+    )
+    db.commit()
+
+    if request.generation_backend == "comfyui":
+        try:
+            dispatch_generation(db, task)
+        except TaskDispatchError:
+            logger.warning("自动图片任务重新入队失败 task_id=%s", task.id)
+            current = db.get(GenerationTask, task.id)
+            if current is not None:
+                add_auto_image_event(
+                    db,
+                    batch.id,
+                    "asset_generation_retry_enqueue_failed",
+                    current.error or "任务无法加入生成队列。",
+                    level="error",
+                )
+                db.commit()
+    else:
+        celery_task_id = uuid.uuid4().hex
+        task.celery_task_id = celery_task_id
+        add_task_event(db, task, "queued", "任务已加入 RunningHub 生成队列。")
+        db.commit()
+        try:
+            run_runninghub_image_task.apply_async(
+                args=[task.id],
+                task_id=celery_task_id,
+            )
+        except Exception:
+            logger.exception("RunningHub 自动图片任务重新入队失败 task_id=%s", task.id)
+            current = db.get(GenerationTask, task.id)
+            if current is not None:
+                current.status = TaskStatus.failed
+                current.error_code = "queue_unavailable"
+                current.error = "任务无法加入生成队列，请检查后台 worker 与 Redis。"
+                current.updated_at = datetime.utcnow()
+                add_task_event(
+                    db,
+                    current,
+                    "enqueue_failed",
+                    current.error,
+                    error_code=current.error_code,
+                )
+                add_auto_image_event(
+                    db,
+                    batch.id,
+                    "asset_generation_retry_enqueue_failed",
+                    current.error,
+                    level="error",
+                )
+                db.commit()
+
+    db.refresh(batch)
+    return _batch_response(batch, db)
+
+
 @router.get("/batches/{batch_id}/episodes/{episode_index}.zip")
 def download_episode_package(
     batch_id: int,
@@ -492,7 +683,7 @@ def download_episode_package(
                     raise HTTPException(404, f"设定图“{item.name}”文件已丢失")
                 filename = safe_asset_filename(item.category, item.name, item.asset_key)
                 target = f"{package_root}/assets/{filename}{path.suffix.lower()}"
-                output.write(target, path)
+                output.write(path, target)
                 included.append(
                     {
                         "category": _CATEGORY_LABELS[item.category],

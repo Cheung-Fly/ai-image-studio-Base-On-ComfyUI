@@ -93,6 +93,8 @@ export interface AutoImageAsset {
   prompt: string;
   status: string;
   error?: string | null;
+  error_code?: string | null;
+  retry_available: boolean;
   task_id?: number | null;
   image_url?: string | null;
 }

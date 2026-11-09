@@ -2,26 +2,38 @@
 
 import json
 import sys
+import tempfile
 import unittest
+import zipfile
+from io import BytesIO
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
-
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.api.auth import get_current_user
 from app.api.auto_image import router as auto_image_router
-from app.database import Base
-from app.database import get_db
-from app.models import AutoImageAsset, AutoImageBatch, AutoImageEvent, User
+from app.database import Base, get_db
+from app.models import (
+    AutoImageAsset,
+    AutoImageBatch,
+    AutoImageEvent,
+    GenerationTask,
+    ImageAsset,
+    TaskEvent,
+    TaskStatus,
+    User,
+)
 from app.schemas import DirectorStoryboardOut, DirectorStoryboardShot
 from app.services.llm_client import LLMError
+from app.services.task_reliability import TaskDispatchError
 from app.workers.auto_image_tasks import _safe_plan_error, plan_auto_image_batch
 
 
@@ -243,6 +255,272 @@ class AutoImageObservabilityTests(unittest.TestCase):
         self.assertIn("The read operation timed out", events[-1].message)
         self.assertEqual(events[-1].level, "error")
         self.assertEqual(events[-2].event_type, "llm_request_failed")
+
+    def create_asset_task(self, status, *, manual_retry_count=0, error=None):
+        with self.sessions() as db:
+            batch = db.get(AutoImageBatch, self.batch_id)
+            batch.status = "draft"
+            task = GenerationTask(
+                user_id=self.user_id,
+                prompt="Reference image prompt",
+                status=status,
+                manual_retry_count=manual_retry_count,
+                error=error,
+                error_code="comfy_unavailable" if error else None,
+                comfy_prompt_id="old-comfy-prompt",
+                runninghub_task_id="old-runninghub-task",
+                celery_task_id="old-celery-task",
+            )
+            db.add(task)
+            db.flush()
+            asset = AutoImageAsset(
+                batch_id=self.batch_id,
+                asset_key=f"asset:{task.id}",
+                category="character",
+                name=f"Asset {task.id}",
+                episode_indices_json="[1]",
+                prompt=task.prompt,
+                task_id=task.id,
+            )
+            db.add(asset)
+            db.commit()
+            return asset.id, task.id
+
+    def test_failed_asset_error_is_visible_and_blocks_package_download(self):
+        asset_id, task_id = self.create_asset_task(
+            TaskStatus.failed,
+            error="无法连接 ComfyUI，请检查服务状态与地址。",
+        )
+
+        with self.create_client() as client:
+            batch_response = client.get(f"/api/auto-image/batches/{self.batch_id}")
+            package_response = client.get(
+                f"/api/auto-image/batches/{self.batch_id}/episodes/1.zip"
+            )
+
+        self.assertEqual(batch_response.status_code, 200)
+        asset = next(
+            item for item in batch_response.json()["assets"] if item["id"] == asset_id
+        )
+        self.assertEqual(asset["task_id"], task_id)
+        self.assertEqual(asset["error_code"], "comfy_unavailable")
+        self.assertIn("无法连接 ComfyUI", asset["error"])
+        self.assertTrue(asset["retry_available"])
+        self.assertEqual(package_response.status_code, 409)
+
+    def test_retry_requeues_only_failed_asset_and_completed_retry_unlocks_package(self):
+        failed_asset_id, failed_task_id = self.create_asset_task(
+            TaskStatus.failed,
+            error="无法连接 ComfyUI，请检查服务状态与地址。",
+        )
+        completed_asset_id, completed_task_id = self.create_asset_task(
+            TaskStatus.completed,
+        )
+        with self.sessions() as db:
+            completed_task = db.get(GenerationTask, completed_task_id)
+            completed_task.comfy_prompt_id = None
+            db.add(
+                TaskEvent(
+                    task_id=failed_task_id,
+                    event_type="generation_failed",
+                    status="failed",
+                    message="原始失败事件",
+                )
+            )
+            db.commit()
+
+        with tempfile.TemporaryDirectory() as image_dir:
+            image_path = Path(image_dir) / "completed.png"
+            image_path.write_bytes(b"completed-image")
+            (Path(image_dir) / "retried.png").write_bytes(b"retried-image")
+            with self.sessions() as db:
+                db.add(
+                    ImageAsset(
+                        task_id=completed_task_id,
+                        filename="completed.png",
+                        filepath="completed.png",
+                        media_type="image",
+                    )
+                )
+                db.commit()
+
+            request = {
+                "episode_index": 1,
+                "generation_backend": "comfyui",
+                "workflow_file": "",
+                "aspect_ratio": "3:2 (Photo)",
+                "megapixels": 1,
+                "seed": -1,
+                "steps": 8,
+                "refine_steps": 4,
+            }
+            with (
+                patch(
+                    "app.api.auto_image.settings",
+                    SimpleNamespace(image_dir=Path(image_dir)),
+                ),
+                patch("app.api.auto_image.dispatch_generation") as dispatch,
+                self.create_client() as client,
+            ):
+                retry_response = client.post(
+                    (
+                        f"/api/auto-image/batches/{self.batch_id}/assets/"
+                        f"{failed_asset_id}/retry"
+                    ),
+                    json=request,
+                )
+                blocked_package = client.get(
+                    f"/api/auto-image/batches/{self.batch_id}/episodes/1.zip"
+                )
+
+                with self.sessions() as db:
+                    retried_task = db.get(GenerationTask, failed_task_id)
+                    self.assertEqual(retried_task.status, TaskStatus.pending)
+                    self.assertEqual(retried_task.manual_retry_count, 1)
+                    self.assertIsNone(retried_task.comfy_prompt_id)
+                    self.assertIsNone(retried_task.runninghub_task_id)
+                    self.assertIsNone(retried_task.celery_task_id)
+                    retried_task.status = TaskStatus.completed
+                    retried_task.error = None
+                    retried_task.error_code = None
+                    retried_task.comfy_prompt_id = None
+                    db.add(
+                        ImageAsset(
+                            task_id=failed_task_id,
+                            filename="retried.png",
+                            filepath="retried.png",
+                            media_type="image",
+                        )
+                    )
+                    db.commit()
+
+                ready_package = client.get(
+                    f"/api/auto-image/batches/{self.batch_id}/episodes/1.zip"
+                )
+
+        self.assertEqual(retry_response.status_code, 202)
+        retry_body = retry_response.json()
+        retried_asset = next(
+            item for item in retry_body["assets"] if item["id"] == failed_asset_id
+        )
+        retained_asset = next(
+            item for item in retry_body["assets"] if item["id"] == completed_asset_id
+        )
+        self.assertEqual(retried_asset["status"], "pending")
+        self.assertEqual(retained_asset["status"], "completed")
+        self.assertEqual(retained_asset["task_id"], completed_task_id)
+        dispatch.assert_called_once()
+        self.assertEqual(blocked_package.status_code, 409)
+        self.assertEqual(ready_package.status_code, 200)
+        with zipfile.ZipFile(BytesIO(ready_package.content)) as archive:
+            names = archive.namelist()
+            image_names = [name for name in names if name.endswith(".png")]
+            manifest_name = next(
+                name for name in names if name.endswith("/assets_manifest.json")
+            )
+            manifest = json.loads(archive.read(manifest_name))
+        self.assertEqual(len(image_names), 2)
+        self.assertEqual(len(manifest), 2)
+        with self.sessions() as db:
+            event_types = [
+                event.event_type
+                for event in db.query(TaskEvent)
+                .filter(TaskEvent.task_id == failed_task_id)
+                .order_by(TaskEvent.id)
+            ]
+        self.assertIn("generation_failed", event_types)
+        self.assertIn("manual_retry_requested", event_types)
+
+    def test_retry_rejects_non_failed_tasks_and_retry_limit(self):
+        pending_asset_id, _ = self.create_asset_task(TaskStatus.pending)
+        exhausted_asset_id, _ = self.create_asset_task(
+            TaskStatus.failed,
+            manual_retry_count=3,
+            error="仍然失败",
+        )
+        request = {
+            "episode_index": 1,
+            "generation_backend": "comfyui",
+            "aspect_ratio": "3:2 (Photo)",
+            "megapixels": 1,
+            "seed": -1,
+            "steps": 8,
+            "refine_steps": 4,
+        }
+
+        with (
+            patch("app.api.auto_image.dispatch_generation") as dispatch,
+            self.create_client() as client,
+        ):
+            pending_response = client.post(
+                (
+                    f"/api/auto-image/batches/{self.batch_id}/assets/"
+                    f"{pending_asset_id}/retry"
+                ),
+                json=request,
+            )
+            exhausted_response = client.post(
+                (
+                    f"/api/auto-image/batches/{self.batch_id}/assets/"
+                    f"{exhausted_asset_id}/retry"
+                ),
+                json=request,
+            )
+
+        self.assertEqual(pending_response.status_code, 409)
+        self.assertEqual(exhausted_response.status_code, 409)
+        dispatch.assert_not_called()
+
+    def test_comfyui_retry_enqueue_failure_is_returned_as_failed_asset(self):
+        asset_id, task_id = self.create_asset_task(
+            TaskStatus.failed,
+            error="上次生成失败",
+        )
+        request = {
+            "episode_index": 1,
+            "generation_backend": "comfyui",
+            "aspect_ratio": "3:2 (Photo)",
+            "megapixels": 1,
+            "seed": -1,
+            "steps": 8,
+            "refine_steps": 4,
+        }
+
+        def fail_dispatch(db, task):
+            task.status = TaskStatus.failed
+            task.error_code = "queue_unavailable"
+            task.error = "任务无法加入生成队列，请检查后台 worker 与 Redis。"
+            db.commit()
+            raise TaskDispatchError(task.error)
+
+        with (
+            patch(
+                "app.api.auto_image.dispatch_generation",
+                side_effect=fail_dispatch,
+            ),
+            self.create_client() as client,
+        ):
+            response = client.post(
+                (
+                    f"/api/auto-image/batches/{self.batch_id}/assets/"
+                    f"{asset_id}/retry"
+                ),
+                json=request,
+            )
+
+        self.assertEqual(response.status_code, 202)
+        asset = next(
+            item for item in response.json()["assets"] if item["id"] == asset_id
+        )
+        self.assertEqual(asset["task_id"], task_id)
+        self.assertEqual(asset["status"], "failed")
+        self.assertEqual(asset["error_code"], "queue_unavailable")
+        self.assertTrue(asset["retry_available"])
+        self.assertIn("无法加入生成队列", asset["error"])
+        self.assertIn(
+            "asset_generation_retry_enqueue_failed",
+            [event["event_type"] for event in response.json()["logs"]],
+        )
 
 
 if __name__ == "__main__":
