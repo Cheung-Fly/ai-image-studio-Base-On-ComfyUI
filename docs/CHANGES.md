@@ -18,6 +18,8 @@ history, not a roadmap; planned work belongs in `项目技术演进路线图.md`
 
 ## Unreleased
 
+## v11.3.0 - 2026-11-09
+
 ### Changed
 
 - Failed reference-image assets now expose their error details and can be retried
