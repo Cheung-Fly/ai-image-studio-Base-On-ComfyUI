@@ -18,6 +18,12 @@ history, not a roadmap; planned work belongs in `项目技术演进路线图.md`
 
 ## Unreleased
 
+### Added
+
+- Added a creator workbench with Agent 1–5 navigation, a personal asset library,
+  and grouped ComfyUI, RunningHub, model, and skill settings. Agent 4 and 5 are
+  clearly marked unavailable until their backends are implemented.
+
 ## v11.1.0 - 2026-11-07
 
 ### Added
