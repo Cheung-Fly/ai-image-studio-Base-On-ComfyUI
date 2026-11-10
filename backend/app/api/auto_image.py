@@ -3,12 +3,14 @@
 import json
 import logging
 import re
+import tempfile
 import time
 import uuid
 import zipfile
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
@@ -46,6 +48,8 @@ from ..services.task_reliability import (
     dispatch_generation,
 )
 from ..services.video_episode import (
+    MAX_SERIES_BYTES,
+    MAX_SERIES_FILES,
     MAX_STORYBOARD_BYTES,
     EpisodePackageError,
     parse_series_storyboards,
@@ -62,6 +66,29 @@ _CATEGORY_LABELS = {
     "scene": "场景",
     "prop": "道具",
 }
+_WINDOWS_RESERVED_COMPONENTS = {
+    "CON",
+    "PRN",
+    "AUX",
+    "NUL",
+    *(f"COM{index}" for index in range(1, 10)),
+    *(f"LPT{index}" for index in range(1, 10)),
+}
+
+
+def _safe_archive_component(value: str, fallback: str) -> str:
+    component = re.sub(r'[<>:"/\\|?*\r\n]+', "-", value).strip(" .-")[:80]
+    component = component.rstrip(" .")
+    if not component:
+        return fallback
+    stem = component.split(".", 1)[0].rstrip(" .").upper()
+    if stem in _WINDOWS_RESERVED_COMPONENTS:
+        return f"_{component}"
+    return component
+
+
+def _content_disposition(filename: str) -> str:
+    return f"attachment; filename*=UTF-8''{quote(filename, safe='')}"
 
 
 def _custom_config(
@@ -355,6 +382,25 @@ def get_batch(
     db: Session = Depends(get_db),
 ):
     return _batch_response(_get_batch(db, user, batch_id), db)
+
+
+@router.get(
+    "/batches/{batch_id}/episodes/{episode_index}/storyboard",
+    response_model=DirectorStoryboardOut,
+)
+def get_episode_storyboard(
+    batch_id: int,
+    episode_index: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    batch = _get_batch(db, user, batch_id)
+    if episode_index < 1 or episode_index > batch.episode_count:
+        raise HTTPException(404, "分集不存在")
+    entries = json.loads(batch.storyboards_json)
+    return DirectorStoryboardOut.model_validate(
+        entries[episode_index - 1]["storyboard"]
+    )
 
 
 @router.post("/batches/{batch_id}/start", response_model=AutoImageBatchOut, status_code=202)
@@ -702,5 +748,211 @@ def download_episode_package(
     return StreamingResponse(
         archive,
         media_type="application/zip",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={"Content-Disposition": _content_disposition(filename)},
+    )
+
+
+@router.get("/batches/{batch_id}/series.zip")
+def download_series_package(
+    batch_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    batch = _get_batch(db, user, batch_id)
+    if batch.status in {"planning", "planning_failed"}:
+        raise HTTPException(409, "资产清单尚未准备好，暂时无法导出整剧素材包")
+
+    entries = json.loads(batch.storyboards_json)
+    if len(entries) != batch.episode_count:
+        raise HTTPException(409, "分集分镜数据不完整，无法导出整剧素材包")
+
+    safe_root = _safe_archive_component(batch.title, "series")
+    with tempfile.NamedTemporaryFile(
+        prefix="aistudio-series-",
+        suffix=".zip",
+        delete=False,
+    ) as archive_file:
+        archive_path = Path(archive_file.name)
+    delivery_episodes = []
+    entry_count = 0
+    uncompressed_bytes = 0
+    category_folders = {
+        "character": "01-characters",
+        "scene": "02-scenes",
+        "prop": "03-props",
+    }
+
+    try:
+        with zipfile.ZipFile(
+            archive_path,
+            "w",
+            compression=zipfile.ZIP_DEFLATED,
+        ) as output:
+            def write_text(path: str, content: str) -> None:
+                nonlocal entry_count, uncompressed_bytes
+                encoded = content.encode("utf-8")
+                entry_count += 1
+                uncompressed_bytes += len(encoded)
+                if entry_count > MAX_SERIES_FILES:
+                    raise HTTPException(413, "整剧素材包文件数量超过 Agent3 导入上限")
+                if uncompressed_bytes > MAX_SERIES_BYTES:
+                    raise HTTPException(413, "整剧素材包解压后超过 4 GB")
+                output.writestr(path, encoded)
+
+            for episode_index, entry in enumerate(entries, start=1):
+                storyboard = DirectorStoryboardOut.model_validate(
+                    entry["storyboard"]
+                )
+                episode_title = _safe_archive_component(
+                    storyboard.video_title,
+                    f"episode-{episode_index:02d}",
+                )
+                episode_folder = f"{episode_index:02d}-{episode_title}"
+                episode_root = f"{safe_root}/{episode_folder}"
+                write_text(
+                    f"{episode_root}/storyboard.json",
+                    storyboard.model_dump_json(indent=2),
+                )
+
+                included_assets = []
+                category_order = {
+                    "character": 0,
+                    "scene": 1,
+                    "prop": 2,
+                }
+                relevant = sorted(
+                    (
+                        item
+                        for item in batch.assets
+                        if episode_index in json.loads(item.episode_indices_json)
+                    ),
+                    key=lambda item: (
+                        category_order.get(item.category, 3),
+                        item.name.casefold(),
+                        item.asset_key,
+                    ),
+                )
+                for asset_order, item in enumerate(relevant, start=1):
+                    if item.category not in category_folders:
+                        raise HTTPException(
+                            409,
+                            f"设定图“{item.name}”的分类无法加入 Agent3 素材包",
+                        )
+                    task = db.get(GenerationTask, item.task_id) if item.task_id else None
+                    if task is None or task.status != TaskStatus.completed:
+                        raise HTTPException(
+                            409,
+                            f"第 {episode_index} 集设定图“{item.name}”尚未完成",
+                        )
+                    image = (
+                        db.query(ImageAsset)
+                        .filter(
+                            ImageAsset.task_id == task.id,
+                            ImageAsset.media_type == "image",
+                        )
+                        .order_by(ImageAsset.id)
+                        .first()
+                    )
+                    if image is None:
+                        raise HTTPException(
+                            409,
+                            f"第 {episode_index} 集设定图“{item.name}”没有可打包的图片",
+                        )
+                    path = (settings.image_dir / image.filepath).resolve()
+                    if (
+                        settings.image_dir.resolve() not in path.parents
+                        or not path.is_file()
+                    ):
+                        raise HTTPException(
+                            404,
+                            f"第 {episode_index} 集设定图“{item.name}”文件已丢失",
+                        )
+                    filename = safe_asset_filename(
+                        item.category,
+                        item.name,
+                        item.asset_key,
+                    )
+                    relative_path = (
+                        f"assets/{category_folders[item.category]}/"
+                        f"{filename}{path.suffix.lower()}"
+                    )
+                    entry_count += 1
+                    uncompressed_bytes += path.stat().st_size
+                    if entry_count > MAX_SERIES_FILES:
+                        raise HTTPException(413, "整剧素材包文件数量超过 Agent3 导入上限")
+                    if uncompressed_bytes > MAX_SERIES_BYTES:
+                        raise HTTPException(413, "整剧素材包解压后超过 4 GB")
+                    output.write(path, f"{episode_root}/{relative_path}")
+                    included_assets.append(
+                        {
+                            "order": asset_order,
+                            "asset_key": item.asset_key,
+                            "category": item.category,
+                            "name": item.name,
+                            "path": relative_path,
+                        }
+                    )
+
+                write_text(
+                    f"{episode_root}/assets_manifest.json",
+                    json.dumps(
+                        {
+                            "order": episode_index,
+                            "episode_index": episode_index,
+                            "asset_scope": "episode_shared_reference",
+                            "assets": included_assets,
+                        },
+                        ensure_ascii=False,
+                        indent=2,
+                    ),
+                )
+                delivery_episodes.append(
+                    {
+                        "episode_index": episode_index,
+                        "title": storyboard.video_title,
+                        "folder": episode_folder,
+                        "shot_order": [
+                            {
+                                "order": order,
+                                "shot_no": shot.shot_no,
+                            }
+                            for order, shot in enumerate(storyboard.shots, start=1)
+                        ],
+                        "assets": included_assets,
+                    }
+                )
+
+            write_text(
+                f"{safe_root}/delivery_manifest.json",
+                json.dumps(
+                    {
+                        "schema_version": "1.0",
+                        "series_title": batch.title,
+                        "episodes": delivery_episodes,
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+            )
+    except zipfile.LargeZipFile as exc:
+        archive_path.unlink(missing_ok=True)
+        raise HTTPException(413, "整剧素材包超过 ZIP 支持大小") from exc
+    except Exception:
+        archive_path.unlink(missing_ok=True)
+        raise
+
+    filename = f"{safe_root}-Agent3.zip"
+
+    def stream_archive():
+        try:
+            with archive_path.open("rb") as archive:
+                while chunk := archive.read(1024 * 1024):
+                    yield chunk
+        finally:
+            archive_path.unlink(missing_ok=True)
+
+    return StreamingResponse(
+        stream_archive(),
+        media_type="application/zip",
+        headers={"Content-Disposition": _content_disposition(filename)},
     )
