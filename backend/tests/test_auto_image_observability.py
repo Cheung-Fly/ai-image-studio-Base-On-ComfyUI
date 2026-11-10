@@ -34,6 +34,7 @@ from app.models import (
 from app.schemas import DirectorStoryboardOut, DirectorStoryboardShot
 from app.services.llm_client import LLMError
 from app.services.task_reliability import TaskDispatchError
+from app.services.video_episode import ingest_episode_folder
 from app.workers.auto_image_tasks import _safe_plan_error, plan_auto_image_batch
 
 
@@ -307,6 +308,209 @@ class AutoImageObservabilityTests(unittest.TestCase):
         self.assertIn("无法连接 ComfyUI", asset["error"])
         self.assertTrue(asset["retry_available"])
         self.assertEqual(package_response.status_code, 409)
+
+    def test_episode_storyboard_endpoint_preserves_shot_order(self):
+        with self.create_client() as client:
+            response = client.get(
+                f"/api/auto-image/batches/{self.batch_id}/episodes/1/storyboard"
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [shot["shot_no"] for shot in response.json()["shots"]],
+            ["1"],
+        )
+
+    def test_series_package_blocks_until_all_episode_assets_complete(self):
+        self.create_asset_task(
+            TaskStatus.failed,
+            error="设定图仍未完成",
+        )
+        with self.create_client() as client:
+            response = client.get(
+                f"/api/auto-image/batches/{self.batch_id}/series.zip"
+            )
+
+        self.assertEqual(response.status_code, 409)
+        self.assertIn("尚未完成", response.json()["detail"])
+
+    def test_series_package_blocks_when_a_later_episode_asset_is_incomplete(self):
+        asset_id, _ = self.create_asset_task(
+            TaskStatus.failed,
+            error="第二集设定图仍未完成",
+        )
+        with self.sessions() as db:
+            batch = db.get(AutoImageBatch, self.batch_id)
+            batch.episode_count = 2
+            batch.storyboards_json = json.dumps(
+                [
+                    json.loads(batch.storyboards_json)[0],
+                    {
+                        "sheet_name": "Episode 2",
+                        "storyboard": {
+                            "video_title": "Test episode 2",
+                            "shots": [
+                                {
+                                    "shot_no": "1",
+                                    "visual_description": "A second episode shot",
+                                    "duration_seconds": 4,
+                                }
+                            ],
+                        },
+                    },
+                ]
+            )
+            db.get(AutoImageAsset, asset_id).episode_indices_json = "[2]"
+            db.commit()
+
+        with self.create_client() as client:
+            response = client.get(
+                f"/api/auto-image/batches/{self.batch_id}/series.zip"
+            )
+
+        self.assertEqual(response.status_code, 409)
+        self.assertIn("第 2 集", response.json()["detail"])
+
+    def test_series_package_uses_windows_safe_root_and_utf8_filename(self):
+        with self.sessions() as db:
+            batch = db.get(AutoImageBatch, self.batch_id)
+            batch.title = "CON"
+            batch.status = "completed"
+            db.commit()
+
+        with self.create_client() as client:
+            response = client.get(
+                f"/api/auto-image/batches/{self.batch_id}/series.zip"
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.headers["content-disposition"],
+            "attachment; filename*=UTF-8''_CON-Agent3.zip",
+        )
+        with zipfile.ZipFile(BytesIO(response.content)) as archive:
+            self.assertTrue(
+                all(name.startswith("_CON/") for name in archive.namelist())
+            )
+
+    def test_series_package_is_ordered_and_importable_by_agent3(self):
+        asset_id, task_id = self.create_asset_task(TaskStatus.completed)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            image_dir = temp_root / "images"
+            image_dir.mkdir()
+            (image_dir / "reference.png").write_bytes(b"reference-image")
+            import_dir = temp_root / "comfy-input"
+
+            first_storyboard = json.loads(
+                json.dumps(
+                    {
+                        "video_title": "Episode One",
+                        "theme": "A test story",
+                        "shots": [
+                            {
+                                "shot_no": "2",
+                                "visual_description": "Second storyboard row",
+                                "duration_seconds": 4,
+                            },
+                            {
+                                "shot_no": "1",
+                                "visual_description": "First storyboard row",
+                                "duration_seconds": 3,
+                            },
+                        ],
+                    }
+                )
+            )
+            second_storyboard = {
+                "video_title": "Episode Two",
+                "shots": [
+                    {
+                        "shot_no": "1",
+                        "visual_description": "Second episode opening",
+                        "duration_seconds": 5,
+                    }
+                ],
+            }
+            with self.sessions() as db:
+                batch = db.get(AutoImageBatch, self.batch_id)
+                batch.title = "测试剧集"
+                batch.episode_count = 2
+                batch.storyboards_json = json.dumps(
+                    [
+                        {"sheet_name": "Episode One", "storyboard": first_storyboard},
+                        {"sheet_name": "Episode Two", "storyboard": second_storyboard},
+                    ],
+                    ensure_ascii=False,
+                )
+                db.get(AutoImageAsset, asset_id).episode_indices_json = "[1,2]"
+                db.add(
+                    ImageAsset(
+                        task_id=task_id,
+                        filename="reference.png",
+                        filepath="reference.png",
+                        media_type="image",
+                    )
+                )
+                db.commit()
+
+            with (
+                patch(
+                    "app.api.auto_image.settings",
+                    SimpleNamespace(image_dir=image_dir),
+                ),
+                self.create_client() as client,
+            ):
+                response = client.get(
+                    f"/api/auto-image/batches/{self.batch_id}/series.zip"
+                )
+
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(
+                response.headers["content-disposition"],
+                "attachment; filename*=UTF-8''%E6%B5%8B%E8%AF%95%E5%89%A7%E9%9B%86-Agent3.zip",
+            )
+            extracted = temp_root / "extracted"
+            with zipfile.ZipFile(BytesIO(response.content)) as archive:
+                names = archive.namelist()
+                archive.extractall(extracted)
+
+            series_root = extracted / "测试剧集"
+            episode_dirs = sorted(path for path in series_root.iterdir() if path.is_dir())
+            self.assertEqual(
+                [path.name for path in episode_dirs],
+                ["01-Episode One", "02-Episode Two"],
+            )
+            delivery_manifest = json.loads(
+                (series_root / "delivery_manifest.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(
+                [episode["episode_index"] for episode in delivery_manifest["episodes"]],
+                [1, 2],
+            )
+            self.assertEqual(
+                [shot["shot_no"] for shot in delivery_manifest["episodes"][0]["shot_order"]],
+                ["2", "1"],
+            )
+            self.assertTrue(
+                any("/assets/01-characters/" in name for name in names)
+            )
+
+            with patch(
+                "app.services.video_episode.settings",
+                SimpleNamespace(comfyui_input_path=import_dir),
+            ):
+                imported = [
+                    ingest_episode_folder(episode_dir) for episode_dir in episode_dirs
+                ]
+
+        self.assertEqual(
+            [shot.shot_no for shot in imported[0].storyboard.shots],
+            ["2", "1"],
+        )
+        self.assertEqual(imported[0].assets[0]["media_type"], "image")
+        self.assertEqual(imported[1].storyboard.video_title, "Episode Two")
+        self.assertEqual(len(imported[1].assets), 1)
 
     def test_retry_requeues_only_failed_asset_and_completed_retry_unlocks_package(self):
         failed_asset_id, failed_task_id = self.create_asset_task(

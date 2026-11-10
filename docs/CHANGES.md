@@ -18,6 +18,12 @@ history, not a roadmap; planned work belongs in `项目技术演进路线图.md`
 
 ## Unreleased
 
+### Added
+
+- Agent 2 now provides an interactive Three.js storyboard rail and exports a
+  complete, episode-ordered Agent 3 handoff folder with each storyboard and its
+  shared reference images.
+
 ## v11.3.0 - 2026-11-09
 
 ### Changed

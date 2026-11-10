@@ -1,15 +1,27 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import {
+  computed,
+  defineAsyncComponent,
+  onMounted,
+  onUnmounted,
+  ref,
+  watch,
+} from "vue";
 import { apiFetch, apiJson, errorMessage } from "../api";
 import { beginAgentActivity } from "../agentActivity";
 import type {
   AutoImageAsset,
   AutoImageBatch,
   CustomModel,
+  DirectorStoryboard,
   Provider,
   RunningHubConfig,
   WorkflowOption,
 } from "../types";
+
+const StoryboardRail = defineAsyncComponent(
+  () => import("./StoryboardRail.vue"),
+);
 
 const props = defineProps<{
   provider: Provider;
@@ -38,8 +50,10 @@ const categoryLabels: Record<string, string> = {
 const file = ref<File | null>(null);
 const fileInput = ref<HTMLInputElement | null>(null);
 const batch = ref<AutoImageBatch | null>(null);
+const storyboard = ref<DirectorStoryboard | null>(null);
 const workflows = ref<WorkflowOption[]>([]);
 const selectedEpisode = ref(1);
+const selectedShotIndex = ref(0);
 const workflowFile = ref("");
 const generationBackend = ref<"comfyui" | "runninghub">("comfyui");
 const aspectRatio = ref("3:2 (Photo)");
@@ -48,12 +62,16 @@ const busy = ref(false);
 const retryingAssetId = ref<number | null>(null);
 const expandedFailureId = ref<number | null>(null);
 const loading = ref(false);
+const storyboardLoading = ref(false);
+const storyboardError = ref("");
+const exportingSeries = ref(false);
 const elapsedNow = ref(Date.now());
 const error = ref("");
 const notice = ref("");
 let pollTimer: number | undefined;
 let elapsedTimer: number | undefined;
 let endGenerationActivity: (() => void) | null = null;
+let storyboardRequestId = 0;
 
 const runningHubSelection = computed(() => {
   const config = props.runningHubConfig;
@@ -94,6 +112,21 @@ const pendingCount = computed(
 );
 const failedAssets = computed(
   () => episodeAssets.value.filter((asset) => asset.status === "failed"),
+);
+const pendingSeriesAssets = computed(
+  () =>
+    (batch.value?.assets || []).filter(
+      (asset) => asset.status !== "completed" || !asset.image_url,
+    ),
+);
+const canDownloadSeries = computed(
+  () =>
+    Boolean(batch.value?.episodes.length) &&
+    !isPlanning.value &&
+    pendingSeriesAssets.value.length === 0,
+);
+const selectedShot = computed(
+  () => storyboard.value?.shots[selectedShotIndex.value] ?? null,
 );
 const canDownload = computed(
   () => episodeAssets.value.length > 0 && completeCount.value === episodeAssets.value.length,
@@ -168,6 +201,28 @@ async function refreshBatch(batchId: number): Promise<void> {
   const updated = await apiJson<AutoImageBatch>(`/api/auto-image/batches/${batchId}`);
   if (batch.value?.id === batchId) {
     batch.value = updated;
+  }
+}
+
+async function loadStoryboard(batchId: number, episodeIndex: number): Promise<void> {
+  const requestId = ++storyboardRequestId;
+  storyboard.value = null;
+  selectedShotIndex.value = 0;
+  storyboardError.value = "";
+  storyboardLoading.value = true;
+  try {
+    const result = await apiJson<DirectorStoryboard>(
+      `/api/auto-image/batches/${batchId}/episodes/${episodeIndex}/storyboard`,
+      undefined,
+      "读取分镜失败",
+    );
+    if (requestId === storyboardRequestId) storyboard.value = result;
+  } catch (cause) {
+    if (requestId === storyboardRequestId) {
+      storyboardError.value = `读取本集分镜失败：${errorMessage(cause)}`;
+    }
+  } finally {
+    if (requestId === storyboardRequestId) storyboardLoading.value = false;
   }
 }
 
@@ -320,11 +375,35 @@ function toggleFailureDetails(assetId: number): void {
 
 async function downloadEpisode(): Promise<void> {
   if (!batch.value || !canDownload.value) return;
+  await downloadPackage(
+    `/api/auto-image/batches/${batch.value.id}/episodes/${selectedEpisode.value}.zip`,
+    `${batch.value.title}-${String(selectedEpisode.value).padStart(2, "0")}.zip`,
+    `第 ${selectedEpisode.value} 集素材包已下载，可交给自动视频栏目。`,
+    "下载素材包失败",
+  );
+}
+
+async function downloadSeriesPackage(): Promise<void> {
+  if (!batch.value || !canDownloadSeries.value) return;
+  exportingSeries.value = true;
+  await downloadPackage(
+    `/api/auto-image/batches/${batch.value.id}/series.zip`,
+    `${batch.value.title}-Agent3.zip`,
+    "整剧交付包已下载，解压后可将根文件夹导入 Agent3。",
+    "下载整剧交付包失败",
+  );
+  exportingSeries.value = false;
+}
+
+async function downloadPackage(
+  endpoint: string,
+  filename: string,
+  successMessage: string,
+  errorPrefix: string,
+): Promise<void> {
   error.value = "";
   try {
-    const response = await apiFetch(
-      `/api/auto-image/batches/${batch.value.id}/episodes/${selectedEpisode.value}.zip`,
-    );
+    const response = await apiFetch(endpoint);
     if (!response.ok) {
       const body = await response.text();
       let detail = "";
@@ -339,16 +418,35 @@ async function downloadEpisode(): Promise<void> {
     const url = URL.createObjectURL(await response.blob());
     const link = document.createElement("a");
     link.href = url;
-    link.download = `${batch.value.title}-${String(selectedEpisode.value).padStart(2, "0")}.zip`;
+    link.download = filename;
     document.body.append(link);
     link.click();
     link.remove();
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-    notice.value = `第 ${selectedEpisode.value} 集素材包已下载，可交给自动视频栏目。`;
+    notice.value = successMessage;
   } catch (cause) {
-    error.value = `下载素材包失败：${errorMessage(cause)}`;
+    error.value = `${errorPrefix}：${errorMessage(cause)}`;
   }
 }
+
+watch(
+  () =>
+    [
+      batch.value?.id ?? 0,
+      selectedEpisode.value,
+      batch.value?.status ?? "",
+    ] as const,
+  ([batchId, episodeIndex]) => {
+    if (!batchId || isPlanning.value || batch.value?.status === "planning_failed") {
+      storyboardRequestId += 1;
+      storyboard.value = null;
+      storyboardLoading.value = false;
+      return;
+    }
+    void loadStoryboard(batchId, episodeIndex);
+  },
+  { immediate: true },
+);
 
 watch(
   () => `${batch.value?.id ?? ""}:${isProcessing.value}`,
@@ -623,11 +721,116 @@ onUnmounted(() => {
             >
               下载本集素材包
             </button>
+            <button
+              class="asset-button secondary"
+              type="button"
+              :disabled="!canDownloadSeries || exportingSeries || busy"
+              aria-describedby="series-package-status"
+              @click="void downloadSeriesPackage()"
+            >
+              {{ exportingSeries ? "正在整理整剧…" : "下载 Agent3 整剧包" }}
+            </button>
+            <p
+              id="series-package-status"
+              class="series-package-status"
+              :class="{ blocked: !canDownloadSeries }"
+              role="status"
+            >
+              {{
+                canDownloadSeries
+                  ? "按分集顺序包含分镜、角色、场景和道具设定图。"
+                  : `全剧还有 ${pendingSeriesAssets.length} 项设定图未完成。`
+              }}
+            </p>
             <p v-if="failedAssets.length" class="asset-package-blocked" role="status">
               本集有 {{ failedAssets.length }} 项设定图失败。全部图片完成前不会生成素材包；
               请查看失败项详情并单独重新生成。
             </p>
           </div>
+
+          <section
+            v-if="storyboardLoading || storyboard || storyboardError"
+            class="episode-script"
+            aria-label="本集分镜脚本"
+          >
+            <p v-if="storyboardLoading" class="script-loading" role="status">
+              正在读取第 {{ selectedEpisode }} 集分镜…
+            </p>
+            <p v-else-if="storyboardError" class="script-error" role="alert">
+              {{ storyboardError }}
+              <button
+                v-if="batch"
+                type="button"
+                @click="void loadStoryboard(batch.id, selectedEpisode)"
+              >
+                重新读取分镜
+              </button>
+            </p>
+            <template v-else-if="storyboard">
+              <StoryboardRail
+                :shots="storyboard.shots"
+                :selected-index="selectedShotIndex"
+                @select="selectedShotIndex = $event"
+              />
+              <div v-if="selectedShot" class="shot-detail">
+                <article class="shot-copy">
+                  <p class="shot-position">
+                    第 {{ selectedEpisode }} 集 · 镜号 {{ selectedShot.shot_no }}
+                  </p>
+                  <h3>{{ selectedShot.visual_description }}</h3>
+                  <dl>
+                    <div>
+                      <dt>景别</dt>
+                      <dd>{{ selectedShot.framing || "未填写" }}</dd>
+                    </div>
+                    <div>
+                      <dt>运镜</dt>
+                      <dd>{{ selectedShot.camera_movement || "未填写" }}</dd>
+                    </div>
+                    <div>
+                      <dt>时长</dt>
+                      <dd>{{ selectedShot.duration_seconds }} 秒</dd>
+                    </div>
+                  </dl>
+                  <p v-if="selectedShot.dialogue" class="shot-note">
+                    <strong>对白</strong>{{ selectedShot.dialogue }}
+                  </p>
+                  <p v-if="selectedShot.prompt" class="shot-note">
+                    <strong>生成提示词</strong>{{ selectedShot.prompt }}
+                  </p>
+                  <p v-if="selectedShot.sound_effects" class="shot-note">
+                    <strong>音效</strong>{{ selectedShot.sound_effects }}
+                  </p>
+                </article>
+                <aside class="shared-assets" aria-label="本集共享设定图">
+                  <h4>本集共享设定图</h4>
+                  <p>Agent3 导入后可在镜头间复用这些资产。</p>
+                  <ul v-if="episodeAssets.length">
+                    <li v-for="asset in episodeAssets" :key="asset.id">
+                      <img
+                        v-if="asset.image_url"
+                        :src="asset.image_url"
+                        :alt="`${asset.name}设定图`"
+                        loading="lazy"
+                      />
+                      <span v-else class="shared-asset-empty">
+                        {{ categoryLabels[asset.category].slice(0, 1) }}
+                      </span>
+                      <span class="shared-asset-copy">
+                        <strong>{{ asset.name }}</strong>
+                        <small>
+                          {{ categoryLabels[asset.category] }} · {{ statusLabel(asset.status) }}
+                        </small>
+                      </span>
+                    </li>
+                  </ul>
+                  <p v-else class="shared-assets-empty">
+                    本集没有需要交付的角色、场景或道具设定图。
+                  </p>
+                </aside>
+              </div>
+            </template>
+          </section>
 
           <div v-if="!isPlanning && batch.status !== 'planning_failed' && !episodeAssets.length" class="asset-empty">
             当前分集没有从分镜中识别出角色、场景或道具。
@@ -1146,7 +1349,10 @@ onUnmounted(() => {
 
 .episode-picker {
   display: grid;
-  grid-template-columns: auto minmax(180px, 1fr) minmax(175px, auto) minmax(145px, auto);
+  grid-template-columns:
+    auto
+    minmax(150px, 1fr)
+    repeat(3, minmax(135px, auto));
   align-items: center;
   gap: 10px;
   margin: 24px 0 26px;
@@ -1164,6 +1370,202 @@ onUnmounted(() => {
 .episode-picker .asset-button {
   width: auto;
   margin: 0;
+}
+
+.series-package-status {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: #526a60;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.series-package-status.blocked {
+  color: #81372e;
+}
+
+.episode-script {
+  margin: 0 0 28px;
+}
+
+.script-loading,
+.script-error {
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  font-size: 13px;
+}
+
+.script-loading {
+  color: #526a60;
+  background: #e8eee8;
+}
+
+.script-error {
+  color: #81372e;
+  background: #fae9e5;
+}
+
+.script-error button {
+  margin-left: 10px;
+  padding: 3px 8px;
+  border: 1px solid currentColor;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+}
+
+.script-error button:focus-visible {
+  outline: 3px solid #263a38;
+  outline-offset: 2px;
+}
+
+.shot-detail {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 290px);
+  gap: 20px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  background: #fff;
+}
+
+.shot-copy {
+  min-width: 0;
+}
+
+.shot-position {
+  margin: 0 0 8px;
+  color: var(--moss);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.shot-copy h3 {
+  max-width: 70ch;
+  margin: 0;
+  color: var(--pine);
+  font-size: clamp(18px, 2vw, 24px);
+  font-weight: 620;
+  line-height: 1.4;
+}
+
+.shot-copy dl {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px 34px;
+  margin: 18px 0;
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.shot-copy dl div {
+  min-width: 72px;
+}
+
+.shot-copy dt {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.shot-copy dd {
+  margin: 3px 0 0;
+  color: var(--pine);
+  font-size: 13px;
+}
+
+.shot-note {
+  margin: 10px 0 0;
+  color: #45554d;
+  font-size: 13px;
+  line-height: 1.65;
+  white-space: pre-wrap;
+}
+
+.shot-note strong {
+  display: block;
+  margin-bottom: 3px;
+  color: #526a60;
+  font-size: 11px;
+}
+
+.shared-assets {
+  padding-left: 18px;
+  border-left: 1px solid var(--line);
+}
+
+.shared-assets h4,
+.shared-assets > p {
+  margin: 0;
+}
+
+.shared-assets h4 {
+  font-size: 13px;
+}
+
+.shared-assets > p {
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.shared-assets ul {
+  display: grid;
+  gap: 9px;
+  max-height: 290px;
+  margin: 13px 0 0;
+  padding: 0 4px 0 0;
+  overflow: auto;
+  list-style: none;
+}
+
+.shared-assets li {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+
+.shared-assets li img,
+.shared-asset-empty {
+  width: 48px;
+  height: 38px;
+  flex: 0 0 auto;
+  object-fit: cover;
+  background: var(--leaf);
+}
+
+.shared-asset-empty {
+  display: grid;
+  place-items: center;
+  color: var(--moss);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.shared-asset-copy {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.shared-asset-copy strong {
+  overflow: hidden;
+  color: var(--pine);
+  font-size: 11px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shared-asset-copy small {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.shared-assets .shared-assets-empty {
+  margin-top: 12px;
+  color: #526a60;
 }
 
 .asset-package-blocked {
@@ -1414,6 +1816,12 @@ onUnmounted(() => {
     border-top: 0;
     border-left: 1px solid var(--line);
   }
+
+  .shot-detail {
+    grid-template-columns: minmax(0, 1fr) minmax(190px, 240px);
+    gap: 14px;
+    padding: 16px;
+  }
 }
 
 @media (max-width: 720px) {
@@ -1450,6 +1858,24 @@ onUnmounted(() => {
 
   .episode-picker > label {
     grid-column: 1 / -1;
+  }
+
+  .episode-picker .asset-button {
+    min-height: 42px;
+    padding-inline: 9px;
+    font-size: 11px;
+  }
+
+  .shot-detail {
+    grid-template-columns: 1fr;
+    gap: 18px;
+    padding: 15px;
+  }
+
+  .shared-assets {
+    padding: 16px 0 0;
+    border-top: 1px solid var(--line);
+    border-left: 0;
   }
 
   .asset-row {

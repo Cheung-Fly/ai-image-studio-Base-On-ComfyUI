@@ -84,6 +84,31 @@ export interface AutoImageEpisodeOption {
   shot_count: number;
 }
 
+export interface DirectorStoryboardShot {
+  shot_no: string;
+  framing: string;
+  camera_movement: string;
+  visual_description: string;
+  duration_seconds: number;
+  dialogue: string;
+  sound_effects: string;
+  prompt: string;
+  producer: string;
+  expected_submission_time: string;
+  reviewer: string;
+  actual_submission_time: string;
+}
+
+export interface DirectorStoryboard {
+  video_title: string;
+  theme: string;
+  shooting_time: string;
+  deadline: string;
+  props: string;
+  characters: string;
+  shots: DirectorStoryboardShot[];
+}
+
 export interface AutoImageAsset {
   id: number;
   asset_key: string;
