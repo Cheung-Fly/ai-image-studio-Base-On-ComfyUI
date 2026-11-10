@@ -18,6 +18,8 @@ history, not a roadmap; planned work belongs in `项目技术演进路线图.md`
 
 ## Unreleased
 
+## v11.4.0 - 2026-11-10
+
 ### Added
 
 - Agent 2 now provides an interactive Three.js storyboard rail and exports a
